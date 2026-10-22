@@ -22,8 +22,16 @@ public struct MonospaceFont: Equatable, Sendable {
 
   public static func prefixEnd(in text: some StringProtocol, columns: Int) -> String.Index {
     guard columns > 0 else { return text.startIndex }
-    if text.utf8.prefix(columns == .max ? columns : columns + 1).allSatisfy({ $0 < 128 }) {
-      return text.index(text.startIndex, offsetBy: max(0, columns), limitedBy: text.endIndex)
+    // CRLF is one Character but two ASCII bytes. Keep the byte shortcut only
+    // where its lookahead also guarantees one byte per Character.
+    // Bound offsets by the slice length, including for an Int.max budget.
+    let byteCount = text.utf8.count
+    let lookahead = min(byteCount, columns == .max ? columns : columns + 1)
+    if text.utf8.prefix(lookahead).allSatisfy({
+      $0 < 128 && $0 != 13
+    }) {
+      return text.index(
+        text.startIndex, offsetBy: min(columns, byteCount), limitedBy: text.endIndex)
         ?? text.endIndex
     }
     var used = 0

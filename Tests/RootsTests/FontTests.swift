@@ -374,3 +374,28 @@ func invalidFontSizesAreRejected(size: Float) async {
   let ascii = "ABC"
   #expect(MonospaceFont.prefixEnd(in: ascii, columns: .max) == ascii.endIndex)
 }
+
+@Test func columnPrefixesCountCRLFGraphemesBeforeWideEmoji() {
+  for text in ["", "ABC", "\r\n\r\n🙂", "A\r\n🙂B", "\r🙂", "\n🙂", "\r\n\r\n"] {
+    for columns in [-1, 0, 1, 2, 3, 4, 5, Int.max] {
+      var expected = ""
+      var used = 0
+      for character in text {
+        let width = MonospaceFont.columnWidth(of: character)
+        if width > columns - used { break }
+        expected.append(character)
+        used += width
+      }
+      let end = MonospaceFont.prefixEnd(in: text, columns: columns)
+      #expect(String(text[..<end]) == expected)
+      let padded = "prefix" + text + "suffix"
+      let start = padded.index(padded.startIndex, offsetBy: 6)
+      let slice = padded[start..<padded.index(start, offsetBy: text.count)]
+      let sliceEnd = MonospaceFont.prefixEnd(in: slice, columns: columns)
+      #expect(String(slice[..<sliceEnd]) == expected)
+    }
+  }
+  let text = "\r\n\r\n🙂"
+  let end = MonospaceFont.prefixEnd(in: text, columns: 3)
+  #expect(String(text[..<end]) == "\r\n\r\n")
+}
