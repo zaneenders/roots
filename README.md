@@ -71,6 +71,12 @@ Run from the `roots` directory:
 swift test
 ```
 
+## Examples
+
+- [Tetris](Examples/Tetris): a standalone Swift package demonstrating desktop windows,
+  blocks, custom painting, keyboard input, observation, and frame-driven animation.
+  Run it with `swift run --package-path Examples/Tetris Tetris`.
+
 ## License
 
 Roots is licensed under [Apache-2.0](LICENSE). Copyright 2026 Zane Enders.
