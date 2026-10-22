@@ -1,0 +1,4 @@
+module CFreeType {
+  umbrella header "CFreeType.h"
+  export *
+}

@@ -1,0 +1,3 @@
+import SwiftWayland
+
+public typealias NativePopupConfiguration = WaylandPopupConfiguration
