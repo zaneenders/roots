@@ -1,0 +1,6 @@
+[submodule "freetype-upstream"]
+	path = Vendor/FreeType/freetype
+	url = https://github.com/freetype/freetype.git
+[submodule "libpng-upstream"]
+	path = Vendor/FreeType/png/libpng
+	url = https://github.com/pnggroup/libpng.git
