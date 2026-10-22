@@ -8,6 +8,11 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   case missingWaylandGlobals
   case waylandDispatch
   case waylandDispatchBusy
+  case x11Connection
+  case x11Dispatch
+  case x11Visual
+  case unsupportedEGLPlatform(String)
+  case x11Protocol(UInt8)
   case egl(Int32)
   case shader(String)
   case rendering
@@ -17,13 +22,19 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     switch self {
     case .invalidConfiguration: "Invalid dimensions or frame limit."
     case .requiresAsyncSession:
-      "Wayland sessions require NativeWindow.runAsync; run is offscreen-only."
+      "Native sessions require NativeWindow.runAsync; run is offscreen-only."
     case .alreadyRunning: "A native rendering session is already running."
     case .waylandConnection: "Cannot connect to Wayland. Check WAYLAND_DISPLAY and XDG_RUNTIME_DIR."
     case .missingWaylandGlobals:
       "Wayland compositor is missing wl_compositor or the requested surface-role protocol."
     case .waylandDispatch: "Wayland event dispatch failed."
     case .waylandDispatchBusy: "Wayland dispatch is already in progress on this connection."
+    case .x11Connection: "Cannot connect to X11. Check DISPLAY and inherited display authorization."
+    case .x11Dispatch: "X11 event dispatch failed."
+    case .x11Visual: "No X11 visual matches the selected EGL configuration."
+    case .unsupportedEGLPlatform(let platform):
+      "The EGL provider does not support the \(platform) platform."
+    case .x11Protocol(let code): "X11 protocol error: \(code)."
     case .egl(let code): "EGL operation failed: 0x\(String(code, radix: 16))."
     case .shader(let log): "Shader compilation or linking failed: \(log)"
     case .rendering: "OpenGL rendering or readback failed."
@@ -70,9 +81,11 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
 
   public static func run(
     configuration: NativeWindowConfiguration = .init(), surfaceless: Bool = false,
+    backend: LinuxWindowBackend = .auto,
     frame: (NativeWindowInput, borrowing RenderFrame) -> Void
   ) throws {
     guard surfaceless else { throw NativeWindowError.requiresAsyncSession }
+    guard backend == .auto else { throw NativeWindowError.invalidConfiguration }
     let host = try start(configuration: configuration, surfaceless: true)
     defer { stop(host) }
     let started = ContinuousClock.now
@@ -89,10 +102,12 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
 
   public static func runAsync(
     configuration: NativeWindowConfiguration = .init(), surfaceless: Bool = false,
+    backend: LinuxWindowBackend = .auto,
     frame: (NativeWindowInput, borrowing RenderFrame) -> Void
   ) async throws {
     try Task.checkCancellation()
-    let host = try await startAsync(configuration: configuration, surfaceless: surfaceless)
+    let host = try await startAsync(
+      configuration: configuration, surfaceless: surfaceless, backend: backend)
     defer { stop(host) }
     let started = ContinuousClock.now
     var frameCount: Int32 = 0
@@ -103,6 +118,9 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
           host, surfaceless: surfaceless, started: started, frameCount: &frameCount, frame: frame)
         try host.renderer.releaseCurrent()
         if finished { break }
+        // A slow X11 swap can consume the entire pacing interval. Yield even when
+        // the next frame is already ready so model, close, and cancellation tasks run.
+        if !surfaceless { await Task.yield() }
       }
       if surfaceless {
         await Task.yield()
@@ -139,29 +157,57 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     }
   }
 
-  private static func startAsync(configuration: NativeWindowConfiguration, surfaceless: Bool)
-    async throws -> NativeHost
-  {
-    if surfaceless { return try start(configuration: configuration, surfaceless: true) }
-    guard configuration.width > 0, configuration.height > 0, configuration.maxFrames >= 0 else {
-      throw NativeWindowError.invalidConfiguration
+  private static func startAsync(
+    configuration: NativeWindowConfiguration, surfaceless: Bool, backend: LinuxWindowBackend
+  ) async throws -> NativeHost {
+    if surfaceless {
+      guard backend == .auto else { throw NativeWindowError.invalidConfiguration }
+      return try start(configuration: configuration, surfaceless: true)
     }
+    guard configuration.width > 0, configuration.height > 0, configuration.maxFrames >= 0,
+      configuration.topBarOverlayHeight >= 0,
+      configuration.topBarOverlayHeight <= Int32.max - configuration.height,
+      configuration.minimumWidth >= 0, configuration.minimumHeight >= 0,
+      !configuration.topBar || backend != .x11
+    else { throw NativeWindowError.invalidConfiguration }
     guard host == nil else { throw NativeWindowError.alreadyRunning }
-    let host = NativeHost(configuration: configuration)
-    self.host = host
-    do {
-      try await host.connect()
-      if host.running { try host.setupRenderer(surfaceless: false) }
-      return host
-    } catch {
-      stop(host)
-      throw error
+    let candidates = backend.candidates(topBar: configuration.topBar)
+    var startupError: (any Error)?
+    for candidate in candidates {
+      try Task.checkCancellation()
+      let host = NativeHost(configuration: configuration, backend: candidate)
+      self.host = host
+      do {
+        try await host.connect()
+        try Task.checkCancellation()
+        if host.running {
+          try host.setupRenderer(surfaceless: false)
+          // MapNotify may still be pending. Never keep EGL current across an await.
+          try host.renderer.releaseCurrent()
+        }
+        return host
+      } catch {
+        // Application close is terminal, not a request to select another backend.
+        if host.closeRequested && !Task.isCancelled {
+          host.cleanup()
+          return host
+        }
+        stop(host)
+        try Task.checkCancellation()
+        if error is CancellationError { throw error }
+        startupError = error
+        if candidates.count > 1 && candidate != candidates.last {
+          nativeLog(
+            "\(candidate.rawValue) startup failed: \(error); trying the next available backend.")
+        }
+      }
     }
+    throw startupError ?? NativeWindowError.waylandConnection
   }
 
   private static func stop(_ host: NativeHost) {
     host.cleanup()
-    self.host = nil
+    if self.host === host { self.host = nil }
   }
 
   static func renderFrame(
@@ -198,7 +244,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   }
 
   private static func logFrames(_ host: NativeHost, frameCount: Int32, surfaceless: Bool) {
-    let mode = surfaceless ? "EGL surfaceless" : "Wayland"
+    let mode = surfaceless ? "EGL surfaceless" : host.backend.rawValue
     nativeLog(
       "Rendered \(frameCount) \(mode) frames at \(host.input.width)x\(host.input.height), "
         + "\(host.input.bufferScale)x buffer scale.")

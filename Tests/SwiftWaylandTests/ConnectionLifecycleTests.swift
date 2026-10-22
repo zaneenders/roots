@@ -60,7 +60,7 @@ private struct ConnectionPeer: Sendable {
     }
   }
 
-  mutating func configure() throws {
+  mutating func configure(closeBeforeConfigure: Bool = false) throws {
     var compositor: UInt32 = 0
     while true {
       var request = try next()
@@ -98,6 +98,10 @@ private struct ConnectionPeer: Sendable {
       case (shell, 2): xdgSurface = try #require(first)
       case (xdgSurface, 1): toplevel = try #require(first)
       case (surface, 6):
+        if closeBeforeConfigure {
+          try send(toplevel, 1)
+          return
+        }
         try send(toplevel, 0, [.int(100), .int(80), .array(ByteBuffer())])
         try send(xdgSurface, 0, [.uint(1)])
         return
@@ -551,4 +555,36 @@ private struct ConnectionPeer: Sendable {
   #expect(!connection.setIdleInhibited(true))
   connection.cleanup()
   #expect(!connection.setIdleInhibited(false))
+}
+
+@Test @MainActor func compositorCloseDuringStartupRetainsTerminalIntent() async throws {
+  let (fd, peer) = try ConnectionPeer.pair()
+  let server = blockingTestTask {
+    var peer = peer
+    try peer.configure(closeBeforeConfigure: true)
+    // Keep the server open until the client closes, distinguishing a close
+    // event from a transport failure or EOF during initial configuration.
+    var byte: UInt8 = 0
+    while peer.socket.borrow({ unsafe recv($0, &byte, 1, 0) }) > 0 {}
+    peer.socket.close()
+  }
+  let connection = WaylandConnection(configuration: .init(width: 100, height: 80))
+  defer { connection.cleanup() }
+  await #expect(throws: WaylandError.connection) {
+    try await connection.connect(path: nil, environment: ["WAYLAND_SOCKET": String(fd)])
+  }
+  #expect(connection.closeRequested && !connection.running && !connection.configured)
+  connection.cleanup()
+  #expect(connection.closeRequested)
+  try await server.value
+}
+
+@Test @MainActor func failedStartupCleanupDoesNotInventCloseIntent() async {
+  let connection = WaylandConnection(configuration: .init())
+  await #expect(throws: WaylandError.connection) {
+    try await connection.connect(path: nil, environment: ["WAYLAND_SOCKET": "invalid"])
+  }
+  #expect(!connection.running && !connection.closeRequested)
+  connection.cleanup()
+  #expect(!connection.closeRequested)
 }
