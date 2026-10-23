@@ -261,8 +261,7 @@ private final class FramePolicy: DesktopFrameDelegate {
 
 extension DesktopRuntimeTests {
   @Test(arguments: [false, true], [false, true])
-  func frameCallbacksInvalidateContentAndPaintReads(afterPresentation: Bool, paintOnly: Bool) async
-  {
+  func frameCallbacksInvalidateContentAndPaintReads(afterPresentation: Bool, paintOnly: Bool) async {
     let model = Model()
     let policy = FramePolicy()
     let change = {

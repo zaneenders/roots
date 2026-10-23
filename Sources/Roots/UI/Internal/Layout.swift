@@ -57,8 +57,7 @@ extension UIStorage {
       let displayed =
         textOverflow == .truncateTail ? font.truncating(title, to: rect.width - 24) : title
       let y = (rect.height - font.height(of: title)) / 2
-      content = displayed.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map
-      {
+      content = displayed.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map {
         TextLine(
           [TextRun(String($0.element))], y: y + Float($0.offset) * font.lineHeight, font: font)
       }

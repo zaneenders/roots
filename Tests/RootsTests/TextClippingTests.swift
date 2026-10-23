@@ -14,7 +14,7 @@ func clippedTextMatchesFilteringUnclippedDraws(size: Float) {
     Rect(-100, -100, 1, 1), Rect(1000, 1000, 1, 1), Rect(0, 0, 0, 0),
     Rect(-3 + size / 2, -5, 1, font.glyphHeight / 2),
     Rect(-3, -5 + font.glyphHeight / 2, size / 2, 1),
-    Rect(-3.25, -5.25, 0.5, 0.5),
+    Rect(-3.25, -5.25, 0.5, 0.5)
   ] {
     var expected: [DrawRect] = []
     for draw in reference.draws where !clip.intersection(draw.rect).isEmpty {

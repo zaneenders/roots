@@ -70,7 +70,7 @@ import Testing
     #expect(throws: EmojiAtlas.AssetError.self) { _ = try EmojiAtlas(data: Data(data.prefix(cut))) }
   }
   for (offset, word): (Int, UInt32) in [
-    (0, 0), (4, 1), (8, 0), (12, 8193), (16, .max), (20, 0), (24, 129), (28, .max), (32, 1),
+    (0, 0), (4, 1), (8, 0), (12, 8193), (16, .max), (20, 0), (24, 129), (28, .max), (32, 1)
   ] {
     var corrupt = data
     for byte in 0..<4 { corrupt[offset + byte] = UInt8(truncatingIfNeeded: word >> (byte * 8)) }

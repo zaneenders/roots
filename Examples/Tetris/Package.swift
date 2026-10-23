@@ -4,24 +4,49 @@ import PackageDescription
 let swiftSettings: [SwiftSetting] = [
   .enableExperimentalFeature("Lifetimes"),
   .treatAllWarnings(as: .error),
-  .strictMemorySafety(),
+  .strictMemorySafety()
 ]
 
 let package = Package(
   name: "RootsTetris",
-  platforms: [.macOS("27.0")],
-  products: [.executable(name: "Tetris", targets: ["Tetris"])],
-  dependencies: [.package(name: "roots", path: "../..")],
+  platforms: [
+    .macOS(.v27)
+  ],
+  products: [
+    .executable(
+      name: "Tetris",
+      targets: ["Tetris"]
+    )
+  ],
+  dependencies: [
+    .package(
+      name: "roots",
+      path: "../.."
+    )
+  ],
   targets: [
-    .target(name: "TetrisCore", swiftSettings: swiftSettings),
+    .target(
+      name: "TetrisCore",
+      swiftSettings: swiftSettings
+    ),
     .executableTarget(
       name: "Tetris",
       dependencies: [
         "TetrisCore",
         .product(name: "Roots", package: "roots"),
-        .product(name: "RootsDesktop", package: "roots"),
-      ], swiftSettings: swiftSettings),
+        .product(name: "RootsDesktop", package: "roots")
+      ],
+      swiftSettings: swiftSettings
+    ),
     .testTarget(
-      name: "TetrisCoreTests", dependencies: ["TetrisCore"], swiftSettings: swiftSettings),
-    .testTarget(name: "TetrisTests", dependencies: ["Tetris"], swiftSettings: swiftSettings),
-  ])
+      name: "TetrisCoreTests",
+      dependencies: ["TetrisCore"],
+      swiftSettings: swiftSettings
+    ),
+    .testTarget(
+      name: "TetrisTests",
+      dependencies: ["Tetris"],
+      swiftSettings: swiftSettings
+    )
+  ]
+)

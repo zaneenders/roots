@@ -11,14 +11,14 @@ private func pixel(_ renderer: CPURenderer, x: Int, y: Int) -> [UInt8] {
   let renderer = CPURenderer(width: 4, height: 3)
   let draws = [
     DrawRect(Rect(-1, -1, 3, 3), Color(1, 0, 0)),
-    DrawRect(Rect(1, 1, 4, 3), Color(0, 0, 1, 0.5)),
+    DrawRect(Rect(1, 1, 4, 3), Color(0, 0, 1, 0.5))
   ]
   renderer.render(draws.span)
   #expect(
     renderer.pixels == [
       255, 0, 0, 220, 0, 17, 26, 11, 24, 9, 12, 26,
       220, 0, 17, 160, 0, 94, 15, 6, 126, 5, 6, 127,
-      26, 11, 24, 15, 6, 126, 21, 5, 135, 5, 6, 136,
+      26, 11, 24, 15, 6, 126, 21, 5, 135, 5, 6, 136
     ])
 
   renderer.render([DrawRect]().span)
@@ -34,7 +34,7 @@ private func pixel(_ renderer: CPURenderer, x: Int, y: Int) -> [UInt8] {
     ".####.",
     ".####.",
     "..##..",
-    "......",
+    "......"
   ]
   for (y, row) in shape.enumerated() {
     for (x, cell) in row.enumerated() {
@@ -52,7 +52,7 @@ private func pixel(_ renderer: CPURenderer, x: Int, y: Int) -> [UInt8] {
     DrawRect(Rect(0, 0, 2, .nan), .accent),
     DrawRect(Rect(0, 0, 0, 2), .accent),
     DrawRect(Rect(0, 0, 2, -1), .accent),
-    DrawRect(Rect(10, 10, 2, 2), .accent),
+    DrawRect(Rect(10, 10, 2, 2), .accent)
   ]
   renderer.render(draws.span)
   #expect(renderer.pixels == [10, 13, 18, 10, 13, 18, 10, 13, 18, 10, 13, 18])
@@ -63,7 +63,7 @@ private func pixel(_ renderer: CPURenderer, x: Int, y: Int) -> [UInt8] {
   renderer.render(
     [
       DrawRect(Rect(1, 1, 4, 4), Color(0, 1, 0), radius: 2, clip: Rect(0, 2, 6, 2)),
-      DrawRect(Rect(0, 0, 1, 1), Color(1, 0, 0)),
+      DrawRect(Rect(0, 0, 1, 1), Color(1, 0, 0))
     ].span)
   let reference = CPURenderer(width: 6, height: 6)
   reference.render([DrawRect(Rect(1, 1, 4, 4), Color(0, 1, 0), radius: 2)].span)
@@ -81,7 +81,7 @@ private func pixel(_ renderer: CPURenderer, x: Int, y: Int) -> [UInt8] {
   let renderer = CPURenderer(width: 2, height: 2)
   for clip in [
     Rect(0, 0, 0, 2), Rect(0, 0, -1, 2), Rect(0, 0, 2, -1),
-    Rect(0, 0, .nan, 2), Rect(.infinity, 0, 2, 2), Rect(5, 5, 2, 2),
+    Rect(0, 0, .nan, 2), Rect(.infinity, 0, 2, 2), Rect(5, 5, 2, 2)
   ] {
     renderer.render([DrawRect(Rect(0, 0, 2, 2), .accent, clip: clip)].span)
     #expect(renderer.pixels == [10, 13, 18, 10, 13, 18, 10, 13, 18, 10, 13, 18])
@@ -124,7 +124,7 @@ private func pixel(_ renderer: CPURenderer, x: Int, y: Int) -> [UInt8] {
       DrawRect(rect, Color(0, value, 0)),
       DrawRect(rect, Color(0, 0, value)),
       DrawRect(rect, Color(1, 0, 0, value)),
-      DrawRect(rect, .text, radius: value),
+      DrawRect(rect, .text, radius: value)
     ] {
       renderer.render([draw].span)
       #expect(renderer.pixels == [10, 13, 18, 10, 13, 18, 10, 13, 18, 10, 13, 18])

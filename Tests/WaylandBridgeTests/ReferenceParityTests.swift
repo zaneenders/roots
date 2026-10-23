@@ -28,8 +28,7 @@ extension NativeSessionTests {
   }
 
   @Test(arguments: [Int32(7), 8, 9], [false, true])
-  func clearAndRoundedCoverageMatchCPUAtOddAndEvenHeights(height: Int32, textureTarget: Bool) throws
-  {
+  func clearAndRoundedCoverageMatchCPUAtOddAndEvenHeights(height: Int32, textureTarget: Bool) throws {
     try expectReferenceParity([], width: 8, height: height, textureTarget: textureTarget)
     try expectReferenceParity(
       [DrawRect(Rect(1, 1, 6, 5), Color(1, 0, 0), radius: 2)], width: 8, height: height,

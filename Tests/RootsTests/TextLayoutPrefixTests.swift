@@ -7,7 +7,7 @@ struct TextLayoutPrefixTests {
 
   @Test(arguments: [
     ["e", "\u{301}x"], ["👩", "\u{200D}", "💻x"], ["🇬", "🇧x"], ["👍", "🏽x"],
-    ["1", "\u{FE0F}", "\u{20E3}x"],
+    ["1", "\u{FE0F}", "\u{20E3}x"]
   ])
   func crossRunGraphemesShareGlyphsBackgroundsAndSelection(parts: [String]) {
     let firstBackground = Color(0.3, 0.2, 0.1)
@@ -67,10 +67,10 @@ struct TextLayoutPrefixTests {
       TextLine(
         [
           TextRun("Second "), TextRun("e", color: .accent), TextRun("\u{301} 👩"),
-          TextRun("\u{200D}💻"),
+          TextRun("\u{200D}💻")
         ], y: 64,
         font: font),
-      TextLine([TextRun("tail")], y: 96, font: font),
+      TextLine([TextRun("tail")], y: 96, font: font)
     ]
     var layout = TextLayout(content)
     let original = layout
@@ -99,7 +99,7 @@ struct TextLayoutPrefixTests {
   @Test func styleGeometryAndRunChangesRefreshContentWithoutDiscardingValidSelections() {
     var content = [
       TextLine([TextRun("first")], y: 0, font: font),
-      TextLine([TextRun("second")], y: 32, font: font),
+      TextLine([TextRun("second")], y: 32, font: font)
     ]
     var layout = TextLayout(content)
     content[1].x = 24
@@ -158,7 +158,7 @@ struct TextLayoutPrefixTests {
         key: 1,
         lines: [
           TextLine([TextRun("a\r")], y: 0, font: font),
-          TextLine([TextRun("b")], y: 32, font: font),
+          TextLine([TextRun("b")], y: 32, font: font)
         ], extent: 100)
       frame.end()
     }
@@ -185,7 +185,7 @@ struct TextLayoutPrefixTests {
         TextLine([TextRun("First")], y: 0, font: font),
         TextLine([TextRun("Second")], y: 32, font: font),
         TextLine([TextRun("tail")], y: 64, font: font),
-        TextLine([], y: 96, font: font),
+        TextLine([], y: 96, font: font)
       ]
       func declare(_ storage: inout UIStorage) -> NodeHandle {
         storage.epoch += 1

@@ -88,8 +88,7 @@ import Testing
     }
     #expect(frames == 3)
     var reopened = 0
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2))
-    { _, _ in
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2)) { _, _ in
       reopened += 1
     }
     #expect(reopened == 2)
@@ -112,8 +111,7 @@ import Testing
         _, _ in
       }
     }
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1))
-    { _, _ in }
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1)) { _, _ in }
   }
 
   @Test func idleWindowPausesAndCoalescesRedrawRequests() async throws {
@@ -154,8 +152,7 @@ import Testing
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
     var reopened = 0
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2))
-    { _, _ in
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2)) { _, _ in
       reopened += 1
     }
     #expect(reopened == 2)
@@ -167,8 +164,7 @@ import Testing
     }
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1))
-    { _, _ in }
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1)) { _, _ in }
   }
 
   @Test func clipboardRoundTripsTextAndBoundsPublication() async throws {

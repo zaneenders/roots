@@ -14,7 +14,7 @@ struct TextSelectionTests {
         key: 1,
         lines: [
           TextLine([TextRun("café "), TextRun("👩‍💻", color: .accent)], y: 4, font: font),
-          TextLine([TextRun("next")], y: 36, font: font),
+          TextLine([TextRun("next")], y: 36, font: font)
         ], extent: 120)
       frame.end()
     }

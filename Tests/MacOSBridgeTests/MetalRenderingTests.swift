@@ -11,7 +11,7 @@ import Testing
     WindowConfiguration(logicalSize: .init(0, 1), maxFrames: 1),
     WindowConfiguration(logicalSize: .init(.nan, 1), maxFrames: 1),
     WindowConfiguration(logicalSize: .init(8193, 1), maxFrames: 1),
-    WindowConfiguration(maxFrames: 0), WindowConfiguration(maxFrames: -1),
+    WindowConfiguration(maxFrames: 0), WindowConfiguration(maxFrames: -1)
   ] {
     do {
       try await MacOSWindow.renderOffscreen(configuration: configuration) { _, _ in
@@ -91,7 +91,7 @@ import Testing
     let draws = [
       DrawRect(Rect(0, 0, 40, 56), Color(0, 0, 0)),
       DrawRect(Rect(0, 0, 20, 28), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("A")),
-      DrawRect(Rect(20, 28, 10, 14), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("B")),
+      DrawRect(Rect(20, 28, 10, 14), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("B"))
     ]
     let cpu = CPURenderer(width: 40, height: 56)
     cpu.render(draws.span)
@@ -107,7 +107,7 @@ import Testing
     let renderer = try MetalRenderer(logicalSize: .init(20, 20), drawableSize: .init(40, 40))
     let draws = [
       DrawRect(Rect(0, 0, 20, 20), Color(0, 0, 0)),
-      DrawRect(Rect(2, 2, 16, 16), Color(1, 1, 1), radius: 8),
+      DrawRect(Rect(2, 2, 16, 16), Color(1, 1, 1), radius: 8)
     ]
     let image = try #require(await renderer.render(readback: true) { $0.render(draws.span) })
     #expect(pixel(image, width: 40, height: 40, x: 20, y: 20) == [255, 255, 255])
@@ -153,7 +153,7 @@ import Testing
     let draws = [
       DrawRect(Rect(0, 0, 48, 40), Color(0, 0, 0)),
       DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Rect(4, 4, 32, 28)),
-      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0)),
+      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0))
     ]
     let cpu = CPURenderer(width: 48, height: 40)
     cpu.render(draws.span)

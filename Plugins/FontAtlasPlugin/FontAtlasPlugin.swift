@@ -25,7 +25,7 @@ struct FontAtlasPlugin: BuildToolPlugin {
         executable: emojiGenerator.url,
         arguments: [emojiFont.path, sequences.path, emojiOutput.path],
         inputFiles: [emojiFont, sequences],
-        outputFiles: [emojiOutput]),
+        outputFiles: [emojiOutput])
     ]
   }
 }

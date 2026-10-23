@@ -68,7 +68,7 @@ private func sockets() throws -> [Int32] {
         object: 2, opcode: 0,
         arguments: [
           .uint(UInt32(index)), .string(String(repeating: "x", count: 30_000)),
-          .fd(try WireDescriptor.duplicate(fd)),
+          .fd(try WireDescriptor.duplicate(fd))
         ]))
   }
   let expected = packets.reduce(0) { $0 + $1.bytes.readableBytes }

@@ -169,8 +169,7 @@ import Testing
   #expect(input.primaryReleased && !input.primaryDown)
 }
 
-@Test(arguments: [UInt32(0), 2, 3, nil]) func nonFingerSourcesNeverGenerateMomentum(source: UInt32?)
-{
+@Test(arguments: [UInt32(0), 2, 3, nil]) func nonFingerSourcesNeverGenerateMomentum(source: UInt32?) {
   var input = WaylandInput(width: 100, height: 80)
   for time: UInt32 in [100, 110] {
     if let source { input.axisSource(source) }

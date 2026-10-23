@@ -58,7 +58,7 @@ public struct FontAtlas: Sendable {
       for value: UInt32 in [
         0xA0, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009,
         0x200A, 0x202F, 0x205F,
-        0x3000,
+        0x3000
       ] {
         if let scalar = UnicodeScalar(value) { indices[Character(String(scalar))] = space }
       }

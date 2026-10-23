@@ -51,7 +51,7 @@ public struct Game: Sendable {
     guard status == .playing, var rotated = active else { return }
     rotated.rotation = (rotated.rotation + (clockwise ? 1 : 3)) % 4
     for offset in [
-      Cell(0, 0), Cell(-1, 0), Cell(1, 0), Cell(-2, 0), Cell(2, 0), Cell(0, -1), Cell(0, -2),
+      Cell(0, 0), Cell(-1, 0), Cell(1, 0), Cell(-2, 0), Cell(2, 0), Cell(0, -1), Cell(0, -2)
     ] {
       let candidate = rotated.moved(x: offset.x, y: offset.y)
       if fits(candidate) {

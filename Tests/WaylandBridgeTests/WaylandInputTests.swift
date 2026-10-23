@@ -17,7 +17,7 @@ import Testing
   source.keyEvents = [
     WaylandKeyEvent(.character("é"), modifiers: [.control, .shift], physicalCode: 16),
     WaylandKeyEvent(.function(12), phase: .repeated, modifiers: .altGraph, physicalCode: 88),
-    WaylandKeyEvent(.symbol(0xFE51), phase: .released, physicalCode: 47),
+    WaylandKeyEvent(.symbol(0xFE51), phase: .released, physicalCode: 47)
   ]
   let input = NativeWindowInput(source)
   source.resetEdges()
@@ -29,7 +29,7 @@ import Testing
     input.keyEvents == [
       KeyEvent(.character("é"), modifiers: [.control, .shift], physicalCode: 16),
       KeyEvent(.function(12), phase: .repeated, modifiers: .altGraph, physicalCode: 88),
-      KeyEvent(.symbol(0xFE51), phase: .released, physicalCode: 47),
+      KeyEvent(.symbol(0xFE51), phase: .released, physicalCode: 47)
     ])
   #expect(source.keyEvents.isEmpty)
 }
@@ -38,12 +38,12 @@ import Testing
   let sourceKeys: [WaylandKey] = [
     .escape, .tab, .enter, .backspace, .delete, .left, .right, .up, .down,
     .home, .end, .pageUp, .pageDown, .shift, .control, .alt, .altGraph,
-    .super, .capsLock, .numLock,
+    .super, .capsLock, .numLock
   ]
   let expected: [Key] = [
     .escape, .tab, .enter, .backspace, .delete, .left, .right, .up, .down,
     .home, .end, .pageUp, .pageDown, .shift, .control, .alt, .altGraph,
-    .super, .capsLock, .numLock,
+    .super, .capsLock, .numLock
   ]
   var source = WaylandInput(width: 1, height: 1)
   source.keyEvents = sourceKeys.map { WaylandKeyEvent($0) }

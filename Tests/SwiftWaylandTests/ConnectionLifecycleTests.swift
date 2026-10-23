@@ -70,7 +70,7 @@ private struct ConnectionPeer: Sendable {
         registry = try #require(first)
         for (name, interface): (UInt32, String) in [
           (1, "wl_compositor"), (2, "xdg_wm_base"), (3, "zwp_linux_dmabuf_v1"), (4, "wl_seat"),
-          (5, "zwp_idle_inhibit_manager_v1"),
+          (5, "zwp_idle_inhibit_manager_v1")
         ] {
           try send(registry, 0, [.uint(name), .string(interface), .uint(6)])
         }
@@ -447,8 +447,7 @@ private struct ConnectionPeer: Sendable {
   #expect(connection.running)
 }
 
-@Test @MainActor func inputBurstsWaitForFrameCallbackAndPreserveEdgesWithoutAnimating() async throws
-{
+@Test @MainActor func inputBurstsWaitForFrameCallbackAndPreserveEdgesWithoutAnimating() async throws {
   let (connection, initialPeer, _) = try await connectedPeer()
   defer { connection.cleanup() }
   var peer = initialPeer

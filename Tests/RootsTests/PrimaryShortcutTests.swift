@@ -20,7 +20,7 @@ import Testing
   ui.frame(
     input: Input(keyEvents: [
       KeyEvent(.character("a"), modifiers: .super), KeyEvent(.character("c"), modifiers: .super),
-      KeyEvent(.character("c"), phase: .repeated, modifiers: .super),
+      KeyEvent(.character("c"), phase: .repeated, modifiers: .super)
     ]), primaryShortcut: .super, onCopy: { copied.append($0) }, build: build, present: { _ in })
   #expect(ui.selectedText == "Selectable text")
   #expect(copied == ["Selectable text"])

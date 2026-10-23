@@ -51,7 +51,7 @@ private func motionOffset(_ ui: borrowing UIStore, key: UInt64 = 1) throws -> Fl
 }
 
 @Test(arguments: [
-  Input(keyEvents: [KeyEvent(.escape)]), Input(pressed: true), Input(x: 300, y: 20, scrollY: 30),
+  Input(keyEvents: [KeyEvent(.escape)]), Input(pressed: true), Input(x: 300, y: 20, scrollY: 30)
 ])
 func interactionsResetAcceleration(input: Input) throws {
   var ui = UIStore(scrollAcceleration: 1)

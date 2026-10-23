@@ -25,7 +25,7 @@ struct GameControllerTests {
     let moved = controller.game.active
     for key: Key in [
       .up, .character("x"), .character("z"), .character(" "), .character("p"), .escape,
-      .character("r"),
+      .character("r")
     ] {
       #expect(controller.handleKey(KeyEvent(key, phase: .repeated)))
       #expect(controller.game.active == moved)

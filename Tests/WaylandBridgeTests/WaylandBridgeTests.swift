@@ -28,7 +28,7 @@ import Testing
   for rect in [
     Rect(0, 0, 0, 1), Rect(0, 0, 1, -1), Rect(.nan, 0, 1, 1), Rect(0, 0, .infinity, 1),
     Rect(.greatestFiniteMagnitude, 0, .greatestFiniteMagnitude, 1),
-    Rect(0, .greatestFiniteMagnitude, 1, .greatestFiniteMagnitude),
+    Rect(0, .greatestFiniteMagnitude, 1, .greatestFiniteMagnitude)
   ] {
     #expect(!RectangleBatch.accepts(DrawRect(rect, .text)))
   }
@@ -54,7 +54,7 @@ import Testing
 @Test @MainActor func invalidConfigurationsFailBeforeOpeningNativeResources() {
   for configuration in [
     NativeWindowConfiguration(width: 0), NativeWindowConfiguration(height: -1),
-    NativeWindowConfiguration(maxFrames: -1), NativeWindowConfiguration(maxFrames: 0),
+    NativeWindowConfiguration(maxFrames: -1), NativeWindowConfiguration(maxFrames: 0)
   ] {
     #expect(throws: NativeWindowError.invalidConfiguration) {
       try NativeWindow.run(configuration: configuration, surfaceless: true) { _, _ in
@@ -185,7 +185,7 @@ extension NativeSessionTests {
           DrawRect(Rect(4.25, 3.5, 17.5, 24.5), Color(1, 1, 1), glyphUV: uv),
           DrawRect(
             Rect(34.25, 3.5, 17.5, 24.5), Color(1, 1, 1), clip: Rect(43, 0, 21, 40), glyphUV: uv),
-          DrawRect(Rect(60, 36, 4, 4), Color(1, 0, 0)),
+          DrawRect(Rect(60, 36, 4, 4), Color(1, 0, 0))
         ].span)
     }
     let data = try Data(contentsOf: path)
@@ -219,7 +219,7 @@ extension NativeSessionTests {
   let largest = try BufferSize(width: .max, height: 1, scale: 1)
   #expect(largest.width == .max)
   for (width, height, scale): (Int32, Int32, Int32) in [
-    (0, 10, 1), (10, -1, 1), (10, 10, 0), (10, 10, -1), (.max, 1, 2), (1, .max, 2),
+    (0, 10, 1), (10, -1, 1), (10, 10, 0), (10, 10, -1), (.max, 1, 2), (1, .max, 2)
   ] {
     #expect(throws: NativeWindowError.invalidConfiguration) {
       _ = try BufferSize(width: width, height: height, scale: scale)
@@ -263,7 +263,7 @@ extension NativeSessionTests {
     let draws = [
       DrawRect(Rect(0, 0, 16, 16), Color(1, 0, 0)),
       DrawRect(Rect(0, 0, 16, 16), Color(0, 1, 0), clip: Rect(2, 3, 5, 4)),
-      DrawRect(Rect(12, 12, 4, 4), Color(0, 0, 1)),
+      DrawRect(Rect(12, 12, 4, 4), Color(0, 0, 1))
     ]
     renderer.withFrame { $0.render(draws.span) }
     try renderer.endFrame(surfaceless: true)

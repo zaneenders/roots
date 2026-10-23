@@ -292,7 +292,7 @@ private func requiredHandle(
   ui.frame(
     input: Input(keyEvents: [
       KeyEvent(.tab, modifiers: .shift), KeyEvent(.tab, phase: .repeated),
-      KeyEvent(.tab, phase: .released),
+      KeyEvent(.tab, phase: .released)
     ]), build: { row(&$0, [1, 2, 3]) }, present: { _ in })
   #expect(ui.state(for: third)?.focused == true)
   ui.frame(
@@ -310,7 +310,7 @@ private func requiredHandle(
       KeyEvent(.tab), KeyEvent(.enter), KeyEvent(.enter, phase: .repeated),
       KeyEvent(.enter, phase: .released),
       KeyEvent(.character(" ")), KeyEvent(.character(" "), phase: .repeated),
-      KeyEvent(.enter, modifiers: .control), KeyEvent(.character(" "), modifiers: .alt),
+      KeyEvent(.enter, modifiers: .control), KeyEvent(.character(" "), modifiers: .alt)
     ]), build: { row(&$0, [1], action: { calls += 1 }) }, present: { _ in })
   let handle = try requiredHandle(ui, for: 1)
   #expect(calls == 2)

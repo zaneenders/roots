@@ -7,14 +7,14 @@ import Testing
     [.init(8, 8), .init(24, 8), .init(24, 24)],
     [.init(8, 8), .init(24, 24), .init(8, 24), .init(24, 8)],
     [.init(8, 8), .init(8, 8), .init(24, 24)],
-    [.init(8, 8)],
+    [.init(8, 8)]
   ] {
     let stroke = try #require(PolylineStroke(points: points, width: 6))
     let cpu = CPURenderer(width: 32, height: 32)
     cpu.render(
       [
         DrawRect(Rect(0, 0, 32, 32), Color(0, 0, 0)),
-        DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5)),
+        DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5))
       ].span)
     #expect(cpu.pixels.max() == 127)
     #expect(cpu.pixels.contains { $0 > 0 && $0 < 127 })

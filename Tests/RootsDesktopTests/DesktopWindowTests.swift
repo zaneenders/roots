@@ -75,7 +75,7 @@ struct DesktopWindowTests {
     }
     #expect(events.isEmpty)
     for (acceleration, deceleration): (Float, Float) in [
-      (-1, 4), (.nan, 4), (1, 0), (1, .infinity),
+      (-1, 4), (.nan, 4), (1, 0), (1, .infinity)
     ] {
       await #expect(throws: DesktopWindowError.invalidConfiguration) {
         try await DesktopWindow(
@@ -96,7 +96,7 @@ struct DesktopWindowTests {
   @Test func invalidConfigurationFailsBeforeBuildingContent() async {
     var builds = 0
     for size: SIMD2<Float> in [
-      .init(0, 10), .init(-1, 10), .init(.nan, 10), .init(10, .infinity), .init(8193, 10),
+      .init(0, 10), .init(-1, 10), .init(.nan, 10), .init(10, .infinity), .init(8193, 10)
     ] {
       let window = DesktopWindow("Invalid", size: size) { _ in
         builds += 1

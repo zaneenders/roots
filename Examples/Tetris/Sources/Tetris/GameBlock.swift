@@ -1,7 +1,6 @@
 import Roots
 import TetrisCore
 
-/// A small composition of ordinary public Roots blocks, not a custom window backend.
 struct GameBlock: Block {
   let controller: GameController
   let bounds: Rect
@@ -63,7 +62,7 @@ struct GameBlock: Block {
         paint.drawText("HOW TO PLAY", x: x, y: y, font: .init(size: 12), color: Palette.muted)
         let rows = [
           "Left / Right   Move", "Up / X         Rotate CW", "Z              Rotate CCW",
-          "Down           Soft drop", "Space          Hard drop", "P / Esc        Pause",
+          "Down           Soft drop", "Space          Hard drop", "P / Esc        Pause"
         ]
         for (index, row) in rows.enumerated() {
           paint.drawText(

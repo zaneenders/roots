@@ -14,13 +14,13 @@ extension NativeSessionTests {
     try renderer.setup(input: input)
     defer { renderer.cleanup() }
     let points: [SIMD2<Float>] = [
-      .init(8, 8), .init(32, 28), .init(8, 28), .init(32, 8), .init(32, 8),
+      .init(8, 8), .init(32, 28), .init(8, 28), .init(32, 8), .init(32, 8)
     ]
     let stroke = try #require(PolylineStroke(points: points, width: 4))
     let draws = [
       DrawRect(Rect(0, 0, 48, 40), Color(0, 0, 0)),
       DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Rect(4, 4, 32, 28)),
-      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0)),
+      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0))
     ]
     try renderer.beginFrame(width: 48, height: 40, bufferScale: scale)
     renderer.withFrame { $0.render(draws.span) }
@@ -40,7 +40,7 @@ extension NativeSessionTests {
       DrawRect(
         polyline: physicalStroke, color: Color(1, 1, 1, 0.5),
         clip: Rect(4 * s, 4 * s, 32 * s, 28 * s)),
-      DrawRect(Rect(40 * s, 30 * s, 4 * s, 4 * s), Color(1, 0, 0)),
+      DrawRect(Rect(40 * s, 30 * s, 4 * s, 4 * s), Color(1, 0, 0))
     ]
     let cpu = CPURenderer(width: width, height: height)
     cpu.render(physical.span)

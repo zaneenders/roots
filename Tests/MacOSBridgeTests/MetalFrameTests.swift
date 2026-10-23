@@ -14,7 +14,7 @@ import Testing
 
 @Test @MainActor func invalidAndOutsideScissorsAreEmpty() {
   for rect in [
-    Rect(.nan, 0, 1, 1), Rect(0, 0, .infinity, 1), Rect(0, 0, -1, 1), Rect(20, 20, 1, 1),
+    Rect(.nan, 0, 1, 1), Rect(0, 0, .infinity, 1), Rect(0, 0, -1, 1), Rect(20, 20, 1, 1)
   ] {
     #expect(MetalScissorRect(rect, logicalSize: .init(10, 10), drawableSize: .init(20, 20)).isEmpty)
   }
@@ -31,7 +31,7 @@ import Testing
     DrawRect(Rect(10, 20, 30, 40), Color(0.1, 0.2, 0.3, 0.4), radius: 5),
     DrawRect(Rect(0, 0, 10, 10), .text),
     DrawRect(Rect(0, 0, 10, 10), .text, clip: clip),
-    DrawRect(Rect(0, 0, 10, 10), .text),
+    DrawRect(Rect(0, 0, 10, 10), .text)
   ]
   state.withFrame { $0.render(draws.span) }
   draws.removeAll()
@@ -58,7 +58,7 @@ import Testing
     DrawRect(Rect(0, 0, 1, 1), .text, radius: .infinity),
     DrawRect(Rect(0, 0, 1, 1), .text, clip: Rect(.nan, 0, 1, 1)),
     DrawRect(Rect(0, 0, 1, 1), .text, clip: Rect(20, 20, 1, 1)),
-    DrawRect(Rect(0, 0, 1, 1), .text, glyphUV: Rect(0, 0, 2, 1)),
+    DrawRect(Rect(0, 0, 1, 1), .text, glyphUV: Rect(0, 0, 2, 1))
   ]
   state.withFrame { $0.render(draws.span) }
   #expect(state.vertices.isEmpty && state.runs.isEmpty)
@@ -86,7 +86,7 @@ import Testing
   var draws = [
     DrawRect(Rect(0, 0, 10, 10), .text),
     DrawRect(polyline: stroke, color: .accent),
-    DrawRect(Rect(0, 0, 10, 10), .text),
+    DrawRect(Rect(0, 0, 10, 10), .text)
   ]
   state.begin(logicalSize: .init(10, 10), drawableSize: .init(20, 20))
   state.withFrame { $0.render(draws.span) }
@@ -115,8 +115,7 @@ import Testing
   )
 }
 
-@Test(arguments: [Int32(1), 2]) func fractionalMetalScissorsMatchHalfOpenPixelCenters(scale: Int32)
-{
+@Test(arguments: [Int32(1), 2]) func fractionalMetalScissorsMatchHalfOpenPixelCenters(scale: Int32) {
   let parent = Rect(1.75, 0.5, 1.5, 6)
   for rect in [parent, parent.intersection(Rect(2.25, 1.75, 4, 2.5)), Rect(0.5, 0.5, 1, 1)] {
     let scissor = MetalScissorRect(

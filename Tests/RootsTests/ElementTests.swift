@@ -45,7 +45,7 @@ import Testing
     KeyEvent(.character("é"), modifiers: .control), KeyEvent(.backspace, phase: .repeated),
     KeyEvent(.escape), KeyEvent(.tab), KeyEvent(.enter),
     KeyEvent(.character("🙂"), phase: .released),
-    KeyEvent(.tab), KeyEvent(.left),
+    KeyEvent(.tab), KeyEvent(.left)
   ]
   ui.frame(
     input: Input(keyEvents: events),
@@ -264,7 +264,7 @@ import Testing
   #expect(ui.state(for: second)?.focused == false)
   for input in [
     Input(x: 30, y: 90, scrollY: 10), Input(x: 30, y: 55, scrollY: .nan),
-    Input(x: 30, y: 55, scrollY: .infinity), Input(x: 30, y: 55, scrollX: 10),
+    Input(x: 30, y: 55, scrollY: .infinity), Input(x: 30, y: 55, scrollX: 10)
   ] {
     ui.frame(input: input, build: build, present: { _ in })
   }

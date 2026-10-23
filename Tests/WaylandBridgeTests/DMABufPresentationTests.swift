@@ -30,7 +30,7 @@ extension NativeSessionTests {
       let draws = [
         DrawRect(Rect(0, 0, Float(input.width), Float(input.height)), Color(0.1, 0.2, 0.4)),
         DrawRect(Rect(8 + Float(frames * 4), 8, 32, 24), Color(1, 0, 0)),
-        DrawRect(Rect(8, Float(input.height) - 32, 32, 24), Color(0, 1, 0)),
+        DrawRect(Rect(8, Float(input.height) - 32, 32, 24), Color(0, 1, 0))
       ]
       frame.render(draws.span)
       frames += 1
@@ -160,7 +160,7 @@ extension NativeSessionTests {
       DrawRect(Rect(0, 0, 24, 48), Color(0, 1, 0, 0.5), clip: Rect(8, 8, 16, 24)),
       DrawRect(Rect(28, 4, 20, 36), .text, glyphUV: FontAtlas.shared.glyphUV("A")),
       DrawRect(
-        Rect(56, 4, 32, 36), .text, glyphUV: EmojiAtlas.shared.glyphUV("🙂"), colorGlyph: true),
+        Rect(56, 4, 32, 36), .text, glyphUV: EmojiAtlas.shared.glyphUV("🙂"), colorGlyph: true)
     ]
     try host.renderer.beginFrame(width: 96, height: 48)
     host.renderer.withFrame { $0.render(draws.span) }

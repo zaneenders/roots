@@ -105,7 +105,7 @@ import Testing
     { $0.axis = .init(0, 1) },
     { $0.radius = 1 },
     { $0.strokeWidth = 1 },
-    { $0.glyphUV = Rect(0, 0, 1, 1) },
+    { $0.glyphUV = Rect(0, 0, 1, 1) }
   ]
   var store = UIStore()
   store.frame(

@@ -94,7 +94,7 @@ private func bundledAtlasData() throws -> Data {
   #expect(
     messages.withLock { $0 } == [
       "Roots: unsupported glyph \"🙂\" (U+1F642); using U+FFFD replacement glyph\n",
-      "Roots: unsupported glyph \"👩‍💻\" (U+1F469 U+200D U+1F4BB); using U+FFFD replacement glyph\n",
+      "Roots: unsupported glyph \"👩‍💻\" (U+1F469 U+200D U+1F4BB); using U+FFFD replacement glyph\n"
     ])
 }
 
@@ -159,7 +159,7 @@ private func bundledAtlasData() throws -> Data {
     #expect(throws: FontAtlas.AssetError.self) { _ = try FontAtlas(data: Data(data.prefix(cut))) }
   }
   for (offset, word): (Int, UInt32) in [
-    (0, 0), (4, 2), (8, 0), (12, 4097), (16, .max), (20, 0xD800), (20, 65),
+    (0, 0), (4, 2), (8, 0), (12, 4097), (16, .max), (20, 0xD800), (20, 65)
   ] {
     var corrupt = data
     for byte in 0..<4 { corrupt[offset + byte] = UInt8(truncatingIfNeeded: word >> (byte * 8)) }
@@ -235,7 +235,7 @@ func invalidFontSizesAreRejected(size: Float) async {
   let font = MonospaceFont(size: 17.5)
   for (text, columns) in [
     ("", 0), ("\n\n", 0), ("\nABC\nx\n", 3), ("A\nBC", 2),
-    ("e\u{301}👩‍💻🇳🇿", 5), ("\r\n", 1), ("A\r\nB\n", 3), ("A\rB\u{2028}C", 5),
+    ("e\u{301}👩‍💻🇳🇿", 5), ("\r\n", 1), ("A\r\nB\n", 3), ("A\rB\u{2028}C", 5)
   ] {
     #expect(font.width(of: text) == Float(columns) * font.advance)
   }
@@ -247,7 +247,7 @@ func invalidFontSizesAreRejected(size: Float) async {
     ("", ""), ("\n\n", "\n\n"), ("ABC\n\nAB\n", "ABC\n\nAB\n"),
     ("e\u{301}👩‍💻🇳🇿X", "e\u{301}…"), ("A\r\nB", "A\r\nB"), ("A\r\nBC", "A\r\n…"),
     ("ABCD\n", "AB…\n"), ("ABCD\nWXYZ", "AB…\nWX…"),
-    ("A\n\nBCDEF\nZ\n12345\n", "A\n\nBC…\nZ\n12…\n"),
+    ("A\n\nBCDEF\nZ\n12345\n", "A\n\nBC…\nZ\n12…\n")
   ] {
     let truncated = font.truncating(text, to: 44)
     #expect(truncated.utf8.elementsEqual(expected.utf8))
@@ -270,14 +270,14 @@ func invalidFontSizesAreRejected(size: Float) async {
   let texts = [
     "", "\n", "\n\n", "A", "ABCDE", "\nABCDE", "ABCDE\n", "A\nABCDE\n\nBC\n",
     "ABCDE\nFGHIJ", "e\u{301}👩‍💻🇳🇿👍🏽X", "A\r\nBC\nDE\r\n", "A\rB\u{2028}C",
-    "…\nA…B", String(repeating: "A", count: 300), String(repeating: "👩‍💻e\u{301}", count: 100),
+    "…\nA…B", String(repeating: "A", count: 300), String(repeating: "👩‍💻e\u{301}", count: 100)
   ]
   for size: Float in [
-    .leastNonzeroMagnitude, .leastNormalMagnitude, 0.25, 17.5, 20, .greatestFiniteMagnitude / 2,
+    .leastNonzeroMagnitude, .leastNormalMagnitude, 0.25, 17.5, 20, .greatestFiniteMagnitude / 2
   ] {
     let font = MonospaceFont(size: size)
     var widths: [Float] = [
-      -.infinity, -1, -0.0, 0, .leastNonzeroMagnitude, .nan, .infinity, .greatestFiniteMagnitude,
+      -.infinity, -1, -0.0, 0, .leastNonzeroMagnitude, .nan, .infinity, .greatestFiniteMagnitude
     ]
     for columns in 1...6 {
       let boundary = font.glyphWidth + Float(columns - 1) * font.advance
@@ -367,7 +367,7 @@ func invalidFontSizesAreRejected(size: Float) async {
 @Test func columnPrefixesKeepGraphemeBoundariesAndHandleExtremeBudgets() {
   let text = "Ae\u{301}🙂B"
   for (columns, expected) in [
-    (0, ""), (1, "A"), (2, "Ae\u{301}"), (3, "Ae\u{301}"), (4, "Ae\u{301}🙂"), (Int.max, text),
+    (0, ""), (1, "A"), (2, "Ae\u{301}"), (3, "Ae\u{301}"), (4, "Ae\u{301}🙂"), (Int.max, text)
   ] {
     #expect(String(text[..<MonospaceFont.prefixEnd(in: text, columns: columns)]) == expected)
   }

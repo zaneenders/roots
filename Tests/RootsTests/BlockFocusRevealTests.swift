@@ -8,7 +8,7 @@ struct BlockFocusRevealTests {
     var host = UIHost()
     var received: [KeyEvent] = []
     let events = [
-      KeyEvent(.right), KeyEvent(.right, phase: .repeated), KeyEvent(.right, phase: .repeated),
+      KeyEvent(.right), KeyEvent(.right, phase: .repeated), KeyEvent(.right, phase: .repeated)
     ]
     for index in 0...events.count {
       host.frame(
@@ -30,14 +30,14 @@ struct BlockFocusRevealTests {
     (height: Float(200), initialOffset: Float(0), expectedOffset: Float(120)),
     (200, 80, 120), (200, 170, 170), (200, 240, 220), (200, 400, 220),
     (100, 0, 120), (100, 140, 120),
-    (30, 0, 50), (30, 80, 80), (30, 140, 120), (30, 300, 120),
+    (30, 0, 50), (30, 80, 80), (30, 140, 120), (30, 300, 120)
   ])
   func keysRevealTheNearestEdgeAndThenSettle(
     height: Float, initialOffset: Float, expectedOffset: Float
   ) {
     var host = UIHost()
     let events = [
-      KeyEvent(.right), KeyEvent(.right, phase: .repeated), KeyEvent(.right, phase: .repeated),
+      KeyEvent(.right), KeyEvent(.right, phase: .repeated), KeyEvent(.right, phase: .repeated)
     ]
     for index in 0...events.count {
       host.frame(
@@ -58,7 +58,7 @@ struct BlockFocusRevealTests {
   @Test(arguments: [
     (height: Float(200), initialOffset: Float(0), expectedOffset: Float(118)),
     (200, 400, 222), (98, 0, 118), (98, 300, 120),
-    (96, 0, 118), (96, 300, 118), (30, 0, 52), (30, 300, 118),
+    (96, 0, 118), (96, 300, 118), (30, 0, 52), (30, 300, 118)
   ])
   func requestedRevealAccountsForPaddingAndThenSettles(
     height: Float, initialOffset: Float, expectedOffset: Float

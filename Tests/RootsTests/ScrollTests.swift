@@ -55,7 +55,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
   for input in [
     Input(x: 9, y: 25, scrollY: 40), Input(x: 20, y: 80, scrollY: 40),
     Input(x: 20, y: 25, scrollY: .nan), Input(x: 20, y: 25, scrollY: .infinity),
-    Input(x: 20, y: 25, scrollX: 40),
+    Input(x: 20, y: 25, scrollX: 40)
   ] {
     ui.frame(input: input, build: { column(&$0) }, present: { _ in })
     #expect(try state(ui, key: 100).scrollOffset == 0.5)
@@ -274,7 +274,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test(arguments: [
   Input(x: 20, y: 25, pressed: true), Input(keyEvents: [KeyEvent(.tab)]),
   Input(keyEvents: [KeyEvent(.enter)]),
-  Input(x: 20, y: 25, scrollY: -2), Input(x: 200, y: 200, scrollY: 2), Input(scrollVelocityY: 0),
+  Input(x: 20, y: 25, scrollY: -2), Input(x: 200, y: 200, scrollY: 2), Input(scrollVelocityY: 0)
 ]) func explicitInteractionStopsMomentum(input: Input) throws {
   var ui = UIStore()
   ui.frame(
@@ -375,7 +375,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
   var ui = UIStore()
   for input in [
     Input(x: 20, y: 25, scrollY: 1000, scrollVelocityY: 160),
-    Input(x: 20, y: 25, scrollY: -1000, scrollVelocityY: -160),
+    Input(x: 20, y: 25, scrollY: -1000, scrollVelocityY: -160)
   ] {
     ui.frame(input: input, build: { column(&$0) }, present: { _ in })
     let offset = try state(ui, key: 100).scrollOffset

@@ -63,8 +63,7 @@ struct TextLayout {
   mutating func update(_ content: [TextLine], selectionEnd: Int = 0) -> Update {
     if reuses(content) { return Update(reusedLineCount: lines.count, preservesSelection: true) }
     var prefix = 0
-    while prefix < min(source.count, content.count), Self.sameLine(source[prefix], content[prefix])
-    { prefix += 1 }
+    while prefix < min(source.count, content.count), Self.sameLine(source[prefix], content[prefix]) { prefix += 1 }
     while prefix > 0, lines[prefix - 1].endsInCarriageReturn { prefix -= 1 }
     let keptUTF8 = prefix > 0 ? lines[prefix - 1].endUTF8 : 0
     let keptCount = prefix > 0 ? lines[prefix - 1].start + lines[prefix - 1].count : 0
@@ -127,8 +126,7 @@ struct TextLayout {
     return runs
   }
 
-  private func suffixPreservesSelection(_ suffix: String, afterUTF8 offset: Int, count: Int) -> Bool
-  {
+  private func suffixPreservesSelection(_ suffix: String, afterUTF8 offset: Int, count: Int) -> Bool {
     let cut = text.utf8.index(text.utf8.startIndex, offsetBy: offset)
     var previous = text[cut...].makeIterator()
     var next = suffix.makeIterator()

@@ -98,7 +98,7 @@ public struct WaylandDMABufPlane: Sendable {
         [
           .fd(fds[index]), .uint(UInt32(index)), .uint(planes[index].offset),
           .uint(planes[index].stride), .uint(UInt32(truncatingIfNeeded: modifier >> 32)),
-          .uint(UInt32(truncatingIfNeeded: modifier)),
+          .uint(UInt32(truncatingIfNeeded: modifier))
         ])
     }
     objects.request(params, 2, [.int(width), .int(height), .uint(format), .uint(0)])

@@ -58,8 +58,7 @@ public struct EmojiAtlas: Sendable {
         !text.unicodeScalars.contains("\u{FFFD}"),
         indices.updateValue(index, forKey: character) == nil
       else { throw .invalidAtlas }
-      if text.unicodeScalars.count > 1 || text.unicodeScalars.first!.properties.isEmojiPresentation
-      {
+      if text.unicodeScalars.count > 1 || text.unicodeScalars.first!.properties.isEmojiPresentation {
         preferred.insert(character)
       }
     }
