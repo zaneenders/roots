@@ -1,5 +1,3 @@
-/// All game rules are independent of Roots, wall clocks, and rendering.
-/// A seeded game and an ordered sequence of commands always produce the same state.
 public struct Game: Sendable {
   public static let width = 10
   public static let height = 20
@@ -33,7 +31,6 @@ public struct Game: Sendable {
     return board[y * Self.width + x]
   }
 
-  /// The landing position is a pure query, shared by the ghost and hard drop.
   public var ghost: Piece? {
     guard var piece = active else { return nil }
     while fits(piece.moved(y: 1)) { piece = piece.moved(y: 1) }

@@ -1,4 +1,3 @@
-/// Integer board coordinates. The origin is the upper-left cell; y increases downwards.
 public struct Cell: Equatable, Sendable {
   public var x: Int
   public var y: Int
@@ -55,7 +54,6 @@ public struct Piece: Equatable, Sendable {
   }
 }
 
-/// A deliberately small, reproducible randomizer: every bag contains all seven kinds.
 struct SevenBag: Sendable {
   private var state: UInt64
   private var remaining: [Tetromino] = []

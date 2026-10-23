@@ -3,8 +3,6 @@ import Roots
 import RootsDesktop
 import TetrisCore
 
-/// Roots tracks observed properties read while building and painting blocks.
-/// The desktop frame clock drives gravity, so there is no timer or background task.
 @MainActor @Observable
 final class GameController: DesktopFrameDelegate {
   private(set) var game: Game
@@ -19,7 +17,6 @@ final class GameController: DesktopFrameDelegate {
   func prepareFrame(input: inout Input, dt: Float) {
     if input.focusLost {
       game.pause()
-      // A key arriving with focus loss must not immediately unpause or restart the game.
       input.keyEvents.removeAll()
     } else {
       game.advance(by: Double(dt))
@@ -28,8 +25,6 @@ final class GameController: DesktopFrameDelegate {
   }
 
   func frameUpdate(after input: Input) -> DesktopFrameUpdate {
-    // Input is dispatched after blocks are built. Rebuild once to keep labels and
-    // button titles in sync with the board in the very same presented frame.
     changedDuringInput ? .rebuild(pointer: .init(input.x, input.y)) : .present
   }
 
@@ -43,8 +38,6 @@ final class GameController: DesktopFrameDelegate {
     changedDuringInput = true
   }
 
-  /// Window-level shortcuts work even after clicking a button. Tab and Enter
-  /// remain available for Roots' built-in button focus and keyboard activation.
   @discardableResult
   func handleKey(_ event: KeyEvent) -> Bool {
     guard event.phase != .released,
