@@ -7,6 +7,10 @@ let swiftSettings: [SwiftSetting] = [
   .strictMemorySafety(),
 ]
 var dependencies: [Package.Dependency] = []
+var windowsBridgeDependencies: [Target.Dependency] = ["Roots", "RootsCPU"]
+#if os(Windows)
+  windowsBridgeDependencies.append("CWindowsHost")
+#endif
 var products: [Product] = [
   .library(name: "Roots", targets: ["Roots"]),
   .library(name: "RootsCPU", targets: ["RootsCPU"]),
@@ -23,7 +27,11 @@ var targets: [Target] = [
       "libpng/arm/palette_neon_intrinsics.c",
     ],
     publicHeadersPath: "include",
-    linkerSettings: [.linkedLibrary("z"), .linkedLibrary("m")]),
+    linkerSettings: [
+      .linkedLibrary("z", .when(platforms: [.macOS, .linux])),
+      .linkedLibrary("m", .when(platforms: [.linux])),
+      .linkedLibrary("zlib", .when(platforms: [.windows])),
+    ]),
   .target(
     name: "CFreeType",
     dependencies: ["CPNG"], path: "Vendor/FreeType",
@@ -68,6 +76,12 @@ var targets: [Target] = [
   .testTarget(name: "RootsTests", dependencies: ["Roots"], swiftSettings: swiftSettings),
   .testTarget(
     name: "RootsCPUTests", dependencies: ["Roots", "RootsCPU"], swiftSettings: swiftSettings),
+  // Keep input translation and CPU frames testable without a Windows SDK.
+  .target(
+    name: "WindowsBridge", dependencies: windowsBridgeDependencies, swiftSettings: swiftSettings),
+  .testTarget(
+    name: "WindowsBridgeTests", dependencies: ["WindowsBridge", "Roots", "RootsCPU"],
+    swiftSettings: swiftSettings),
 ]
 #if os(Linux)
   dependencies += [
@@ -135,11 +149,22 @@ var targets: [Target] = [
       name: "MacOSBridgeTests", dependencies: ["MacOSBridge", "RootsCPU", "DesktopTestSupport"],
       swiftSettings: swiftSettings),
   ]
+#elseif os(Windows)
+  products += [.library(name: "WindowsBridge", targets: ["WindowsBridge"])]
+  targets += [
+    .target(
+      name: "CWindowsHost", publicHeadersPath: "include",
+      linkerSettings: [.linkedLibrary("user32"), .linkedLibrary("gdi32")]),
+    .target(
+      name: "DesktopTestSupport", path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings),
+  ]
 #endif
-#if os(macOS) || os(Linux)
+#if os(macOS) || os(Linux) || os(Windows)
   products += [.library(name: "RootsDesktop", targets: ["RootsDesktop"])]
   #if os(macOS)
     let desktopBackend: Target.Dependency = "MacOSBridge"
+  #elseif os(Windows)
+    let desktopBackend: Target.Dependency = "WindowsBridge"
   #else
     let desktopBackend: Target.Dependency = "WaylandBridge"
   #endif

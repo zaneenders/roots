@@ -4,6 +4,8 @@ import Roots
   import MacOSBridge
 #elseif os(Linux)
   import WaylandBridge
+#elseif os(Windows)
+  import WindowsBridge
 #endif
 
 @MainActor
@@ -19,6 +21,8 @@ public enum DesktopSystem {
   public static func requestRedraw() {
     #if os(macOS)
       MacOSWindow.requestRedraw()
+    #elseif os(Windows)
+      WindowsWindow.requestRedraw()
     #else
       NativeWindow.requestRedraw()
     #endif
@@ -27,6 +31,8 @@ public enum DesktopSystem {
   public static func writeClipboard(_ text: String) -> Bool {
     #if os(macOS)
       MacOSWindow.writeClipboard(text)
+    #elseif os(Windows)
+      WindowsWindow.writeClipboard(text)
     #else
       NativeWindow.writeClipboard(text)
     #endif
@@ -35,6 +41,8 @@ public enum DesktopSystem {
   public static func requestClose() {
     #if os(macOS)
       MacOSWindow.requestClose()
+    #elseif os(Windows)
+      WindowsWindow.requestClose()
     #else
       NativeWindow.requestClose()
     #endif
@@ -43,6 +51,8 @@ public enum DesktopSystem {
   public static func readClipboard() async -> String? {
     #if os(macOS)
       await MacOSWindow.readClipboard()
+    #elseif os(Windows)
+      await WindowsWindow.readClipboard()
     #else
       await NativeWindow.readClipboard()
     #endif
@@ -68,6 +78,21 @@ public enum DesktopSystem {
         try await MacOSWindow.renderOffscreen(configuration: configuration, frame: frame)
       } else {
         try await MacOSWindow.runAsync(configuration: configuration, frame: frame)
+      }
+    #elseif os(Windows)
+      let configuration = WindowsWindowConfiguration(
+        size: window.size, title: window.title, maxFrames: window.maxFrames,
+        screenshotPath: window.screenshotPath)
+      let frame: @MainActor (WindowsFrameInput, borrowing WindowsRenderFrame) -> Void = {
+        snapshot, renderer in
+        runtime.frame(
+          input: snapshot.input, viewport: Viewport(size: snapshot.size),
+          time: snapshot.timeSeconds, present: { renderer.render($0) })
+      }
+      if window.offscreen {
+        try await WindowsWindow.renderOffscreen(configuration: configuration, frame: frame)
+      } else {
+        try await WindowsWindow.runAsync(configuration: configuration, frame: frame)
       }
     #else
       try await run(
