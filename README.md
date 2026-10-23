@@ -23,7 +23,8 @@ swift run --package-path Examples/Tetris Tetris
 
 ## Platforms
 
-macOS 27+ and Linux (Hyprland). PRs for other backends welcome.
+macOS 27+, Linux (Hyprland), and an initial Windows Win32/CPU backend.
+See [Windows setup, capabilities, and validation limits](Documentation/Windows.md).
 
 ## Development
 
@@ -33,6 +34,7 @@ Requires Swift 6.4.1 (`pkg-config` on Linux), plus:
 | --- | --- |
 | macOS | zlib (provided by the SDK) |
 | Linux / Wayland | Development headers and libraries for zlib, xkbcommon, EGL, and GLES 3 |
+| Windows | Microsoft C++ Build Tools and Windows SDK; zlib headers and `zlib.lib` |
 
 ```sh
 git clone --recurse-submodules https://github.com/zaneenders/roots.git
