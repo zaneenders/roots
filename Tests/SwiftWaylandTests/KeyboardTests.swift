@@ -72,7 +72,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
     input.keyEvents == [
       event(.character("a"), code: 16), event(.character("A"), code: 16, modifiers: .shift),
       event(.character(" "), code: 57), event(.backspace, code: 14), event(.left, code: 105),
-      event(.enter, code: 28), event(.character("a"), code: 16, phase: .released),
+      event(.enter, code: 28), event(.character("a"), code: 16, phase: .released)
     ])
   input.resetEdges()
   #expect(input.keyEvents.isEmpty)
@@ -89,7 +89,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
   keyboard.load(keymap: keymap)
   var input = WaylandInput(width: 100, height: 80)
   for (mask, modifier): (UInt32, WaylandKeyModifiers) in [
-    (4, .control), (8, .alt), (64, .super), (128, .altGraph),
+    (4, .control), (8, .alt), (64, .super), (128, .altGraph)
   ] {
     keyboard.modifiers(depressed: mask, latched: 0, locked: 0, group: 0)
     keyboard.key(16, pressed: true, input: &input)
@@ -97,7 +97,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
     #expect(
       input.keyEvents == [
         event(.character("a"), code: 16, modifiers: modifier),
-        event(.enter, code: 28, modifiers: modifier),
+        event(.enter, code: 28, modifiers: modifier)
       ])
     input.resetEdges()
   }
@@ -113,7 +113,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
   #expect(
     input.keyEvents.map(\.key) == [
       .character("é"), .function(1), .symbol(0xFE51), .shift, .control, .alt, .super, .altGraph,
-      .escape, .tab,
+      .escape, .tab
     ])
   #expect(input.keyEvents.allSatisfy { $0.phase == .pressed })
 }
@@ -140,7 +140,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
   #expect(
     input.keyEvents == [
       event(.shift, code: 42),
-      event(.character("A"), code: 16, phase: .repeated, modifiers: .shift),
+      event(.character("A"), code: 16, phase: .repeated, modifiers: .shift)
     ])
   input.resetEdges()
   keyboard.key(16, pressed: false, input: &input)
@@ -196,7 +196,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
   keyboard.key(UInt32.max, pressed: false, input: &input)
   #expect(
     input.keyEvents == [
-      event(.symbol(0), code: 16), event(.symbol(0), code: .max, phase: .released),
+      event(.symbol(0), code: 16), event(.symbol(0), code: .max, phase: .released)
     ])
 }
 
@@ -226,7 +226,7 @@ private func withKeymapFile(_ bytes: Data, _ body: (Int32) throws -> Void) throw
   keyboard.repeatKeys(input: &input, now: start.advanced(by: .milliseconds(200)))
   #expect(
     input.keyEvents == [
-      event(.shift, code: 42, phase: .released), event(.character("a"), code: 16, phase: .repeated),
+      event(.shift, code: 42, phase: .released), event(.character("a"), code: 16, phase: .repeated)
     ])
   input.resetEdges()
   keyboard.load(keymap: keymap)

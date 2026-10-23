@@ -60,7 +60,7 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
 
 @Test func wireRejectsInvalidLengthOpcodeObjectAndMissingStringTerminator() throws {
   for (object, header): (UInt32, UInt32) in [
-    (1, 4 << 16), (1, 9 << 16), (999, 8 << 16), (1, 8 << 16 | 99),
+    (1, 4 << 16), (1, 9 << 16), (999, 8 << 16), (1, 8 << 16 | 99)
   ] {
     var decoder = WireDecoder()
     var bytes = ByteBufferAllocator().buffer(capacity: 8)

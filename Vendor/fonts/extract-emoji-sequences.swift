@@ -2,7 +2,7 @@
 import Foundation
 
 #if canImport(CryptoKit)
-  import CryptoKit
+import CryptoKit
 #endif
 
 let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -35,24 +35,24 @@ func coverage(_ offset: Int) -> [Int] {
 
 func sha256() throws -> String {
   #if canImport(CryptoKit)
-    return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
   #else
-    let process = Process()
-    let output = Pipe()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = ["sha256sum", font.path]
-    process.standardInput = FileHandle.nullDevice
-    process.standardOutput = output
-    try process.run()
-    let checksum = output.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-    guard process.terminationStatus == 0,
-      let digest = String(decoding: checksum, as: UTF8.self).split(separator: " ").first,
-      digest.count == 64, digest.allSatisfy(\.isHexDigit)
-    else {
-      throw CocoaError(.fileReadUnknown, userInfo: [NSLocalizedDescriptionKey: "sha256sum failed"])
-    }
-    return String(digest)
+  let process = Process()
+  let output = Pipe()
+  process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+  process.arguments = ["sha256sum", font.path]
+  process.standardInput = FileHandle.nullDevice
+  process.standardOutput = output
+  try process.run()
+  let checksum = output.fileHandleForReading.readDataToEndOfFile()
+  process.waitUntilExit()
+  guard process.terminationStatus == 0,
+    let digest = String(decoding: checksum, as: UTF8.self).split(separator: " ").first,
+    digest.count == 64, digest.allSatisfy(\.isHexDigit)
+  else {
+    throw CocoaError(.fileReadUnknown, userInfo: [NSLocalizedDescriptionKey: "sha256sum failed"])
+  }
+  return String(digest)
   #endif
 }
 
@@ -116,7 +116,7 @@ for (glyph, components) in ligatures {
 }
 var output = [
   "# NotoColorEmoji.ttf sha256=" + (try sha256()),
-  "# glyph-id; Unicode scalars (VS16 omitted by the font)",
+  "# glyph-id; Unicode scalars (VS16 omitted by the font)"
 ]
 for sequence in entries.keys.sorted(by: { $0.lexicographicallyPrecedes($1) }) {
   let scalars = sequence.map { String($0, radix: 16, uppercase: true) }.joined(separator: " ")

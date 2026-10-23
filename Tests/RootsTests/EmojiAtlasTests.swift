@@ -70,7 +70,7 @@ import Testing
     #expect(throws: EmojiAtlas.AssetError.self) { _ = try EmojiAtlas(data: Data(data.prefix(cut))) }
   }
   for (offset, word): (Int, UInt32) in [
-    (0, 0), (4, 1), (8, 0), (12, 8193), (16, .max), (20, 0), (24, 129), (28, .max), (32, 1),
+    (0, 0), (4, 1), (8, 0), (12, 8193), (16, .max), (20, 0), (24, 129), (28, .max), (32, 1)
   ] {
     var corrupt = data
     for byte in 0..<4 { corrupt[offset + byte] = UInt8(truncatingIfNeeded: word >> (byte * 8)) }
@@ -89,7 +89,7 @@ import Testing
   for (index, character) in text.enumerated() {
     let color = character != "A" && character != "✔" && character != "☀︎" && character != "你"
     #expect(storage.draws[index].colorGlyph == color, "\(character)")
-    #expect(storage.draws[index].rect.width == (color ? 2 * font.advance : font.glyphWidth))
-    #expect(storage.draws[index].rect.x == 2 + font.width(of: text.prefix(index)))
+    #expect(storage.draws[index].region.width == (color ? 2 * font.advance : font.glyphWidth))
+    #expect(storage.draws[index].region.x == 2 + font.width(of: text.prefix(index)))
   }
 }

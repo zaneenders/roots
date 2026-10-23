@@ -126,7 +126,7 @@ import Glibc
     var modifiers: WaylandKeyModifiers = []
     for (name, flag): (String, WaylandKeyModifiers) in [
       ("Shift", .shift), ("Control", .control), ("Mod1", .alt), ("Mod4", .super),
-      ("Mod5", .altGraph), ("Lock", .capsLock), ("Mod2", .numLock),
+      ("Mod5", .altGraph), ("Lock", .capsLock), ("Mod2", .numLock)
     ] {
       if unsafe xkb_state_mod_name_is_active(state, name, XKB_STATE_MODS_EFFECTIVE) > 0 {
         modifiers.insert(flag)

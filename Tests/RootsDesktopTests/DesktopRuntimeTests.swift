@@ -16,14 +16,20 @@ private final class Model {
 
 private struct ObservedContent: Block {
   let model: Model
-  let bounds: Rect
+  let bounds: Region
 
   var body: some Block {
-    ColumnBlock(in: bounds, gap: 0) {
-      LabelBlock(key: 1, model.title)
-      ForEachBlock(model.rows) { key in
-        CanvasBlock(key: key, extent: 20) { context in
-          context.fillRect(context.rect, color: Color(model.red, 0, 0))
+    Column(in: bounds, gap: 0) {
+      Text(model.title)
+        .size(20)
+        .selectable(key: 1)
+        .alignment(.leading)
+        .padding(horizontal: 12)
+        .frame(width: .fill, height: .fixed(32))
+        .background(.panel)
+      ForEach(model.rows) { key in
+        Canvas(key: key, extent: 20) { context in
+          context.fillRect(context.region, color: Color(model.red, 0, 0))
         }
       }
     }
@@ -39,8 +45,8 @@ struct DesktopRuntimeTests {
     var builds = 0
     let window = DesktopWindow("Test") { viewport in
       builds += 1
-      return ColumnBlock(in: viewport.bounds, gap: 0) {
-        ButtonBlock(key: 1, model.title) { model.clicks += 1 }
+      return Column(in: viewport.bounds, gap: 0) {
+        Button(key: 1, model.title) { model.clicks += 1 }
       }
     }
     #expect(builds == 0)
@@ -60,7 +66,7 @@ struct DesktopRuntimeTests {
       input: Input(), viewport: Viewport(size: .init(200, 100), scale: 2), time: 0.03,
       present: { _ in })
     #expect(builds == 4)
-    #expect(runtime.state(for: 1)?.rect.width == 200)
+    #expect(runtime.state(for: 1)?.region.width == 200)
     #expect(runtime.state(for: 1)?.clicks == 1)
     #expect(redraws > 0)
   }
@@ -77,14 +83,20 @@ struct DesktopRuntimeTests {
       content: { viewport in
         let title = "Count: \(model.count)"
         titles.append(title)
-        return ColumnBlock(in: viewport.bounds) {
-          LabelBlock(key: 1, title)
-          ButtonBlock(key: 2, "Increment") { model.count += 1 }
+        return Column(in: viewport.bounds) {
+          Text(title)
+            .size(20)
+            .selectable(key: 1)
+            .alignment(.leading)
+            .padding(horizontal: 12)
+            .frame(width: .fill, height: .fixed(32))
+            .background(.panel)
+          Button(key: 2, "Increment") { model.count += 1 }
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: { requests += 1 })
     defer { runtime.stop() }
     runtime.frame(input: Input(), viewport: viewport, dt: 0, present: { _ in })
-    let button = try #require(runtime.state(for: 2)?.rect)
+    let button = try #require(runtime.state(for: 2)?.region)
     let x = button.x + button.width / 2
     let y = button.y + button.height / 2
     runtime.frame(
@@ -165,8 +177,8 @@ struct DesktopRuntimeTests {
     var intercepted = 0
     let runtime = DesktopRuntime(
       content: { viewport in
-        ColumnBlock(in: viewport.bounds) {
-          ButtonBlock(key: 1, model.title) { model.clicks += 1 }
+        Column(in: viewport.bounds) {
+          Button(key: 1, model.title) { model.clicks += 1 }
           FocusBlock(key: 1)
         }
       }, primaryShortcut: .control,
@@ -203,7 +215,7 @@ struct DesktopRuntimeTests {
     var requests = 0
     let runtime = DesktopRuntime(
       content: { viewport in
-        ColumnBlock(in: viewport.bounds) { ButtonBlock(key: 1, "Hover") }
+        Column(in: viewport.bounds) { Button(key: 1, "Hover") }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: { requests += 1 })
     defer { runtime.stop() }
     runtime.frame(input: Input(x: 5, y: 5), viewport: viewport, time: 0, present: { _ in })
@@ -217,7 +229,7 @@ struct DesktopRuntimeTests {
       releasedModel = model
       let runtime = DesktopRuntime(
         content: { viewport in
-          ColumnBlock(in: viewport.bounds) { ButtonBlock(key: 1, "Action") { model.clicks += 1 } }
+          Column(in: viewport.bounds) { Button(key: 1, "Action") { model.clicks += 1 } }
         }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {})
       runtime.frame(input: Input(), viewport: viewport, time: 0, present: { _ in })
       runtime.stop()
@@ -261,8 +273,7 @@ private final class FramePolicy: DesktopFrameDelegate {
 
 extension DesktopRuntimeTests {
   @Test(arguments: [false, true], [false, true])
-  func frameCallbacksInvalidateContentAndPaintReads(afterPresentation: Bool, paintOnly: Bool) async
-  {
+  func frameCallbacksInvalidateContentAndPaintReads(afterPresentation: Bool, paintOnly: Bool) async {
     let model = Model()
     let policy = FramePolicy()
     let change = {
@@ -274,9 +285,9 @@ extension DesktopRuntimeTests {
     let runtime = DesktopRuntime(
       content: { viewport in
         if !paintOnly { titles.append(model.title) }
-        return ColumnBlock(in: viewport.bounds) {
-          CanvasBlock(key: 1, extent: 100) { painter in
-            painter.fillRect(painter.rect, color: Color(model.red, 0, 0))
+        return Column(in: viewport.bounds) {
+          Canvas(key: 1, extent: 100) { painter in
+            painter.fillRect(painter.region, color: Color(model.red, 0, 0))
           }
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: { requests += 1 },
@@ -301,8 +312,14 @@ extension DesktopRuntimeTests {
     let policy = FramePolicy()
     let runtime = DesktopRuntime(
       content: { viewport in
-        ScrollColumnBlock(key: 1, in: viewport.bounds) {
-          LabelBlock(key: 2, "", extent: 2000)
+        ScrollColumn(key: 1, in: viewport.bounds) {
+          Text("")
+            .size(20)
+            .selectable(key: 2)
+            .alignment(.leading)
+            .padding(horizontal: 12)
+            .frame(width: .fill, height: .fixed(2000))
+            .background(.panel)
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy,
       scrollAcceleration: 1)
@@ -329,12 +346,16 @@ extension DesktopRuntimeTests {
     let runtime = DesktopRuntime(
       content: { viewport in
         builds += 1
-        return ColumnBlock(in: viewport.bounds) {
-          ButtonBlock(key: 1, "Change") {
+        return Column(in: viewport.bounds) {
+          Button(key: 1, "Change") {
             clicks += 1
             policy.rebuild = true
           }
-          if policy.rebuild { LabelBlock(key: 2, "Updated") }
+          if policy.rebuild {
+            Text("Updated").size(20).selectable(key: 2).alignment(.leading).padding(horizontal: 12).frame(
+              width: .fill, height: .fixed(32)
+            ).background(.panel)
+          }
           FocusBlock(key: 1)
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy)
@@ -389,8 +410,8 @@ extension DesktopRuntimeTests {
     var events: [PointerEvent] = []
     let runtime = DesktopRuntime(
       content: { viewport in
-        ColumnBlock(in: viewport.bounds) {
-          ElementBlock(key: 1, extent: 80, onPointer: { events.append($0) }) { _ in }
+        Column(in: viewport.bounds) {
+          Element(key: 1, extent: 80, onPointer: { events.append($0) }) { _ in }
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy)
     defer { runtime.stop() }
@@ -414,8 +435,8 @@ extension DesktopRuntimeTests {
     policy.rebuild = true
     let runtime = DesktopRuntime(
       content: { viewport in
-        ColumnBlock(in: viewport.bounds) {
-          TextBlock(key: 1, lines: [TextLine([TextRun("ABCD")], x: 0, y: 0)], extent: 80)
+        Column(in: viewport.bounds) {
+          RichText(key: 1, lines: [TextLine([TextRun("ABCD")], x: 0, y: 0)], extent: 80)
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy)
     defer { runtime.stop() }

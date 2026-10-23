@@ -53,8 +53,7 @@ import MetalKit
       for await completion in stream {
         guard let self else { return }
         do {
-          if let image = try renderer.complete(completion), let path = configuration.screenshotPath
-          {
+          if let image = try renderer.complete(completion), let path = configuration.screenshotPath {
             try image.write(to: URL(fileURLWithPath: path))
           }
         } catch {

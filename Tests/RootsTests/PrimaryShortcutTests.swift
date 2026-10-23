@@ -6,7 +6,7 @@ import Testing
   var ui = UIStore()
   var copied: [String] = []
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 200, 40))
+    frame.beginColumn(in: Region(0, 0, 200, 40))
     frame.label(key: 1, "Selectable text", extent: 40)
     frame.end()
   }
@@ -20,7 +20,7 @@ import Testing
   ui.frame(
     input: Input(keyEvents: [
       KeyEvent(.character("a"), modifiers: .super), KeyEvent(.character("c"), modifiers: .super),
-      KeyEvent(.character("c"), phase: .repeated, modifiers: .super),
+      KeyEvent(.character("c"), phase: .repeated, modifiers: .super)
     ]), primaryShortcut: .super, onCopy: { copied.append($0) }, build: build, present: { _ in })
   #expect(ui.selectedText == "Selectable text")
   #expect(copied == ["Selectable text"])

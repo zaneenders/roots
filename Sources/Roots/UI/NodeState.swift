@@ -4,6 +4,6 @@ public struct NodeState: Sendable {
   public let hovered: Bool
   public let focused: Bool
   public let hoverAnimation: Float
-  public let rect: Rect
+  public let region: Region
   public let scrollOffset: Float
 }

@@ -1,26 +1,28 @@
-public struct MonospaceFont: Equatable, Sendable {
-  public let size: Float
+struct MonospaceFont: Equatable, Sendable {
+  let size: Float
 
-  public init(size: Float = 20) {
+  init(size: Float = 20) {
     precondition(size > 0 && (size * 1.6).isFinite)
     self.size = size
   }
 
-  public var glyphWidth: Float { size }
-  public var glyphHeight: Float { size * 1.4 }
-  public var advance: Float { size * 0.6 }
-  public var lineHeight: Float { size * 1.6 }
+  var glyphWidth: Float { size }
+  var glyphHeight: Float { size * 1.4 }
+  // The atlas baseline is row 68 minus 3 rows of padding, at a 60-pixel font size.
+  var baseline: Float { size * (65 / 60) }
+  var advance: Float { size * 0.6 }
+  var lineHeight: Float { size * 1.6 }
 
-  public static func columnWidth(of character: Character) -> Int {
+  static func columnWidth(of character: Character) -> Int {
     guard character.asciiValue == nil else { return 1 }
     return EmojiAtlas.shared.renders(character) ? 2 : 1
   }
 
-  public static func columnCount(of text: some StringProtocol) -> Int {
+  static func columnCount(of text: some StringProtocol) -> Int {
     text.reduce(0) { $0 + columnWidth(of: $1) }
   }
 
-  public static func prefixEnd(in text: some StringProtocol, columns: Int) -> String.Index {
+  static func prefixEnd(in text: some StringProtocol, columns: Int) -> String.Index {
     guard columns > 0 else { return text.startIndex }
     if text.utf8.prefix(columns == .max ? columns : columns + 1).allSatisfy({ $0 < 128 }) {
       return text.index(text.startIndex, offsetBy: max(0, columns), limitedBy: text.endIndex)
@@ -34,7 +36,7 @@ public struct MonospaceFont: Equatable, Sendable {
     return text.endIndex
   }
 
-  public func offset(in text: some StringProtocol, atX x: Float) -> Int {
+  func offset(in text: some StringProtocol, atX x: Float) -> Int {
     guard !x.isNaN, x > 0 else { return 0 }
     var columns = 0
     var offset = 0
@@ -47,7 +49,7 @@ public struct MonospaceFont: Equatable, Sendable {
     return offset
   }
 
-  public func width(of text: some StringProtocol) -> Float {
+  func width(of text: some StringProtocol) -> Float {
     var longestLine = 0
     var lineLength = 0
     for character in text {
@@ -61,11 +63,11 @@ public struct MonospaceFont: Equatable, Sendable {
     return Float(max(longestLine, lineLength)) * advance
   }
 
-  public func height(of text: String) -> Float {
+  func height(of text: String) -> Float {
     glyphHeight + Float(text.reduce(0) { $0 + ($1 == "\n" ? 1 : 0) }) * lineHeight
   }
 
-  public func truncating(_ text: String, to width: Float) -> String {
+  func truncating(_ text: String, to width: Float) -> String {
     guard !width.isNaN, width >= glyphWidth else { return "" }
     if width == .infinity { return text }
     let capacity = Int(min(Float(Int32.max), ((width - glyphWidth) / advance).rounded(.down))) + 1
@@ -97,7 +99,7 @@ public struct MonospaceFont: Equatable, Sendable {
     return result
   }
 
-  public func columns(in width: Float) -> Int {
+  func columns(in width: Float) -> Int {
     guard width.isFinite else { return 1 }
     return Int(max(1, min(Float(Int32.max), (width / advance).rounded(.down))))
   }

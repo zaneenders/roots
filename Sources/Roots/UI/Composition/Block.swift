@@ -79,22 +79,53 @@ public struct OptionalBlock<Content: Block>: Block {
   public borrowing func _build(into frame: inout UIFrame) { content?._build(into: &frame) }
 }
 
-public struct ForEachBlock<Data: RandomAccessCollection, Content: Block>: Block {
+public struct ForEach<Data: RandomAccessCollection, Content: Block>: Block {
   public typealias Body = Never
   @usableFromInline
   let data: Data
   @usableFromInline
   let content: @MainActor (Data.Element) -> Content
+  @usableFromInline
+  let identity: ((Data.Element) -> AnyHashable)?
+  @usableFromInline
+  let location: IdentityLocation
+
   @inlinable
   public init(_ data: Data, @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content) {
     self.data = data
     self.content = content
+    self.identity = nil
+    self.location = IdentityLocation(file: #fileID, line: #line, column: #column)
   }
+
+  public init<ID: Hashable>(
+    _ data: Data, id: KeyPath<Data.Element, ID>,
+    file: StaticString = #fileID, line: UInt = #line, column: UInt = #column,
+    @BlockBuilder content: @escaping @MainActor (Data.Element) -> Content
+  ) {
+    self.data = data
+    self.content = content
+    self.identity = { AnyHashable($0[keyPath: id]) }
+    self.location = IdentityLocation(file: file, line: line, column: column)
+  }
+
   @inlinable
   public borrowing func _build(into frame: inout UIFrame) {
-    for element in data {
-      let row = content(element)
-      row._build(into: &frame)
+    if let identity {
+      var seen: Set<AnyHashable> = []
+      for element in data {
+        let id = identity(element)
+        precondition(seen.insert(id).inserted, "ForEach item IDs must be unique")
+        frame.beginItem(id, at: location)
+        let row = content(element)
+        row._build(into: &frame)
+        frame.endItem()
+      }
+    } else {
+      for element in data {
+        let row = content(element)
+        row._build(into: &frame)
+      }
     }
   }
 }

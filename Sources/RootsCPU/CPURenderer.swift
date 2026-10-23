@@ -27,7 +27,7 @@ public final class CPURenderer {
     }
 
     for draw in draws {
-      let r = draw.rect
+      let r = draw.region
       guard draw.isValid else { continue }
       var bounds = draw.bounds
       if let clip = draw.clip {

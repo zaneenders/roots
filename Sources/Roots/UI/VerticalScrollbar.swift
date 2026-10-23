@@ -1,11 +1,11 @@
 public struct VerticalScrollbar {
-  public let track: Rect
-  public let thumb: Rect
-  public let hitRect: Rect
+  public let track: Region
+  public let thumb: Region
+  public let hitRegion: Region
   private let limit: Float
   private let offset: Float
 
-  public init?(viewport: Rect, contentHeight: Float, offset: Float) {
+  public init?(viewport: Region, contentHeight: Float, offset: Float) {
     guard viewport.x.isFinite, viewport.y.isFinite, viewport.width.isFinite,
       viewport.height.isFinite,
       viewport.width >= 12, viewport.height > 8, contentHeight.isFinite,
@@ -15,10 +15,10 @@ public struct VerticalScrollbar {
     self.offset = min(limit, max(0, offset))
     let height = viewport.height - 8
     let thumbHeight = max(min(24, height / 2), height * (viewport.height / contentHeight))
-    track = Rect(viewport.x + viewport.width - 8, viewport.y + 4, 6, height)
-    thumb = Rect(
+    track = Region(viewport.x + viewport.width - 8, viewport.y + 4, 6, height)
+    thumb = Region(
       track.x, track.y + min(1, max(0, offset / limit)) * (height - thumbHeight), 6, thumbHeight)
-    hitRect = Rect(viewport.x + viewport.width - 12, track.y, 12, height)
+    hitRegion = Region(viewport.x + viewport.width - 12, track.y, 12, height)
   }
 
   public func scrollOffset(at y: Float, grabOffset: Float) -> Float {

@@ -107,7 +107,7 @@ private final class StartupPeer: Sendable {
 @Test @MainActor func connectionRejectsInvalidConfigurationsBeforeOpeningSocket() async {
   for configuration in [
     WaylandWindowConfiguration(width: 0), .init(height: -1), .init(minimumWidth: -1),
-    .init(topBarOverlayHeight: .max),
+    .init(topBarOverlayHeight: .max)
   ] {
     let connection = WaylandConnection(configuration: configuration)
     await #expect(throws: WaylandError.invalidConfiguration) { try await connection.connect() }

@@ -1,34 +1,3 @@
-public struct TextRun: Sendable {
-  public var text: String
-  public var color: Color
-  public var background: Color?
-
-  public init(_ text: String, color: Color = .text, background: Color? = nil) {
-    self.text = text
-    self.color = color
-    self.background = background
-  }
-}
-
-public struct TextLine: Sendable {
-  public var runs: [TextRun]
-  public var x: Float
-  public var y: Float
-  public var font: MonospaceFont
-  public var background: Color?
-
-  public init(
-    _ runs: [TextRun], x: Float = 12, y: Float, font: MonospaceFont = MonospaceFont(),
-    background: Color? = nil
-  ) {
-    self.runs = runs
-    self.x = x
-    self.y = y
-    self.font = font
-    self.background = background
-  }
-}
-
 struct TextLayout {
   struct Line {
     var content: TextLine
@@ -49,6 +18,29 @@ struct TextLayout {
     var preservesSelection: Bool
   }
 
+  struct Fragment {
+    let text: String
+    let region: Region
+    let font: MonospaceFont
+    let color: Color
+    let background: Color?
+    let advance: Float
+  }
+  struct FlowLine {
+    let start: Int
+    let end: Int
+    let region: Region
+    let stops: [Float]
+  }
+  private(set) var fragments: [Fragment] = []
+  private(set) var flowLines: [FlowLine] = []
+
+  init(text: String, fragments: [Fragment], flowLines: [FlowLine]) {
+    self.text = text
+    self.fragments = fragments
+    self.flowLines = flowLines
+  }
+
   private var source: [TextLine] = []
   private(set) var lines: [Line] = []
   private(set) var text = ""
@@ -61,10 +53,11 @@ struct TextLayout {
 
   @discardableResult
   mutating func update(_ content: [TextLine], selectionEnd: Int = 0) -> Update {
+    fragments.removeAll(keepingCapacity: true)
+    flowLines.removeAll(keepingCapacity: true)
     if reuses(content) { return Update(reusedLineCount: lines.count, preservesSelection: true) }
     var prefix = 0
-    while prefix < min(source.count, content.count), Self.sameLine(source[prefix], content[prefix])
-    { prefix += 1 }
+    while prefix < min(source.count, content.count), Self.sameLine(source[prefix], content[prefix]) { prefix += 1 }
     while prefix > 0, lines[prefix - 1].endsInCarriageReturn { prefix -= 1 }
     let keptUTF8 = prefix > 0 ? lines[prefix - 1].endUTF8 : 0
     let keptCount = prefix > 0 ? lines[prefix - 1].start + lines[prefix - 1].count : 0
@@ -127,8 +120,7 @@ struct TextLayout {
     return runs
   }
 
-  private func suffixPreservesSelection(_ suffix: String, afterUTF8 offset: Int, count: Int) -> Bool
-  {
+  private func suffixPreservesSelection(_ suffix: String, afterUTF8 offset: Int, count: Int) -> Bool {
     let cut = text.utf8.index(text.utf8.startIndex, offsetBy: offset)
     var previous = text[cut...].makeIterator()
     var next = suffix.makeIterator()
@@ -151,6 +143,18 @@ struct TextLayout {
   }
 
   func offset(x: Float, y: Float) -> Int {
+    if !flowLines.isEmpty {
+      guard x.isFinite, y.isFinite,
+        let line = flowLines.min(by: {
+          max($0.region.y - y, y - $0.region.y - $0.region.height, 0)
+            < max($1.region.y - y, y - $1.region.y - $1.region.height, 0)
+        })
+      else { return 0 }
+      for index in 0..<max(0, line.stops.count - 1) {
+        if x < (line.stops[index] + line.stops[index + 1]) / 2 { return line.start + index }
+      }
+      return line.end
+    }
     guard x.isFinite, y.isFinite,
       let line = lines.min(by: {
         distance(y, to: $0.content) < distance(y, to: $1.content)
