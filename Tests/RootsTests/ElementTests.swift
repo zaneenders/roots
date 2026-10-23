@@ -6,19 +6,19 @@ import Testing
   var ui = UIStore()
   ui.frame(
     build: { frame in
-      frame.beginColumn(in: Rect(0, 0, 100, 44))
+      frame.beginColumn(in: Region(0, 0, 100, 44))
       frame.label(key: 1, "A\nA", extent: 44)
       frame.end()
     },
     present: { draws in
-      var first: Rect?
-      var last: Rect?
+      var first: Region?
+      var last: Region?
       for draw in draws where draw.color == .text {
-        if first == nil { first = draw.rect }
-        last = draw.rect
+        if first == nil { first = draw.region }
+        last = draw.region
       }
       #expect((last?.y ?? 0) - (first?.y ?? 0) >= 20)
-      #expect(draws[0].rect == Rect(0, 0, 100, 44))
+      #expect(draws[0].region == Region(0, 0, 100, 44))
     })
 }
 
@@ -45,7 +45,7 @@ import Testing
     KeyEvent(.character("é"), modifiers: .control), KeyEvent(.backspace, phase: .repeated),
     KeyEvent(.escape), KeyEvent(.tab), KeyEvent(.enter),
     KeyEvent(.character("🙂"), phase: .released),
-    KeyEvent(.tab), KeyEvent(.left),
+    KeyEvent(.tab), KeyEvent(.left)
   ]
   ui.frame(
     input: Input(keyEvents: events),
@@ -54,15 +54,15 @@ import Testing
       return $0.key == .escape
     },
     build: { frame in
-      frame.beginRow(in: Rect(10, 20, 200, 40), gap: 0)
+      frame.beginRow(in: Region(10, 20, 200, 40), gap: 0)
       let handle = frame.element(
         key: 1, extent: 100, onKey: { first.append($0) },
         paint: { painter in
           #expect(first == [events[0], events[1], events[7]])
           let focused = painter.focused
           #expect(focused)
-          #expect(painter.rect == Rect(10, 20, 100, 40))
-          painter.draw(DrawRect(Rect(10, 20, Float(first.count), 1), .text))
+          #expect(painter.region == Region(10, 20, 100, 40))
+          painter.draw(DrawRect(Region(10, 20, Float(first.count), 1), .text))
         })
       frame.element(
         key: 2, extent: 100, onKey: { second.append($0) },
@@ -70,7 +70,7 @@ import Testing
           #expect(second == [events[4], events[5]])
           let focused = painter.focused
           #expect(!focused)
-          #expect(painter.rect == Rect(110, 20, 100, 40))
+          #expect(painter.region == Region(110, 20, 100, 40))
         })
       frame.focus(handle)
       frame.end()
@@ -78,7 +78,7 @@ import Testing
     present: { draws in
       var foundUpdatedDraw = false
       for draw in draws where draw.color == .text {
-        #expect(draw.rect == Rect(10, 20, 3, 1))
+        #expect(draw.region == Region(10, 20, 3, 1))
         foundUpdatedDraw = true
       }
       #expect(foundUpdatedDraw)
@@ -96,7 +96,7 @@ import Testing
   var newPaints = 0
   ui.frame(
     build: { frame in
-      frame.beginColumn(in: Rect(0, 0, 100, 40))
+      frame.beginColumn(in: Region(0, 0, 100, 40))
       let handle = frame.element(
         key: 1, onKey: { _ in oldKeys += 1 }, paint: { _ in oldPaints += 1 })
       frame.focus(handle)
@@ -106,13 +106,13 @@ import Testing
   ui.frame(
     input: Input(keyEvents: [KeyEvent(.enter)]),
     build: { frame in
-      frame.beginColumn(in: Rect(20, 30, 200, 50))
+      frame.beginColumn(in: Region(20, 30, 200, 50))
       frame.element(
         key: 1, extent: 50, onKey: { _ in newKeys += 1 },
         paint: { painter in
           newPaints += 1
           #expect(newKeys == 1)
-          #expect(painter.rect == Rect(20, 30, 200, 50))
+          #expect(painter.region == Region(20, 30, 200, 50))
           let focused = painter.focused
           #expect(focused)
         })
@@ -124,7 +124,7 @@ import Testing
   ui.frame(
     input: Input(keyEvents: [KeyEvent(.enter)]),
     build: { frame in
-      frame.beginColumn(in: Rect(0, 0, 100, 40))
+      frame.beginColumn(in: Region(0, 0, 100, 40))
       frame.element(key: 1, paint: { _ in })
       frame.end()
     }, present: { _ in })
@@ -146,7 +146,7 @@ import Testing
     releasedPaint = paintToken
     ui.frame(
       build: { frame in
-        frame.beginColumn(in: Rect(0, 0, 100, 40))
+        frame.beginColumn(in: Region(0, 0, 100, 40))
         let handle = frame.element(
           key: 1, onKey: { _ in _ = keyToken }, paint: { _ in _ = paintToken })
         frame.focus(handle)
@@ -158,7 +158,7 @@ import Testing
     input: Input(keyEvents: [KeyEvent(.enter)]),
     build: { frame in
       if !remove {
-        frame.beginColumn(in: Rect(0, 0, 100, 40))
+        frame.beginColumn(in: Region(0, 0, 100, 40))
         frame.label(key: 1, "")
         frame.end()
       }
@@ -171,18 +171,18 @@ import Testing
   var ui = UIStore()
   ui.frame(
     build: { frame in
-      frame.beginScrollColumn(key: 100, in: Rect(10, 20, 100, 60), gap: 10)
+      frame.beginScrollColumn(key: 100, in: Region(10, 20, 100, 60), gap: 10)
       frame.label(key: 1, "", extent: 40)
       frame.element(
         key: 2, extent: 40,
         paint: { painter in
-          #expect(painter.rect == Rect(10, 70, 100, 40))
-          #expect(painter.clip == Rect(10, 70, 100, 10))
-          painter.draw(DrawRect(Rect(0, 0, 200, 200), .accent))
-          painter.draw(DrawRect(Rect(0, 0, 200, 200), .accent, clip: Rect(20, 70, 30, 20)))
-          painter.draw(DrawRect(Rect(0, 0, 1, 1), .accent))
-          painter.draw(DrawRect(Rect(0, 0, 200, 200), .accent, clip: Rect(0, 0, 1, 1)))
-          painter.drawText("A", x: 10, y: 70, font: MonospaceFont(size: 10))
+          #expect(painter.region == Region(10, 70, 100, 40))
+          #expect(painter.clip == Region(10, 70, 100, 10))
+          painter.draw(DrawRect(Region(0, 0, 200, 200), .accent))
+          painter.draw(DrawRect(Region(0, 0, 200, 200), .accent, clip: Region(20, 70, 30, 20)))
+          painter.draw(DrawRect(Region(0, 0, 1, 1), .accent))
+          painter.draw(DrawRect(Region(0, 0, 200, 200), .accent, clip: Region(0, 0, 1, 1)))
+          painter.drawText("A", x: 10, y: 70, size: 10)
         })
       frame.end()
     },
@@ -191,13 +191,13 @@ import Testing
       var glyphs = 0
       for draw in draws {
         if draw.color == .accent {
-          #expect(draw.rect == Rect(0, 0, 200, 200))
-          #expect(draw.clip == (shapes == 0 ? Rect(10, 70, 100, 10) : Rect(20, 70, 30, 10)))
+          #expect(draw.region == Region(0, 0, 200, 200))
+          #expect(draw.clip == (shapes == 0 ? Region(10, 70, 100, 10) : Region(20, 70, 30, 10)))
           shapes += 1
         }
         if draw.color == .text {
-          #expect(draw.clip == Rect(10, 70, 100, 10))
-          #expect(!draw.rect.intersection(Rect(10, 70, 100, 10)).isEmpty)
+          #expect(draw.clip == Region(10, 70, 100, 10))
+          #expect(!draw.region.intersection(Region(10, 70, 100, 10)).isEmpty)
           glyphs += 1
         }
       }
@@ -210,18 +210,18 @@ import Testing
   var ui = UIStore(drawCapacity: capacity)
   ui.frame(
     build: { frame in
-      frame.beginColumn(in: Rect(0, 0, 100, 40))
+      frame.beginColumn(in: Region(0, 0, 100, 40))
       frame.element(
         key: 1,
         paint: { painter in
-          painter.draw(DrawRect(Rect(-10, -10, 1, 1), .text))
-          for i in 0..<4 { painter.draw(DrawRect(Rect(Float(i), 0, 1, 1), .text)) }
+          painter.draw(DrawRect(Region(-10, -10, 1, 1), .text))
+          for i in 0..<4 { painter.draw(DrawRect(Region(Float(i), 0, 1, 1), .text)) }
         })
       frame.end()
     },
     present: { draws in
       #expect(draws.count == capacity)
-      for i in 0..<draws.count where i > 0 { #expect(draws[i].clip == Rect(0, 0, 100, 44)) }
+      for i in 0..<draws.count where i > 0 { #expect(draws[i].clip == Region(0, 0, 100, 44)) }
     })
   #expect(ui.droppedDraws == 5 - capacity)
 }
@@ -232,7 +232,7 @@ import Testing
   var phases: [String] = []
   var handlesScroll = true
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 100, in: Rect(10, 20, 100, 60), gap: 0)
+    frame.beginScrollColumn(key: 100, in: Region(10, 20, 100, 60), gap: 0)
     let focused = frame.element(
       key: 1, extent: 30, onKey: { _ in phases.append("key") }, paint: { _ in })
     frame.element(
@@ -250,7 +250,7 @@ import Testing
   ui.frame(input: Input(x: 30, y: 55, scrollY: 12.5), build: build, present: { _ in })
   #expect(received.count == 1)
   #expect(received.first?.deltaY == 12.5)
-  #expect(received.first?.rect == Rect(10, 50, 100, 90))
+  #expect(received.first?.region == Region(10, 50, 100, 90))
   #expect(received.first?.x == 20 && received.first?.y == 5)
   #expect(phases == ["scroll", "paint"])
   let viewportHandle = ui.handle(for: 100)
@@ -264,7 +264,7 @@ import Testing
   #expect(ui.state(for: second)?.focused == false)
   for input in [
     Input(x: 30, y: 90, scrollY: 10), Input(x: 30, y: 55, scrollY: .nan),
-    Input(x: 30, y: 55, scrollY: .infinity), Input(x: 30, y: 55, scrollX: 10),
+    Input(x: 30, y: 55, scrollY: .infinity), Input(x: 30, y: 55, scrollX: 10)
   ] {
     ui.frame(input: input, build: build, present: { _ in })
   }
@@ -284,7 +284,7 @@ import Testing
   var ui = UIStore()
   var distances: [Float] = []
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 100, in: Rect(0, 0, 100, 100), gap: 0)
+    frame.beginScrollColumn(key: 100, in: Region(0, 0, 100, 100), gap: 0)
     frame.element(key: 1, extent: 40, onScroll: { distances.append($0.deltaY) }, paint: { _ in })
     frame.label(key: 2, "", extent: 200)
     frame.end()
@@ -306,9 +306,9 @@ import Testing
   var pointers: [PointerEvent] = []
   var scrolls = 0
   var keys = 0
-  let overlay = Rect(0, 0, 300, 200)
+  let overlay = Region(0, 0, 300, 200)
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 220, 100, 32))
+    frame.beginColumn(in: Region(0, 220, 100, 32))
     frame.button(key: 1, "First", extent: 32)
     frame.end()
     frame.beginColumn(in: overlay)
@@ -321,14 +321,14 @@ import Testing
       })
     frame.focus(handle)
     frame.end()
-    frame.beginColumn(in: Rect(110, 220, 100, 32))
+    frame.beginColumn(in: Region(110, 220, 100, 32))
     frame.button(key: 3, "Last", extent: 32)
     frame.end()
   }
   func present(_ draws: borrowing UIDrawBatch) {
     for draw in draws {
-      if draw.color == .accent { #expect(draw.rect.height < overlay.height) }
-      if draw.rect == overlay { #expect(draw.color == Color(0, 0, 0, 0.5)) }
+      if draw.color == .accent { #expect(draw.region.height < overlay.height) }
+      if draw.region == overlay { #expect(draw.color == Color(0, 0, 0, 0.5)) }
     }
   }
   ui.frame(
@@ -358,7 +358,7 @@ import Testing
   var focusable = true
   var keys = 0
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 100, 40))
+    frame.beginColumn(in: Region(0, 0, 100, 40))
     let handle = frame.element(
       key: 1, onKey: { _ in keys += 1 }, focusable: focusable, paint: { _ in })
     if focusable { frame.focus(handle) }

@@ -10,7 +10,7 @@ import Testing
   var ui = UIStore()
   var phases: [PointerEvent.Phase] = []
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 100, 40))
+    frame.beginColumn(in: Region(0, 0, 100, 40))
     frame.element(key: 1, extent: 40, onPointer: { phases.append($0.phase) }, paint: { _ in })
     frame.end()
   }
@@ -32,7 +32,7 @@ import Testing
 @Test(arguments: [false, true]) func focusLossPreservesReadOnlySelection(syntheticRelease: Bool) {
   var ui = UIStore()
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 200, 40))
+    frame.beginColumn(in: Region(0, 0, 200, 40))
     frame.label(key: 1, "abcdef", extent: 40)
     frame.end()
   }
@@ -51,7 +51,7 @@ import Testing
 ) throws {
   var ui = UIStore()
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 1, in: Rect(0, 0, 100, 100), gap: 0, showsScrollIndicator: true)
+    frame.beginScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0, showsScrollIndicator: true)
     frame.label(key: 2, "", extent: 500)
     frame.end()
   }
@@ -59,7 +59,7 @@ import Testing
   let declared = ui.handle(for: 1)
   let viewport = try #require(declared)
   let bar = try #require(
-    VerticalScrollbar(viewport: Rect(0, 0, 100, 100), contentHeight: 500, offset: 120))
+    VerticalScrollbar(viewport: Region(0, 0, 100, 100), contentHeight: 500, offset: 120))
   ui.frame(input: Input(x: 95, y: bar.thumb.y + 2, pressed: true), build: build, present: { _ in })
   #expect(ui.state(for: viewport)?.scrollOffset == 120)
   ui.frame(
@@ -72,7 +72,7 @@ import Testing
 @Test func focusLossStopsMomentumAndResetsScrollAcceleration() throws {
   var ui = UIStore(scrollAcceleration: 1)
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 1, in: Rect(0, 0, 100, 100), gap: 0)
+    frame.beginScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0)
     frame.label(key: 2, "", extent: 500)
     frame.end()
   }
@@ -96,7 +96,7 @@ import Testing
   var scrolls = 0
   var keys = 0
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 100, 40))
+    frame.beginColumn(in: Region(0, 0, 100, 40))
     let element = frame.element(
       key: 1, extent: 40, onKey: { _ in keys += 1 },
       onPointer: { _ in pointers += 1 }, onScroll: { _ in scrolls += 1 }, paint: { _ in })
@@ -119,7 +119,7 @@ import Testing
   var ui = UIStore()
   ui.frame(
     build: { frame in
-      frame.beginScrollColumn(key: 1, in: Rect(0, 0, 100, 80), gap: 0)
+      frame.beginScrollColumn(key: 1, in: Region(0, 0, 100, 80), gap: 0)
       let first = frame.button(key: 2, "", extent: 40)
       frame.label(key: 3, "", extent: 160)
       let last = frame.button(key: 4, "", extent: 40)
@@ -139,7 +139,7 @@ import Testing
   var ui = UIStore()
   var clicks = 0
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 100, 40))
+    frame.beginColumn(in: Region(0, 0, 100, 40))
     frame.button(key: 1, "", extent: 40, onClick: { clicks += 1 })
     frame.end()
   }
@@ -157,7 +157,7 @@ import Testing
 @Test func focusLossStopsSelectionAutoscroll() throws {
   var ui = UIStore()
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 1, in: Rect(0, 0, 200, 64), gap: 0)
+    frame.beginScrollColumn(key: 1, in: Region(0, 0, 200, 64), gap: 0)
     frame.text(
       key: 2,
       lines: (0..<20).map {
@@ -188,7 +188,7 @@ import Testing
   var phases: [PointerEvent.Phase] = []
   func build(_ frame: inout UIFrame) {
     guard visible else { return }
-    frame.beginColumn(in: Rect(0, 0, 100, 40))
+    frame.beginColumn(in: Region(0, 0, 100, 40))
     frame.element(key: 1, extent: 40, onPointer: { phases.append($0.phase) }, paint: { _ in })
     frame.end()
   }

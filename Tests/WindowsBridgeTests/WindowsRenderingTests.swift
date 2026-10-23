@@ -12,7 +12,7 @@ import Testing
       WindowsWindowConfiguration(size: .init(8193, 30), maxFrames: 1),
       WindowsWindowConfiguration(size: .init(0, 30), maxFrames: 1),
       WindowsWindowConfiguration(maxFrames: 0),
-      WindowsWindowConfiguration(title: "bad\0title", maxFrames: 1),
+      WindowsWindowConfiguration(title: "bad\0title", maxFrames: 1)
     ] {
       await #expect(throws: WindowsWindowError.invalidConfiguration) {
         try await WindowsWindow.renderOffscreen(configuration: configuration) { _, _ in
@@ -33,9 +33,9 @@ import Testing
       times.append(snapshot.timeSeconds)
       #expect(snapshot.size == SIMD2<Float>(33, 25))
       host.frame(input: snapshot.input, dt: 1 / 60) {
-        ColumnBlock(in: Rect(0, 0, snapshot.size.x, snapshot.size.y), gap: 0) {
-          CanvasBlock(key: 1, extent: snapshot.size.y) { context in
-            context.fillRect(context.rect, color: Color(1, 0, 0))
+        Column(in: Region(0, 0, snapshot.size.x, snapshot.size.y), gap: 0) {
+          Canvas(key: 1, extent: snapshot.size.y) { context in
+            context.fillRect(context.region, color: Color(1, 0, 0))
           }
         }
       } present: {

@@ -12,10 +12,10 @@ private final class BlockModel {
   @ObservationIgnored var ignored = 0
 }
 
-private struct ModelLabel: Block {
+private struct ModelText: Block {
   let model: BlockModel
   var body: some Block {
-    LabelBlock(key: 1, model.title, selectable: false)
+    Text(model.title).selectable(key: 1).frame(width: .fill, height: .fixed(32))
   }
 }
 
@@ -37,42 +37,42 @@ struct BlockTests {
       legacy.frame(
         input: input, dt: 0,
         build: { frame in
-          frame.beginColumn(in: Rect(0, 0, 120, 100), gap: 4)
-          frame.label(key: 1, "Title", extent: 32, selectable: false)
+          frame.beginColumn(in: Region(0, 0, 120, 100), gap: 4)
+          frame.canvas(key: 1, extent: 32) { _ in }
           frame.button(key: 2, "Action", extent: 40) { legacyClicks += 1 }
-          frame.beginRow(in: Rect(200, 0, 100, 20), gap: 3)
-          frame.label(key: 3, "", extent: 20)
-          frame.label(key: 4, "", extent: 30)
+          frame.beginRow(in: Region(200, 0, 100, 20), gap: 3)
+          frame.canvas(key: 3, extent: 20) { _ in }
+          frame.canvas(key: 4, extent: 30) { _ in }
           frame.end()
-          frame.label(key: 5, "", extent: 10)
+          frame.canvas(key: 5, extent: 10) { _ in }
           frame.end()
         }, present: { for draw in $0 { expected.append(draw) } })
       host.frame(
         input: input, dt: 0,
         build: {
-          ColumnBlock(in: Rect(0, 0, 120, 100), gap: 4) {
+          Column(in: Region(0, 0, 120, 100), gap: 4) {
             StoredContent {
-              LabelBlock(key: 1, "Title", extent: 32, selectable: false)
-              ButtonBlock(key: 2, "Action", extent: 40) { clicks += 1 }
+              Canvas(key: 1, extent: 32) { _ in }
+              Button(key: 2, "Action", extent: 40) { clicks += 1 }
             }
-            RowBlock(in: Rect(200, 0, 100, 20), gap: 3) {
-              LabelBlock(key: 3, "", extent: 20)
-              LabelBlock(key: 4, "", extent: 30)
+            RowBlock(in: Region(200, 0, 100, 20), gap: 3) {
+              Canvas(key: 3, extent: 20) { _ in }
+              Canvas(key: 4, extent: 30) { _ in }
             }
-            LabelBlock(key: 5, "", extent: 10)
+            Canvas(key: 5, extent: 10) { _ in }
           }
         },
         present: { actual in
           #expect(actual.count == expected.count)
           for index in 0..<min(actual.count, expected.count) {
-            #expect(actual[index].rect == expected[index].rect)
+            #expect(actual[index].region == expected[index].region)
             #expect(actual[index].color == expected[index].color)
             #expect(actual[index].clip == expected[index].clip)
             #expect(actual[index].glyphUV == expected[index].glyphUV)
           }
         })
-      #expect(host.state(for: 4)?.rect == Rect(223, 0, 30, 20))
-      #expect(host.state(for: 5)?.rect == Rect(0, 80, 120, 10))
+      #expect(host.state(for: 4)?.region == Region(223, 0, 30, 20))
+      #expect(host.state(for: 5)?.region == Region(0, 80, 120, 10))
     }
     #expect(clicks == 1 && legacyClicks == 1)
   }
@@ -83,15 +83,15 @@ struct BlockTests {
       host.frame(
         build: {
           EmptyBlock()
-          ColumnBlock(in: Rect(0, 0, 100, 100), gap: 0) {
+          Column(in: Region(0, 0, 100, 100), gap: 0) {
             if alternate {
-              ButtonBlock(key: 1, "Button")
+              Button(key: 1, "Button")
             } else {
-              LabelBlock(key: 2, "Label")
+              Text("Label").selectable(key: 2).frame(width: .fill, height: .fixed(32))
             }
-            if alternate { LabelBlock(key: 3, "Optional") }
-            ForEachBlock(alternate ? [UInt64(5), 4] : [4, 5]) { key in
-              LabelBlock(key: key, "", extent: 10)
+            if alternate { Text("Optional").selectable(key: 3).frame(width: .fill, height: .fixed(32)) }
+            ForEach(alternate ? [UInt64(5), 4] : [4, 5]) { key in
+              Text("").selectable(key: key).frame(width: .fill, height: .fixed(10))
             }
           }
         }, present: { _ in })
@@ -116,9 +116,9 @@ struct BlockTests {
     host.frame(
       input: Input(keyEvents: [KeyEvent(.enter)]), dt: 0,
       build: {
-        ScrollColumnBlock(key: 10, in: Rect(0, 0, 100, 50), gap: 0) {
-          LabelBlock(key: 1, "", extent: 100)
-          ElementBlock(key: 2, extent: 30, onKey: { _ in activated = true }) { _ in
+        ScrollColumn(key: 10, in: Region(0, 0, 100, 50), gap: 0) {
+          Text("").selectable(key: 1).frame(width: .fill, height: .fixed(100))
+          Element(key: 2, extent: 30, onKey: { _ in activated = true }) { _ in
             painted = activated
           }
         }
@@ -138,12 +138,13 @@ struct BlockTests {
       withObservationTracking {
         host.frame(
           build: {
-            ColumnBlock(in: Rect(0, 0, 100, 100)) {
-              StoredContent { ModelLabel(model: model) }
-              ForEachBlock([UInt64(2)]) { key in
-                LabelBlock(key: key, model.alternate ? "Alternate" : "Default")
+            Column(in: Region(0, 0, 100, 100)) {
+              StoredContent { ModelText(model: model) }
+              ForEach([UInt64(2)]) { key in
+                Text(model.alternate ? "Alternate" : "Default").selectable(key: key).frame(
+                  width: .fill, height: .fixed(32))
               }
-              CanvasBlock(key: 3, extent: 10) { _ in _ = model.title }
+              Canvas(key: 3, extent: 10) { _ in _ = model.title }
             }
           }, present: { _ in })
       } onChange: {
@@ -168,9 +169,9 @@ struct BlockTests {
         var host = UIHost()
         host.frame(
           build: {
-            ColumnBlock(in: Rect(0, 0, 100, 100)) {
-              LabelBlock(key: 1, "First")
-              LabelBlock(key: 1, "Duplicate")
+            Column(in: Region(0, 0, 100, 100)) {
+              Text("First").selectable(key: 1).frame(width: .fill, height: .fixed(32))
+              Text("Duplicate").selectable(key: 1).frame(width: .fill, height: .fixed(32))
             }
           }, present: { _ in })
       }
@@ -181,16 +182,16 @@ struct BlockTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumnBlock(key: 10, in: Rect(0, 0, 100, 50), gap: 0) {
-          ButtonBlock(key: 1, "", extent: 200)
+        ScrollColumn(key: 10, in: Region(0, 0, 100, 50), gap: 0) {
+          Button(key: 1, "", extent: 200)
         }
       }, present: { _ in })
     host.frame(
       build: {
         FocusBlock(key: 1)
         ScrollToBlock(100, in: 10)
-        ScrollColumnBlock(key: 10, in: Rect(0, 0, 100, 50), gap: 0) {
-          ButtonBlock(key: 1, "", extent: 200)
+        ScrollColumn(key: 10, in: Region(0, 0, 100, 50), gap: 0) {
+          Button(key: 1, "", extent: 200)
         }
       }, present: { _ in })
     #expect(host.state(for: 1)?.focused == false)
@@ -206,8 +207,8 @@ struct BlockTests {
       retained = token
       host.frame(
         build: {
-          ColumnBlock(in: Rect(0, 0, 100, 40)) {
-            ButtonBlock(key: 1, "") { _ = token }
+          Column(in: Region(0, 0, 100, 40)) {
+            Button(key: 1, "") { _ = token }
           }
         }, present: { _ in })
     }

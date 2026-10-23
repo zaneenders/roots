@@ -17,12 +17,14 @@ extension UIStorage {
       !input.focusLost && input.x.isFinite && input.y.isFinite ? SIMD2(input.x, input.y) : nil
     precondition(cursors.isEmpty, "Every row/column must be ended")
     for i in 0..<nodes.count where nodes[i].live && nodes[i].seen != epoch {
-      keys.removeValue(forKey: nodes[i].key)
+      if nodes[i].hasKey { keys.removeValue(forKey: nodes[i].key) }
+      if let identity = nodes[i].implicitIdentity { implicitKeys.removeValue(forKey: identity) }
       let next = nodes[i].generation.addingReportingOverflow(1)
       precondition(!next.overflow)
       nodes[i] = Node(generation: next.partialValue)
       free.append(i)
     }
+    reconcileGroupSelection()
     if let i = resolve(focused), !nodes[i].isFocusable { focused = nil }
     if resolve(focused) == nil { focused = nil }
     if let i = resolve(pressed), !nodes[i].isInteractive { pressed = nil }
@@ -77,21 +79,25 @@ extension UIStorage {
     }
     if draggingScrollbar { hit = nil }
     if input.pressed && !draggingScrollbar {
+      clearGroupSelection()
       pressed = hit.map { handle($0) }
       focused = hit.flatMap { nodes[$0].isFocusable ? handle($0) : nil }
       if let hit {
         if let layout = nodes[hit].textLayout {
-          let offset = layout.offset(x: input.x - nodes[hit].rect.x, y: input.y - nodes[hit].rect.y)
+          let offset = layout.offset(x: input.x - nodes[hit].region.x, y: input.y - nodes[hit].region.y)
           nodes[hit].selectionAnchor = offset
           nodes[hit].selectionCursor = offset
+          beginGroupSelection(at: hit, offset: offset)
         }
         pointer(.pressed, input: input, to: hit)
       }
     }
     if let i = resolve(pressed), !input.pressed || input.released {
       if let layout = nodes[i].textLayout {
-        nodes[i].selectionCursor = layout.offset(
-          x: input.x - nodes[i].rect.x, y: input.y - nodes[i].rect.y)
+        if !updateGroupSelection(x: input.x, y: input.y) {
+          nodes[i].selectionCursor = layout.offset(
+            x: input.x - nodes[i].region.x, y: input.y - nodes[i].region.y)
+        }
       }
       pointer(input.released ? .released : .dragged, input: input, to: i)
     }
@@ -105,7 +111,7 @@ extension UIStorage {
       if event.key == .escape, event.phase == .pressed, selectedText != nil,
         let i = resolve(focused)
       {
-        nodes[i].selectionAnchor = nodes[i].selectionCursor
+        if !collapseGroupSelection() { nodes[i].selectionAnchor = nodes[i].selectionCursor }
         continue
       }
       if onKey?(event) == true { continue }
@@ -150,7 +156,7 @@ extension UIStorage {
     var scrollbarHit: Int?
     for i in order where contains(i, x: x, y: y) {
       if let scrollbarHit, isDescendant(i, of: scrollbarHit) { continue }
-      if let bar = scrollbar(at: i), bar.hitRect.contains(x: x, y: y) {
+      if let bar = scrollbar(at: i), bar.hitRegion.contains(x: x, y: y) {
         scrollbarHit = i
         hit = nil
       } else if nodes[i].isInteractive || (scrollable && nodes[i].scrollable) {

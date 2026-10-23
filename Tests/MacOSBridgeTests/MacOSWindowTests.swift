@@ -62,7 +62,7 @@ import Testing
         #expect(!snapshot.input.released && snapshot.input.x == -1)
       }
       let draws = [
-        DrawRect(Rect(0, 0, snapshot.logicalSize.x, snapshot.logicalSize.y), Color(0, 1, 0))
+        DrawRect(Region(0, 0, snapshot.logicalSize.x, snapshot.logicalSize.y), Color(0, 1, 0))
       ]
       frame.render(draws.span)
     }
@@ -78,7 +78,7 @@ import Testing
       configuration: .init(logicalSize: .init(420, 320), title: "Quit test")
     ) { _, frame in
       frames += 1
-      let draws = [DrawRect(Rect(0, 0, 420, 320), Color(1, 0, 0))]
+      let draws = [DrawRect(Region(0, 0, 420, 320), Color(1, 0, 0))]
       frame.render(draws.span)
       if frames < 3 { MacOSWindow.requestRedraw() }
       if frames == 3 {
@@ -88,8 +88,7 @@ import Testing
     }
     #expect(frames == 3)
     var reopened = 0
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2))
-    { _, _ in
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2)) { _, _ in
       reopened += 1
     }
     #expect(reopened == 2)
@@ -112,8 +111,7 @@ import Testing
         _, _ in
       }
     }
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1))
-    { _, _ in }
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1)) { _, _ in }
   }
 
   @Test func idleWindowPausesAndCoalescesRedrawRequests() async throws {
@@ -154,8 +152,7 @@ import Testing
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
     var reopened = 0
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2))
-    { _, _ in
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2)) { _, _ in
       reopened += 1
     }
     #expect(reopened == 2)
@@ -167,8 +164,7 @@ import Testing
     }
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1))
-    { _, _ in }
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1)) { _, _ in }
   }
 
   @Test func clipboardRoundTripsTextAndBoundsPublication() async throws {

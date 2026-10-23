@@ -9,15 +9,15 @@ func clippedTextMatchesFilteringUnclippedDraws(size: Float) {
   var reference = UIStorage(nodeCapacity: 0, drawCapacity: 10000)
   let expectedX = reference.drawText(text, x: -3, y: -5, font: font, color: .text, clip: nil)
   for clip in [
-    Rect(-1000, -1000, 2000, 2000), Rect(0, 0, 20, 15),
-    Rect(-3, -5, size / 2, font.glyphHeight / 2),
-    Rect(-100, -100, 1, 1), Rect(1000, 1000, 1, 1), Rect(0, 0, 0, 0),
-    Rect(-3 + size / 2, -5, 1, font.glyphHeight / 2),
-    Rect(-3, -5 + font.glyphHeight / 2, size / 2, 1),
-    Rect(-3.25, -5.25, 0.5, 0.5),
+    Region(-1000, -1000, 2000, 2000), Region(0, 0, 20, 15),
+    Region(-3, -5, size / 2, font.glyphHeight / 2),
+    Region(-100, -100, 1, 1), Region(1000, 1000, 1, 1), Region(0, 0, 0, 0),
+    Region(-3 + size / 2, -5, 1, font.glyphHeight / 2),
+    Region(-3, -5 + font.glyphHeight / 2, size / 2, 1),
+    Region(-3.25, -5.25, 0.5, 0.5)
   ] {
     var expected: [DrawRect] = []
-    for draw in reference.draws where !clip.intersection(draw.rect).isEmpty {
+    for draw in reference.draws where !clip.intersection(draw.region).isEmpty {
       var draw = draw
       draw.clip = clip
       expected.append(draw)
@@ -29,7 +29,7 @@ func clippedTextMatchesFilteringUnclippedDraws(size: Float) {
       #expect(clipped.draws.count == min(capacity, expected.count))
       #expect(clipped.droppedDraws == max(0, expected.count - capacity))
       for index in 0..<clipped.draws.count {
-        #expect(clipped.draws[index].rect == expected[index].rect)
+        #expect(clipped.draws[index].region == expected[index].region)
         #expect(clipped.draws[index].color == expected[index].color)
         #expect(clipped.draws[index].radius == expected[index].radius)
         #expect(clipped.draws[index].clip == expected[index].clip)

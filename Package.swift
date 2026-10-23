@@ -4,16 +4,16 @@ import PackageDescription
 let swiftSettings: [SwiftSetting] = [
   .enableExperimentalFeature("Lifetimes"),
   .treatAllWarnings(as: .error),
-  .strictMemorySafety(),
+  .strictMemorySafety()
 ]
 var dependencies: [Package.Dependency] = []
 var windowsBridgeDependencies: [Target.Dependency] = ["Roots", "RootsCPU"]
 #if os(Windows)
-  windowsBridgeDependencies.append("CWindowsHost")
+windowsBridgeDependencies.append("CWindowsHost")
 #endif
 var products: [Product] = [
   .library(name: "Roots", targets: ["Roots"]),
-  .library(name: "RootsCPU", targets: ["RootsCPU"]),
+  .library(name: "RootsCPU", targets: ["RootsCPU"])
 ]
 var targets: [Target] = [
   .target(
@@ -24,13 +24,13 @@ var targets: [Target] = [
       "libpng/pngrutil.c", "libpng/pngset.c", "libpng/pngtrans.c", "libpng/pngwio.c",
       "libpng/pngwrite.c", "libpng/pngwtran.c", "libpng/pngwutil.c",
       "libpng/arm/arm_init.c", "libpng/arm/filter_neon_intrinsics.c",
-      "libpng/arm/palette_neon_intrinsics.c",
+      "libpng/arm/palette_neon_intrinsics.c"
     ],
     publicHeadersPath: "include",
     linkerSettings: [
       .linkedLibrary("z", .when(platforms: [.macOS, .linux])),
       .linkedLibrary("m", .when(platforms: [.linux])),
-      .linkedLibrary("zlib", .when(platforms: [.windows])),
+      .linkedLibrary("zlib", .when(platforms: [.windows]))
     ]),
   .target(
     name: "CFreeType",
@@ -52,13 +52,13 @@ var targets: [Target] = [
       "freetype/src/sfnt/sfnt.c", "freetype/src/smooth/smooth.c",
       "freetype/src/svg/svg.c", "freetype/src/truetype/truetype.c",
       "freetype/src/type1/type1.c", "freetype/src/type42/type42.c",
-      "freetype/src/winfonts/winfnt.c",
+      "freetype/src/winfonts/winfnt.c"
     ],
     publicHeadersPath: "include",
     cSettings: [
       .define("FT2_BUILD_LIBRARY"),
       .define("FT_CONFIG_OPTION_USE_PNG"),
-      .headerSearchPath("freetype/include"),
+      .headerSearchPath("freetype/include")
     ]),
   .target(
     name: "Roots", resources: [.copy("Resources")], swiftSettings: swiftSettings,
@@ -81,100 +81,100 @@ var targets: [Target] = [
     name: "WindowsBridge", dependencies: windowsBridgeDependencies, swiftSettings: swiftSettings),
   .testTarget(
     name: "WindowsBridgeTests", dependencies: ["WindowsBridge", "Roots", "RootsCPU"],
-    swiftSettings: swiftSettings),
+    swiftSettings: swiftSettings)
 ]
 #if os(Linux)
-  dependencies += [
-    .package(
-      url: "https://github.com/zaneenders/swift-nio.git", branch: "shape-tree/unix-fd-messages"),
-    .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1"),
-  ]
-  products += [
-    .library(name: "SwiftWayland", targets: ["SwiftWayland"]),
-    .library(name: "WaylandBridge", targets: ["WaylandBridge"]),
-  ]
-  targets += [
-    .target(
-      name: "SwiftWayland",
-      dependencies: [
-        "CXKBCommon", .product(name: "NIOCore", package: "swift-nio"),
-        .product(name: "NIOPosix", package: "swift-nio"),
-        .product(name: "SystemPackage", package: "swift-system"),
-      ], swiftSettings: swiftSettings),
-    .systemLibrary(name: "CXKBCommon", pkgConfig: "xkbcommon"),
-    .target(
-      name: "CWaylandTestSupport", path: "Tests/CWaylandTestSupport", publicHeadersPath: "include"),
-    .testTarget(
-      name: "SwiftWaylandTests",
-      dependencies: [
-        "SwiftWayland", "CWaylandTestSupport",
-        .product(name: "SystemPackage", package: "swift-system"),
-      ],
-      resources: [.copy("Protocols")], swiftSettings: swiftSettings),
-    .target(
-      name: "WaylandBridge",
-      dependencies: ["CEGLGLES", "Roots", "SwiftWayland"],
-      exclude: ["Shaders"],
-      swiftSettings: swiftSettings, plugins: [.plugin(name: "ShaderSourcePlugin")]),
-    .executableTarget(name: "ShaderSourceGenerator", swiftSettings: swiftSettings),
-    .plugin(
-      name: "ShaderSourcePlugin", capability: .buildTool(), dependencies: ["ShaderSourceGenerator"]),
-    .testTarget(
-      name: "ShaderSourceGeneratorTests", dependencies: ["ShaderSourceGenerator"],
-      swiftSettings: swiftSettings),
-    .target(
-      name: "DesktopTestSupport",
-      dependencies: [
-        "CEGLGLES", .product(name: "NIOCore", package: "swift-nio"),
-        .product(name: "NIOPosix", package: "swift-nio"),
-      ],
-      path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings),
-    .testTarget(
-      name: "WaylandBridgeTests",
-      dependencies: [
-        "WaylandBridge", "RootsCPU", "CEGLGLES", "SwiftWayland", "DesktopTestSupport",
-      ],
-      swiftSettings: swiftSettings),
-    .systemLibrary(name: "CEGLGLES"),
-  ]
+dependencies += [
+  .package(
+    url: "https://github.com/zaneenders/swift-nio.git", branch: "shape-tree/unix-fd-messages"),
+  .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1")
+]
+products += [
+  .library(name: "SwiftWayland", targets: ["SwiftWayland"]),
+  .library(name: "WaylandBridge", targets: ["WaylandBridge"])
+]
+targets += [
+  .target(
+    name: "SwiftWayland",
+    dependencies: [
+      "CXKBCommon", .product(name: "NIOCore", package: "swift-nio"),
+      .product(name: "NIOPosix", package: "swift-nio"),
+      .product(name: "SystemPackage", package: "swift-system")
+    ], swiftSettings: swiftSettings),
+  .systemLibrary(name: "CXKBCommon", pkgConfig: "xkbcommon"),
+  .target(
+    name: "CWaylandTestSupport", path: "Tests/CWaylandTestSupport", publicHeadersPath: "include"),
+  .testTarget(
+    name: "SwiftWaylandTests",
+    dependencies: [
+      "SwiftWayland", "CWaylandTestSupport",
+      .product(name: "SystemPackage", package: "swift-system")
+    ],
+    resources: [.copy("Protocols")], swiftSettings: swiftSettings),
+  .target(
+    name: "WaylandBridge",
+    dependencies: ["CEGLGLES", "Roots", "SwiftWayland"],
+    exclude: ["Shaders"],
+    swiftSettings: swiftSettings, plugins: [.plugin(name: "ShaderSourcePlugin")]),
+  .executableTarget(name: "ShaderSourceGenerator", swiftSettings: swiftSettings),
+  .plugin(
+    name: "ShaderSourcePlugin", capability: .buildTool(), dependencies: ["ShaderSourceGenerator"]),
+  .testTarget(
+    name: "ShaderSourceGeneratorTests", dependencies: ["ShaderSourceGenerator"],
+    swiftSettings: swiftSettings),
+  .target(
+    name: "DesktopTestSupport",
+    dependencies: [
+      "CEGLGLES", .product(name: "NIOCore", package: "swift-nio"),
+      .product(name: "NIOPosix", package: "swift-nio")
+    ],
+    path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings),
+  .testTarget(
+    name: "WaylandBridgeTests",
+    dependencies: [
+      "WaylandBridge", "RootsCPU", "CEGLGLES", "SwiftWayland", "DesktopTestSupport"
+    ],
+    swiftSettings: swiftSettings),
+  .systemLibrary(name: "CEGLGLES")
+]
 #elseif os(macOS)
-  products += [.library(name: "MacOSBridge", targets: ["MacOSBridge"])]
-  targets += [
-    .target(
-      name: "MacOSBridge", dependencies: ["Roots"],
-      resources: [.copy("Shaders")], swiftSettings: swiftSettings),
-    .target(
-      name: "DesktopTestSupport", path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings),
-    .testTarget(
-      name: "MacOSBridgeTests", dependencies: ["MacOSBridge", "RootsCPU", "DesktopTestSupport"],
-      swiftSettings: swiftSettings),
-  ]
+products += [.library(name: "MacOSBridge", targets: ["MacOSBridge"])]
+targets += [
+  .target(
+    name: "MacOSBridge", dependencies: ["Roots"],
+    resources: [.copy("Shaders")], swiftSettings: swiftSettings),
+  .target(
+    name: "DesktopTestSupport", path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings),
+  .testTarget(
+    name: "MacOSBridgeTests", dependencies: ["MacOSBridge", "RootsCPU", "DesktopTestSupport"],
+    swiftSettings: swiftSettings)
+]
 #elseif os(Windows)
-  products += [.library(name: "WindowsBridge", targets: ["WindowsBridge"])]
-  targets += [
-    .target(
-      name: "CWindowsHost", publicHeadersPath: "include",
-      linkerSettings: [.linkedLibrary("user32"), .linkedLibrary("gdi32")]),
-    .target(
-      name: "DesktopTestSupport", path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings),
-  ]
+products += [.library(name: "WindowsBridge", targets: ["WindowsBridge"])]
+targets += [
+  .target(
+    name: "CWindowsHost", publicHeadersPath: "include",
+    linkerSettings: [.linkedLibrary("user32"), .linkedLibrary("gdi32")]),
+  .target(
+    name: "DesktopTestSupport", path: "Tests/DesktopTestSupport", swiftSettings: swiftSettings)
+]
 #endif
 #if os(macOS) || os(Linux) || os(Windows)
-  products += [.library(name: "RootsDesktop", targets: ["RootsDesktop"])]
-  #if os(macOS)
-    let desktopBackend: Target.Dependency = "MacOSBridge"
-  #elseif os(Windows)
-    let desktopBackend: Target.Dependency = "WindowsBridge"
-  #else
-    let desktopBackend: Target.Dependency = "WaylandBridge"
-  #endif
-  targets += [
-    .target(
-      name: "RootsDesktop", dependencies: ["Roots", desktopBackend], swiftSettings: swiftSettings),
-    .testTarget(
-      name: "RootsDesktopTests", dependencies: ["RootsDesktop", "RootsCPU", "DesktopTestSupport"],
-      swiftSettings: swiftSettings),
-  ]
+products += [.library(name: "RootsDesktop", targets: ["RootsDesktop"])]
+#if os(macOS)
+let desktopBackend: Target.Dependency = "MacOSBridge"
+#elseif os(Windows)
+let desktopBackend: Target.Dependency = "WindowsBridge"
+#else
+let desktopBackend: Target.Dependency = "WaylandBridge"
+#endif
+targets += [
+  .target(
+    name: "RootsDesktop", dependencies: ["Roots", desktopBackend], swiftSettings: swiftSettings),
+  .testTarget(
+    name: "RootsDesktopTests", dependencies: ["RootsDesktop", "RootsCPU", "DesktopTestSupport"],
+    swiftSettings: swiftSettings)
+]
 #endif
 let package = Package(
   name: "roots", platforms: [.macOS("27.0")], products: products,

@@ -31,8 +31,14 @@ private struct TestApp: RootsApp {
 private struct ExampleApp: RootsApp {
   var window: some Window {
     DesktopWindow("Example", size: .init(1180, 820)) { viewport in
-      ColumnBlock(in: viewport.bounds) {
-        LabelBlock(key: 1, "Hello")
+      Column(in: viewport.bounds) {
+        Text("Hello")
+          .size(20)
+          .selectable(key: 1)
+          .alignment(.leading)
+          .padding(horizontal: 12)
+          .frame(width: .fill, height: .fixed(32))
+          .background(.panel)
       }
     }.onKey { $0.key == .escape }
   }
@@ -75,7 +81,7 @@ struct DesktopWindowTests {
     }
     #expect(events.isEmpty)
     for (acceleration, deceleration): (Float, Float) in [
-      (-1, 4), (.nan, 4), (1, 0), (1, .infinity),
+      (-1, 4), (.nan, 4), (1, 0), (1, .infinity)
     ] {
       await #expect(throws: DesktopWindowError.invalidConfiguration) {
         try await DesktopWindow(
@@ -89,14 +95,14 @@ struct DesktopWindowTests {
 
   @Test func viewportUsesLogicalBounds() {
     let viewport = Viewport(size: .init(200, 100), scale: 2)
-    #expect(viewport.bounds == Rect(0, 0, 200, 100))
+    #expect(viewport.bounds == Region(0, 0, 200, 100))
     #expect(viewport.scale == 2)
   }
 
   @Test func invalidConfigurationFailsBeforeBuildingContent() async {
     var builds = 0
     for size: SIMD2<Float> in [
-      .init(0, 10), .init(-1, 10), .init(.nan, 10), .init(10, .infinity), .init(8193, 10),
+      .init(0, 10), .init(-1, 10), .init(.nan, 10), .init(10, .infinity), .init(8193, 10)
     ] {
       let window = DesktopWindow("Invalid", size: size) { _ in
         builds += 1
@@ -162,10 +168,10 @@ struct DesktopWindowRenderingTests {
       viewport in
       #expect(events == ["start"])
       frames += 1
-      #expect(viewport.bounds == Rect(0, 0, 64, 48))
-      return ColumnBlock(in: viewport.bounds, gap: 0) {
-        CanvasBlock(key: 1, extent: 48) { context in
-          context.fillRect(context.rect, color: Color(1, 0, 0))
+      #expect(viewport.bounds == Region(0, 0, 64, 48))
+      return Column(in: viewport.bounds, gap: 0) {
+        Canvas(key: 1, extent: 48) { context in
+          context.fillRect(context.region, color: Color(1, 0, 0))
         }
       }
     }

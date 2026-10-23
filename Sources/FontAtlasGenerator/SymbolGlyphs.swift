@@ -72,7 +72,7 @@ enum SymbolGlyphs {
     case 0xEACC:  // sparkle
       bitmap.polygon([
         (6, 2), (7, 9), (11, 6), (8, 11), (12, 12), (8, 13), (11, 18),
-        (7, 15), (6, 22), (5, 15), (1, 18), (4, 13), (0, 12), (4, 11), (1, 6), (5, 9),
+        (7, 15), (6, 22), (5, 15), (1, 18), (4, 13), (0, 12), (4, 11), (1, 6), (5, 9)
       ])
     case 0xF002:  // search
       bitmap.ellipse(center: (5, 10), radius: (4, 5), width: 1.2)
@@ -94,7 +94,7 @@ enum SymbolGlyphs {
         bitmap.stroke(
           [
             (6 + 4 * cos(angle), 12 + 6 * sin(angle)),
-            (6 + 6 * cos(angle), 12 + 9 * sin(angle)),
+            (6 + 6 * cos(angle), 12 + 9 * sin(angle))
           ], width: 1.5)
       }
       bitmap.ellipse(center: (6, 12), radius: (4, 6))
@@ -103,7 +103,7 @@ enum SymbolGlyphs {
       for y: Float in [6, 12, 18] { bitmap.stroke([(1, y), (11, y)], width: 1.6) }
     case 0x1F44D:  // thumbs up
       bitmap.polygon([
-        (4, 20), (4, 11), (7, 7), (7, 3), (8, 2), (9, 3), (9, 9), (11, 9), (12, 11), (10, 20),
+        (4, 20), (4, 11), (7, 7), (7, 3), (8, 2), (9, 3), (9, 9), (11, 9), (12, 11), (10, 20)
       ])
       bitmap.polygon([(0, 11), (2.5, 11), (2.5, 20), (0, 20)])
     default:

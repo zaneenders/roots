@@ -92,7 +92,7 @@ import Testing
   (Key.shift, KeyModifiers.shift, UInt32(56), UInt32(60)),
   (Key.control, KeyModifiers.control, UInt32(59), UInt32(62)),
   (Key.alt, KeyModifiers.alt, UInt32(58), UInt32(61)),
-  (Key.super, KeyModifiers.super, UInt32(55), UInt32(54)),
+  (Key.super, KeyModifiers.super, UInt32(55), UInt32(54))
 ])
 func overlappingModifiersPreservePhysicalTransitions(
   key: Key, flag: KeyModifiers, left: UInt32, right: UInt32
@@ -107,7 +107,7 @@ func overlappingModifiersPreservePhysicalTransitions(
       KeyEvent(key, modifiers: flag, physicalCode: left),
       KeyEvent(key, modifiers: flag, physicalCode: right),
       KeyEvent(key, phase: .released, modifiers: flag, physicalCode: left),
-      KeyEvent(key, phase: .released, physicalCode: right),
+      KeyEvent(key, phase: .released, physicalCode: right)
     ])
   state.loseFocus()
   #expect(state.input.keyEvents.isEmpty)
@@ -121,7 +121,7 @@ func overlappingModifiersPreservePhysicalTransitions(
   #expect(
     state.input.keyEvents == [
       KeyEvent(.shift, phase: .released, physicalCode: 56),
-      KeyEvent(.shift, phase: .released, physicalCode: 60),
+      KeyEvent(.shift, phase: .released, physicalCode: 60)
     ])
   state.consumeEdges()
   state.flags(.shift, code: 60, key: .shift)
@@ -137,6 +137,6 @@ func overlappingModifiersPreservePhysicalTransitions(
   #expect(
     state.input.keyEvents == [
       KeyEvent(.capsLock, modifiers: .capsLock, physicalCode: 57),
-      KeyEvent(.capsLock, phase: .released, physicalCode: 57),
+      KeyEvent(.capsLock, phase: .released, physicalCode: 57)
     ])
 }

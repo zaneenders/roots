@@ -3,7 +3,7 @@ import Testing
 @testable import Roots
 
 private func idleButton(_ frame: inout UIFrame) {
-  frame.beginColumn(in: Rect(0, 0, 100, 40))
+  frame.beginColumn(in: Region(0, 0, 100, 40))
   frame.button(key: 1, "Button")
   frame.end()
 }
@@ -32,7 +32,7 @@ private func idleButton(_ frame: inout UIFrame) {
 @Test func momentumRequestsFramesOnlyUntilItSettlesOrIsInterrupted() {
   var ui = UIStore()
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 1, in: Rect(0, 0, 100, 100))
+    frame.beginScrollColumn(key: 1, in: Region(0, 0, 100, 100))
     frame.label(key: 2, "Content", extent: 2000)
     frame.end()
   }

@@ -6,7 +6,7 @@ enum WireSchema {
     "xdg_wm_base": 0, "xdg_positioner": 0, "xdg_surface": 0, "xdg_toplevel": 0, "xdg_popup": 0,
     "zwlr_layer_shell_v1": 1, "zwlr_layer_surface_v1": 7,
     "zwp_idle_inhibit_manager_v1": 0, "zwp_idle_inhibitor_v1": 0,
-    "zwp_linux_dmabuf_v1": 0, "zwp_linux_buffer_params_v1": 0,
+    "zwp_linux_dmabuf_v1": 0, "zwp_linux_buffer_params_v1": 0
   ]
   static let events: [String: [String]] = [
     "wl_display": ["uus", "u"],
@@ -33,7 +33,7 @@ enum WireSchema {
     "zwlr_layer_surface_v1": ["uuu", ""],
     "zwp_idle_inhibit_manager_v1": [], "zwp_idle_inhibitor_v1": [],
     "zwp_linux_dmabuf_v1": ["u", "uuu"],
-    "zwp_linux_buffer_params_v1": ["u", ""],
+    "zwp_linux_buffer_params_v1": ["u", ""]
   ]
   static let requests: [String: [String]] = [
     "wl_display": ["u", "u"],
@@ -60,6 +60,6 @@ enum WireSchema {
     "zwlr_layer_surface_v1": ["uu", "u", "i", "iiii", "u", "u", "u", "", "u"],
     "zwp_idle_inhibit_manager_v1": ["", "uu"], "zwp_idle_inhibitor_v1": [""],
     "zwp_linux_dmabuf_v1": ["", "u", "u", "uu"],
-    "zwp_linux_buffer_params_v1": ["", "huuuuu", "iiuu", "uiiuu", "a"],
+    "zwp_linux_buffer_params_v1": ["", "huuuuu", "iiuu", "uiiuu", "a"]
   ]
 }

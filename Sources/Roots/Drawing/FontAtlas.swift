@@ -58,7 +58,7 @@ public struct FontAtlas: Sendable {
       for value: UInt32 in [
         0xA0, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009,
         0x200A, 0x202F, 0x205F,
-        0x3000,
+        0x3000
       ] {
         if let scalar = UnicodeScalar(value) { indices[Character(String(scalar))] = space }
       }
@@ -90,7 +90,7 @@ public struct FontAtlas: Sendable {
 
   public func contains(_ character: Character) -> Bool { indices[character] != nil }
 
-  public func glyphUV(_ character: Character) -> Rect {
+  public func glyphUV(_ character: Character) -> Region {
     let index: Int
     if let supported = indices[character] {
       index = supported
@@ -101,12 +101,12 @@ public struct FontAtlas: Sendable {
     return glyphUV(index: index)
   }
 
-  func glyphUVIfPresent(_ character: Character) -> Rect? {
+  func glyphUVIfPresent(_ character: Character) -> Region? {
     indices[character].map { glyphUV(index: $0) }
   }
 
-  private func glyphUV(index: Int) -> Rect {
-    Rect(
+  private func glyphUV(index: Int) -> Region {
+    Region(
       Float((index % 32) * 66 + 3) / Float(width),
       Float((index / 32) * 90 + 3) / Float(height),
       60 / Float(width), 84 / Float(height))

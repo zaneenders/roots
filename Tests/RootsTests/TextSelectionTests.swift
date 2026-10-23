@@ -9,12 +9,12 @@ struct TextSelectionTests {
     var ui = UIStore()
     var copies: [String] = []
     func build(_ frame: inout UIFrame) {
-      frame.beginColumn(in: Rect(10, 20, 300, 120))
+      frame.beginColumn(in: Region(10, 20, 300, 120))
       frame.text(
         key: 1,
         lines: [
-          TextLine([TextRun("café "), TextRun("👩‍💻", color: .accent)], y: 4, font: font),
-          TextLine([TextRun("next")], y: 36, font: font),
+          TextLine([TextRun("café "), TextRun("👩‍💻", color: .accent)], y: 4, size: font.size),
+          TextLine([TextRun("next")], y: 36, size: font.size)
         ], extent: 120)
       frame.end()
     }
@@ -40,7 +40,7 @@ struct TextSelectionTests {
   @Test func reverseDragAndKeyboardExtensionRespectSelectionBounds() {
     var ui = UIStore()
     func build(_ frame: inout UIFrame) {
-      frame.beginColumn(in: Rect(0, 0, 200, 40))
+      frame.beginColumn(in: Region(0, 0, 200, 40))
       frame.label(key: 1, "abcd", extent: 40, font: font)
       frame.end()
     }
@@ -59,11 +59,11 @@ struct TextSelectionTests {
     var ui = UIStore()
     var offset: Float = 32
     func build(_ frame: inout UIFrame) {
-      let scroll = frame.beginScrollColumn(key: 1, in: Rect(0, 10, 200, 60), gap: 0)
+      let scroll = frame.beginScrollColumn(key: 1, in: Region(0, 10, 200, 60), gap: 0)
       frame.text(
         key: 2,
         lines: (0..<10).map {
-          TextLine([TextRun("line\($0)")], y: Float($0) * 32, font: font)
+          TextLine([TextRun("line\($0)")], y: Float($0) * 32, size: font.size)
         }, extent: 320)
       frame.end()
       frame.scrollTo(offset, in: scroll)
@@ -80,7 +80,7 @@ struct TextSelectionTests {
       build: build,
       present: { draws in
         for draw in draws where draw.glyphUV != nil {
-          #expect(draw.clip == Rect(0, 10, 200, 60))
+          #expect(draw.clip == Region(0, 10, 200, 60))
         }
       })
     #expect(ui.selectedText == "line1")
@@ -90,11 +90,11 @@ struct TextSelectionTests {
   @Test func dragBeyondViewportAutoscrollsAndKeepsCapture() {
     var ui = UIStore()
     func build(_ frame: inout UIFrame) {
-      frame.beginScrollColumn(key: 1, in: Rect(0, 0, 200, 64), gap: 0)
+      frame.beginScrollColumn(key: 1, in: Region(0, 0, 200, 64), gap: 0)
       frame.text(
         key: 2,
         lines: (0..<20).map {
-          TextLine([TextRun("row\($0)")], y: Float($0) * 32, font: font)
+          TextLine([TextRun("row\($0)")], y: Float($0) * 32, size: font.size)
         }, extent: 640)
       frame.end()
     }
@@ -116,7 +116,7 @@ struct TextSelectionTests {
     var ui = UIStore()
     var clicks = 0
     func build(_ frame: inout UIFrame) {
-      frame.beginColumn(in: Rect(0, 0, 200, 200), gap: 0)
+      frame.beginColumn(in: Region(0, 0, 200, 200), gap: 0)
       frame.button(key: 1, "Button", extent: 40, onClick: { clicks += 1 })
       frame.label(key: 2, "Selectable", extent: 40)
       frame.button(key: 3, "Next", extent: 40)
@@ -153,7 +153,7 @@ struct TextSelectionTests {
     var shown = true
     func build(_ frame: inout UIFrame) {
       guard shown else { return }
-      frame.beginColumn(in: Rect(0, 0, 200, 40))
+      frame.beginColumn(in: Region(0, 0, 200, 40))
       frame.label(key: 1, text, extent: 40)
       frame.end()
     }
@@ -181,17 +181,17 @@ struct TextSelectionTests {
 
   @Test func retainedTextLinesReuseSelectionLayoutButRefreshMutations() throws {
     var storage = UIStorage(nodeCapacity: 1, drawCapacity: nil)
-    var content = [TextLine([TextRun("hello", color: .text)], y: 0, font: font)]
+    var content = [TextLine([TextRun("hello", color: .text)], y: 0, size: font.size)]
     storage.epoch = 1
     let handle = storage.declare(
-      key: 1, title: "", rect: Rect(0, 0, 200, 40), color: .panel, textLines: content)
+      key: 1, title: "", region: Region(0, 0, 200, 40), color: .panel, textLines: content)
     let initial = try #require(storage.nodes[handle.slot].textLayout)
     storage.focused = handle
     storage.nodes[handle.slot].selectionCursor = 5
 
     storage.epoch += 1
     _ = storage.declare(
-      key: 1, title: "", rect: Rect(0, -20, 200, 40), color: .panel, textLines: content)
+      key: 1, title: "", region: Region(0, -20, 200, 40), color: .panel, textLines: content)
     let reused = try #require(storage.nodes[handle.slot].textLayout)
     #expect(reused.lines.isTriviallyIdentical(to: initial.lines))
     #expect(storage.selectedText == "hello")
@@ -200,7 +200,7 @@ struct TextSelectionTests {
     content[0].x = 20
     storage.epoch += 1
     _ = storage.declare(
-      key: 1, title: "", rect: Rect(0, 0, 200, 40), color: .panel, textLines: content)
+      key: 1, title: "", region: Region(0, 0, 200, 40), color: .panel, textLines: content)
     let changed = try #require(storage.nodes[handle.slot].textLayout)
     #expect(!changed.lines.isTriviallyIdentical(to: initial.lines))
     #expect(changed.lines[0].content.runs[0].color == .accent)
@@ -211,17 +211,17 @@ struct TextSelectionTests {
     content[0].runs[0].text += " world"
     storage.epoch += 1
     _ = storage.declare(
-      key: 1, title: "", rect: Rect(0, 0, 200, 40), color: .panel, textLines: content)
+      key: 1, title: "", region: Region(0, 0, 200, 40), color: .panel, textLines: content)
     #expect(storage.nodes[handle.slot].textLayout?.text == "hello world")
     #expect(storage.selectedText == "hello")
 
     content[0].runs[0].text = "replacement"
     storage.epoch += 1
     _ = storage.declare(
-      key: 1, title: "", rect: Rect(0, 0, 200, 40), color: .panel, textLines: content)
+      key: 1, title: "", region: Region(0, 0, 200, 40), color: .panel, textLines: content)
     #expect(storage.selectedText == nil)
     storage.epoch += 1
-    _ = storage.declare(key: 1, title: "button", rect: Rect(0, 0, 200, 40), color: .panel)
+    _ = storage.declare(key: 1, title: "button", region: Region(0, 0, 200, 40), color: .panel)
     #expect(storage.nodes[handle.slot].textLayout == nil)
     #expect(storage.focused == nil)
   }
@@ -230,7 +230,7 @@ struct TextSelectionTests {
     var ui = UIStore()
     var events: [PointerEvent] = []
     func build(_ frame: inout UIFrame) {
-      frame.beginColumn(in: Rect(10, 20, 200, 40))
+      frame.beginColumn(in: Region(10, 20, 200, 40))
       frame.element(key: 1, extent: 40, onPointer: { events.append($0) }, paint: { _ in })
       frame.end()
     }
@@ -246,7 +246,7 @@ struct TextSelectionTests {
 
 @Test func wideEmojiHitTestingAndHighlightUseColumnsNotGraphemeCounts() {
   let font = MonospaceFont(size: 20)
-  let layout = TextLayout([TextLine([TextRun("A🙂B")], y: 0, font: font)])
+  let layout = TextLayout([TextLine([TextRun("A🙂B")], y: 0, size: font.size)])
   #expect(layout.lines[0].columns == [0, 1, 3, 4])
   #expect(layout.offset(x: 12 + 13, y: 4) == 1)
   #expect(layout.offset(x: 12 + 23, y: 4) == 1)
@@ -255,8 +255,8 @@ struct TextSelectionTests {
   #expect(layout.offset(x: 12 + 48, y: 4) == 3)
   var ui = UIStore()
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 200, 50))
-    frame.text(key: 1, lines: [TextLine([TextRun("A🙂B")], y: 0, font: font)], extent: 50)
+    frame.beginColumn(in: Region(0, 0, 200, 50))
+    frame.text(key: 1, lines: [TextLine([TextRun("A🙂B")], y: 0, size: font.size)], extent: 50)
     frame.end()
   }
   ui.frame(input: Input(x: 24, y: 10, pressed: true), build: build, present: { _ in })
@@ -265,7 +265,7 @@ struct TextSelectionTests {
       $0.color == Color(0.28, 0.24, 0.42)
     }
     #expect(highlights.count == 1)
-    #expect(highlights.first?.rect == Rect(24, 0, 24, font.lineHeight))
+    #expect(highlights.first?.region == Region(24, 0, 24, font.lineHeight))
   }
   #expect(ui.selectedText == "🙂")
 }

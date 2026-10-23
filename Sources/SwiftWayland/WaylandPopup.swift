@@ -48,7 +48,7 @@ public struct WaylandPopupConfiguration: Sendable {
       positioner, 2,
       [
         .int(configuration.x), .int(configuration.y), .int(configuration.anchorWidth),
-        .int(configuration.anchorHeight),
+        .int(configuration.anchorHeight)
       ])
     objects.request(positioner, 3, [.uint(8)])
     objects.request(positioner, 4, [.uint(6)])
