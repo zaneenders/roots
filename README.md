@@ -10,7 +10,7 @@ Explore the runnable apps in [Examples](Examples):
 
 - [Markdown](Examples/Markdown): styled paragraphs, selectable text, scrolling,
   and clipboard support.
-- [Tetris](Examples/Tetris): custom painting, keyboard input, observation,
+- [Tetris](Examples/Tetris): declarative blocks, keyboard input, observation,
   and frame-driven animation.
 
 After following the [setup instructions](#development), run either example from
