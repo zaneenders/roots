@@ -17,6 +17,9 @@ import NIOCore
   private var waitingForBuffer = false
   public let configuration: WaylandWindowConfiguration
   public internal(set) var input: WaylandInput
+  // Preserve an intentional close across startup cleanup so a hosting facade
+  // never interprets it as a reason to open a different window-system backend.
+  package private(set) var closeRequested = false
   public private(set) var running = true
   public private(set) var configured = false
   public private(set) var frameReady = true
@@ -267,6 +270,7 @@ import NIOCore
     signal()
   }
   public func requestClose() {
+    closeRequested = true
     running = false
     signal()
   }

@@ -4,6 +4,10 @@ import SwiftWayland
   let configuration: NativeWindowConfiguration
   let connection: WaylandConnection
   let renderer = NativeRenderer()
+  let backend: LinuxWindowBackend
+  private let x11: X11Connection?
+  private var applicationCloseRequested = false
+  var closeRequested: Bool { applicationCloseRequested || connection.closeRequested }
   var timeSeconds: Double = 0
   private var connected = false
   private var rendererReady = false
@@ -14,16 +18,19 @@ import SwiftWayland
   private var popupDismissal: (@MainActor () -> Void)?
 
   var input: NativeWindowInput {
-    var input = NativeWindowInput(connection.input)
+    var input = x11?.input ?? NativeWindowInput(connection.input)
     input.timeSeconds = timeSeconds
     return input
   }
-  var running: Bool { connection.running }
-  var configured: Bool { connection.configured }
-  var canRender: Bool { connection.canRender }
+  var running: Bool { x11?.running ?? connection.running }
+  var configured: Bool { x11?.configured ?? connection.configured }
+  var canRender: Bool { x11?.canRender ?? connection.canRender }
 
-  init(configuration: NativeWindowConfiguration) {
+  init(configuration: NativeWindowConfiguration, backend: LinuxWindowBackend = .wayland) {
+    precondition(backend != .auto)
     self.configuration = configuration
+    self.backend = backend
+    x11 = backend == .x11 ? X11Connection(configuration: configuration) : nil
     connection = WaylandConnection(
       configuration: .init(
         width: configuration.width, height: configuration.height, title: configuration.title,
@@ -41,20 +48,29 @@ import SwiftWayland
 
   func connect() async throws {
     guard !rendererReady else { throw NativeWindowError.waylandConnection }
-    do { try await connection.connect() } catch let error as WaylandError {
-      throw NativeWindowError(error)
+    if let x11 {
+      try x11.connect()
+    } else {
+      do { try await connection.connect() } catch let error as WaylandError {
+        throw NativeWindowError(error)
+      }
     }
     connected = true
   }
 
   func setupRenderer(surfaceless: Bool) throws {
-    guard !closed, !rendererReady, running, surfaceless ? !connected : connected && configured
+    guard !closed, !rendererReady, running,
+      surfaceless ? !connected : connected && (x11 != nil || configured)
     else {
       throw NativeWindowError.rendering
     }
     do {
-      try renderer.setup(input: input)
-      if !surfaceless { renderer.enableDMABuf(connection: connection) }
+      if let x11, !surfaceless {
+        try renderer.setup(input: input, x11: x11)
+      } else {
+        try renderer.setup(input: input)
+        if !surfaceless { renderer.enableDMABuf(connection: connection) }
+      }
       rendererReady = true
     } catch {
       cleanup()
@@ -63,6 +79,10 @@ import SwiftWayland
   }
 
   func dispatchAsync() async throws {
+    if let x11 {
+      try await x11.dispatchAsync()
+      return
+    }
     if connection.popupDismissed {
       dismissPopup()
       return
@@ -74,6 +94,7 @@ import SwiftWayland
   }
 
   func drain() async throws {
+    if closed || !connected || x11 != nil { return }
     do { try await connection.drain() } catch let error as WaylandError {
       throw NativeWindowError(error)
     }
@@ -81,32 +102,49 @@ import SwiftWayland
 
   func preparePresentation() throws -> Bool {
     try renderer.preparePresentation(
-      width: connection.input.width, height: connection.input.height,
-      bufferScale: connection.input.bufferScale)
+      width: input.width, height: input.height, bufferScale: input.bufferScale)
   }
 
   func beginFrame() -> NativeWindowInput {
-    var input = NativeWindowInput(connection.beginFrame())
+    var input = x11?.beginFrame() ?? NativeWindowInput(connection.beginFrame())
     input.timeSeconds = timeSeconds
     return input
   }
 
   func endFrame(continuously: Bool = false) throws {
-    try translate { try connection.endFrame(continuously: continuously) }
+    if let x11 {
+      try x11.endFrame(continuously: continuously)
+    } else {
+      try translate { try connection.endFrame(continuously: continuously) }
+    }
   }
 
-  func setIdleInhibited(_ enabled: Bool) -> Bool { connection.setIdleInhibited(enabled) }
+  func setIdleInhibited(_ enabled: Bool) -> Bool {
+    x11 == nil && connection.setIdleInhibited(enabled)
+  }
 
-  func requestRedraw() { connection.requestRedraw() }
-  func requestClose() { connection.requestClose() }
-  func readClipboard() async -> String? { await connection.readClipboard() }
-  func writeClipboard(_ text: String) -> Bool { connection.writeClipboard(text) }
+  func requestRedraw() {
+    if let x11 { x11.requestRedraw() } else { connection.requestRedraw() }
+  }
+  func requestClose() {
+    applicationCloseRequested = true
+    if let x11 { x11.requestClose() } else { connection.requestClose() }
+  }
+  func readClipboard() async -> String? {
+    if let x11 { return await x11.readClipboard() }
+    return await connection.readClipboard()
+  }
+  func writeClipboard(_ text: String) -> Bool {
+    if let x11 { return x11.writeClipboard(text) }
+    return connection.writeClipboard(text)
+  }
 
   func presentPopup(
     configuration: NativePopupConfiguration, grab: Bool = true,
     frame: @escaping @MainActor (NativeWindowInput, borrowing RenderFrame) -> Void,
     onDismiss: @escaping @MainActor () -> Void
   ) throws {
+    guard x11 == nil else { throw NativeWindowError.invalidConfiguration }
     try translate {
       try connection.presentPopup(configuration: configuration, grab: grab)
     }
@@ -130,6 +168,7 @@ import SwiftWayland
   }
 
   func renderPopup() {
+    guard x11 == nil else { return }
     guard !connection.popupDismissed else {
       dismissPopup()
       return
@@ -172,9 +211,9 @@ import SwiftWayland
   func cleanup() {
     guard !closed else { return }
     closed = true
-    connection.requestClose()
     dismissPopup()
     renderer.cleanup()
+    x11?.cleanup()
     connection.cleanup()
   }
 }

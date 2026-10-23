@@ -76,16 +76,18 @@ public enum DesktopSystem {
           maxFrames: window.maxFrames, title: window.title, screenshotPath: window.screenshotPath,
           minimumWidth: min(760, Int32(window.size.x.rounded(.up))),
           minimumHeight: min(640, Int32(window.size.y.rounded(.up)))),
-        runtime: runtime, offscreen: window.offscreen)
+        runtime: runtime, offscreen: window.offscreen, backend: window.backend)
     #endif
   }
 
   #if os(Linux)
     static func run<Content: Block>(
       configuration: NativeWindowConfiguration, runtime: DesktopRuntime<Content>,
-      offscreen: Bool = false
+      offscreen: Bool = false, backend: LinuxWindowBackend = .auto
     ) async throws {
-      try await NativeWindow.runAsync(configuration: configuration, surfaceless: offscreen) {
+      try await NativeWindow.runAsync(
+        configuration: configuration, surfaceless: offscreen, backend: backend
+      ) {
         snapshot, renderer in
         frame(snapshot, renderer: renderer, runtime: runtime)
       }

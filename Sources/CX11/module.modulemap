@@ -1,0 +1,8 @@
+module CX11 [system] {
+  header "shim.h"
+  link "xcb"
+  link "xcb-xkb"
+  link "xkbcommon"
+  link "xkbcommon-x11"
+  export *
+}

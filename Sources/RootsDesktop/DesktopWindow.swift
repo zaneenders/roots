@@ -1,5 +1,11 @@
 import Roots
 
+#if os(Linux)
+  import WaylandBridge
+
+  public typealias LinuxWindowBackend = WaylandBridge.LinuxWindowBackend
+#endif
+
 public enum DesktopWindowError: Error, Equatable {
   case invalidConfiguration
 }
@@ -11,6 +17,9 @@ public struct DesktopWindow<Content: Block>: Window {
   let maxFrames: Int32
   let screenshotPath: String?
   let offscreen: Bool
+  #if os(Linux)
+    var backend: LinuxWindowBackend = .auto
+  #endif
   let content: @MainActor (Viewport) -> Content
   private var session: DesktopSession
 
@@ -30,6 +39,15 @@ public struct DesktopWindow<Content: Block>: Window {
       nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }
+
+  #if os(Linux)
+    /// Selects the native Linux backend. Automatic selection prefers an available Wayland session.
+    public func linuxBackend(_ backend: LinuxWindowBackend) -> Self {
+      var window = self
+      window.backend = backend
+      return window
+    }
+  #endif
 
   public func onKey(_ handler: @escaping @MainActor (KeyEvent) -> Bool) -> Self {
     var window = self
@@ -64,6 +82,9 @@ public struct DesktopWindow<Content: Block>: Window {
   }
 
   func validate() throws {
+    #if os(Linux)
+      guard !offscreen || backend == .auto else { throw DesktopWindowError.invalidConfiguration }
+    #endif
     guard size.x.isFinite, size.y.isFinite, size.x > 0, size.y > 0,
       size.x <= 8192, size.y <= 8192, maxFrames >= (offscreen ? 1 : 0),
       session.isValid,
