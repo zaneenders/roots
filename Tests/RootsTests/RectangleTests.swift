@@ -125,7 +125,7 @@ struct RectangleTests {
       build: {
         ZStack(in: Region(0, 0, 100, 40)) {
           Button(key: 1, "") { clicks += 1 }
-          if outline { Rect(cornerRadius: 3).stroke() } else { Rect() }
+          if outline { Rect().radius(3).stroke() } else { Rect() }
         }
       }, present: { _ in })
     #expect(clicks == 1)
@@ -139,8 +139,8 @@ struct RectangleTests {
     host.frame(
       build: {
         ZStack(in: bounds) {
-          Rect(cornerRadius: 3)
-          Rect(cornerRadius: 7).stroke(width: 1.5)
+          Rect().radius(3)
+          Rect().radius(7).stroke(width: 1.5)
         }.color(.accent)
       },
       present: { batch in
@@ -156,10 +156,31 @@ struct RectangleTests {
       })
   }
 
+  @Test func radiusModifierPreservesValuesAndComposesWithStroke() {
+    let original = Rectangle().radius(3)
+    var host = UIHost()
+    host.frame(
+      build: {
+        ZStack(in: Region(0, 0, 20, 20)) {
+          original
+          original.radius(7).stroke(width: 2)
+          original.radius(7).radius(0)
+          Rect().stroke(width: 2).radius(5)
+        }
+      },
+      present: { batch in
+        #expect(batch.count == 4)
+        for index in 0..<batch.count {
+          #expect(batch[index].radius == [Float(3), 7, 0, 5][index])
+          #expect(batch[index].strokeWidth == [Float(0), 2, 0, 2][index])
+        }
+      })
+  }
+
   @Test func zeroWidthStrokeDoesNotBecomeAFill() {
     var host = UIHost()
     host.frame(
-      build: { ZStack(in: Region(0, 0, 20, 20)) { Rect(cornerRadius: 3).stroke(width: 0) } },
+      build: { ZStack(in: Region(0, 0, 20, 20)) { Rect().radius(3).stroke(width: 0) } },
       present: { batch in
         #expect(batch.count == 0)
       })
@@ -170,7 +191,7 @@ struct RectangleTests {
     host.frame(
       build: {
         ScrollColumn(key: 1, in: Region(0, 0, 20, 20), gap: 0) {
-          Rect(cornerRadius: 3).stroke().color(.accent)
+          Rect().radius(3).stroke().color(.accent)
             .frame(width: .fixed(20), height: .fixed(40))
         }
         ScrollToBlock(10, in: 1)
@@ -186,7 +207,7 @@ struct RectangleTests {
   }
 
   @Test func strokeModifierHasValueSemanticsAndDoesNotLeakAcrossFrames() {
-    let fill = Rect(cornerRadius: 3)
+    let fill = Rect().radius(3)
     let stroke = fill.stroke(width: 2)
     var host = UIHost(nodeCapacity: 2)
     host.frame(

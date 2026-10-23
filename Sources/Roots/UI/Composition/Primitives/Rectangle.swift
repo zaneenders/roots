@@ -1,10 +1,14 @@
 public struct Rectangle: Block {
   public typealias Body = Never
-  private var style: RectangleStyle
+  private var style = RectangleStyle()
 
-  public init(cornerRadius: Float = 0) {
-    precondition(cornerRadius.isFinite && cornerRadius >= 0)
-    style = RectangleStyle(cornerRadius: cornerRadius)
+  public init() {}
+
+  public func radius(_ radius: Float) -> Self {
+    precondition(radius.isFinite && radius >= 0)
+    var copy = self
+    copy.style.cornerRadius = radius
+    return copy
   }
 
   public func stroke(width: Float = 1) -> Self {

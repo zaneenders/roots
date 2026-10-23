@@ -10,9 +10,9 @@ struct BoardBlock: Block {
     let activeCells = game.active?.cells ?? []
 
     ZStack {
-      Rect(cornerRadius: 7).color(Palette.well)
+      Rect().radius(7).color(Palette.well)
       CellGrid(columns: Game.width, rows: Game.height) { _ in
-        Rect(cornerRadius: 3).stroke(width: 0.5).color(Palette.grid).padding(1)
+        Rect().radius(3).stroke(width: 0.5).color(Palette.grid).padding(1)
           .frame(width: .fill, height: .fill)
       }
       CellGrid(columns: Game.width, rows: Game.height) { cell in
@@ -22,7 +22,7 @@ struct BoardBlock: Block {
       }
       CellGrid(columns: Game.width, rows: Game.height) { cell in
         if let ghost, ghostCells.contains(cell) {
-          Rect(cornerRadius: 3).stroke(width: 1.5).color(Palette.color(ghost.kind))
+          Rect().radius(3).stroke(width: 1.5).color(Palette.color(ghost.kind))
             .padding(1).frame(width: .fill, height: .fill)
         }
       }
@@ -41,8 +41,8 @@ struct TileBlock: Block {
 
   var body: some Block {
     ZStack(alignment: .top) {
-      Rect(cornerRadius: 3).color(Palette.color(kind))
-      Rect(cornerRadius: 1).color(Color(1, 1, 1, 0.28))
+      Rect().radius(3).color(Palette.color(kind))
+      Rect().radius(1).color(Color(1, 1, 1, 0.28))
         .frame(width: .fill, height: .fixed(2))
         .padding(2).frame(width: .fill)
     }

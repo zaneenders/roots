@@ -39,10 +39,10 @@ import Testing
     build: {
       ScrollColumn(key: 1, in: Region(5, 5, 30, 20), gap: 0) {
         if let width {
-          Rect(cornerRadius: radius).stroke(width: width).color(color)
+          Rect().radius(radius).stroke(width: width).color(color)
             .frame(width: .fixed(30), height: .fixed(30))
         } else {
-          Rect(cornerRadius: radius).color(color)
+          Rect().radius(radius).color(color)
             .frame(width: .fixed(30), height: .fixed(30))
         }
       }

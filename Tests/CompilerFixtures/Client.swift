@@ -6,7 +6,7 @@ func render(into frame: inout UIFrame) {
   let panel = PublicPanel { PublicLeaf() }
   let copy = panel
   copy._build(into: &frame)
-  let rectangle: Rectangle = Rect(cornerRadius: 3).stroke(width: 1.5)
+  let rectangle: Rectangle = Rect().radius(3).stroke(width: 1.5)
   Column(in: Region(0, 0, 100, 100)) {
     Canvas(key: 6) { context in
       let region: Region = context.region
