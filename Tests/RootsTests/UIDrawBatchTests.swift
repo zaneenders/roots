@@ -6,9 +6,9 @@ import Testing
   var ui = UIStore()
   ui.frame(
     build: { frame in
-      frame.beginRow(in: Rect(0, 0, 80, 40), gap: 0)
+      frame.beginRow(in: Region(0, 0, 80, 40), gap: 0)
       frame.canvas(key: 1, extent: 40, color: .panel) { context in
-        context.fillRect(Rect(4, 4, 8, 8), color: .accent)
+        context.fillRect(Region(4, 4, 8, 8), color: .accent)
       }
       frame.canvas(key: 2, extent: 40, color: .text) { _ in }
       frame.end()
@@ -24,7 +24,7 @@ import Testing
       #expect(batch[2].color == .text)
       var index = 0
       for draw in batch {
-        #expect(draw.rect == batch[index].rect)
+        #expect(draw.region == batch[index].region)
         #expect(draw.color == batch[index].color)
         index += 1
       }

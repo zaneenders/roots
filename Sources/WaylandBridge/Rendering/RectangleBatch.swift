@@ -17,10 +17,10 @@ struct RectangleBatch: ~Copyable {
     precondition(count < Self.capacity && draw.polyline == nil)
     let offset = count * Self.vertexFloats
     var vertices = storage.mutableSpan
-    vertices[offset] = draw.rect.x
-    vertices[offset + 1] = draw.rect.y
-    vertices[offset + 2] = draw.rect.width
-    vertices[offset + 3] = draw.rect.height
+    vertices[offset] = draw.region.x
+    vertices[offset + 1] = draw.region.y
+    vertices[offset + 2] = draw.region.width
+    vertices[offset + 3] = draw.region.height
     vertices[offset + 4] = draw.color.r
     vertices[offset + 5] = draw.color.g
     vertices[offset + 6] = draw.color.b

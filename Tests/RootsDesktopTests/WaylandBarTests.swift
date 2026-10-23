@@ -12,7 +12,13 @@ private struct BarApp: RootsApp {
   var window: some Window {
     WaylandBar(height: 26, namespace: "org.example.bar") { viewport in
       RowBlock(in: viewport.bounds) {
-        LabelBlock(key: 1, "Status")
+        Text("Status")
+          .size(20)
+          .selectable(key: 1)
+          .alignment(.leading)
+          .padding(horizontal: 12)
+          .frame(width: .fill, height: .fixed(32))
+          .background(.panel)
       }
     }
   }
@@ -118,11 +124,11 @@ struct WaylandBarTests {
     var builds = 0
     let bar = WaylandBar(overlayHeight: 32) { viewport in
       builds += 1
-      #expect(viewport.bounds == Rect(0, 0, 100, 58))
+      #expect(viewport.bounds == Region(0, 0, 100, 58))
       #expect(viewport.scale == 2)
       return RowBlock(in: viewport.bounds) {
-        CanvasBlock(key: 1, extent: 100) { context in
-          context.fillRect(context.rect, color: Color(model.red, 0, 0))
+        Canvas(key: 1, extent: 100) { context in
+          context.fillRect(context.region, color: Color(model.red, 0, 0))
         }
       }
     }
@@ -161,9 +167,9 @@ struct WaylandBarRenderingTests {
       viewport in
       #expect(viewport.bounds.width > 0 && viewport.bounds.height == 58 && viewport.scale >= 1)
       frames += 1
-      return RowBlock(in: Rect(0, 0, viewport.bounds.width, 26)) {
-        CanvasBlock(key: 1, extent: viewport.bounds.width) { context in
-          context.fillRect(context.rect, color: Color(0.2, 0.3, 0.4))
+      return RowBlock(in: Region(0, 0, viewport.bounds.width, 26)) {
+        Canvas(key: 1, extent: viewport.bounds.width) { context in
+          context.fillRect(context.region, color: Color(0.2, 0.3, 0.4))
         }
       }
     }

@@ -11,17 +11,17 @@ import Testing
   ui.frame(
     input: Input(keyEvents: [KeyEvent(.tab)]),
     build: { frame in
-      let scroll = frame.beginScrollColumn(key: 1, in: Rect(0, 0, 300, 100))
+      let scroll = frame.beginScrollColumn(key: 1, in: Region(0, 0, 300, 100))
       viewport = scroll
       canvas = frame.canvas(key: 2, extent: 1000) { painter in
         painted = true
         let focused = painter.focused
         #expect(!focused)
-        painter.drawText("# raw markdown", x: painter.rect.x, y: painter.rect.y)
+        painter.drawText("# raw markdown", x: painter.region.x, y: painter.region.y)
       }
       frame.end()
       frame.scrollTo(400, in: scroll)
-      frame.beginColumn(in: Rect(0, 120, 300, 44))
+      frame.beginColumn(in: Region(0, 120, 300, 44))
       editor = frame.element(key: 3, paint: { _ in })
       frame.end()
     }, present: { _ in })
@@ -43,16 +43,16 @@ import Testing
 
 @Test func labelTextIsClippedToItsOwnBounds() {
   var ui = UIStore()
-  let rect = Rect(0, 0, 40, 32)
+  let region = Region(0, 0, 40, 32)
   ui.frame(
     build: { frame in
-      frame.beginColumn(in: rect)
+      frame.beginColumn(in: region)
       frame.label(key: 1, "a long label that must not overlap adjacent controls", extent: 32)
       frame.end()
     },
     present: { draws in
       for draw in draws where draw.color == .text {
-        #expect(draw.clip == rect)
+        #expect(draw.clip == region)
       }
     })
 }

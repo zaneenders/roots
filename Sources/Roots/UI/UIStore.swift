@@ -16,7 +16,7 @@ struct UIStore: ~Copyable {
       scrollAcceleration: scrollAcceleration, scrollDeceleration: scrollDeceleration)
   }
 
-  var liveCount: Int { storage.keys.count }
+  var liveCount: Int { storage.order.count }
   var slotCount: Int { storage.nodes.count }
   var droppedDraws: Int { storage.droppedDraws }
 
@@ -29,7 +29,7 @@ struct UIStore: ~Copyable {
     let node = storage.nodes[i]
     return NodeState(
       key: node.key, clicks: node.clicks, hovered: node.hovered, focused: storage.focused == handle,
-      hoverAnimation: node.hover, rect: node.rect, scrollOffset: node.scrollOffset)
+      hoverAnimation: node.hover, region: node.region, scrollOffset: node.scrollOffset)
   }
 
   func handle(for key: UInt64) -> NodeHandle? { storage.keys[key].map { storage.handle($0) } }
@@ -46,6 +46,10 @@ struct UIStore: ~Copyable {
     storage.epoch += 1
     storage.order.removeAll()
     storage.cursors.removeAll()
+    storage.layouts.removeAll(keepingCapacity: true)
+    storage.backgrounds.removeAll(keepingCapacity: true)
+    storage.focusAfterLayout = nil
+    storage.selectionGroupKeys.removeAll(keepingCapacity: true)
     storage.draws.removeAll()
     storage.droppedDraws = 0
     let track = track ?? { $0() }
@@ -53,6 +57,7 @@ struct UIStore: ~Copyable {
       var frame = UIFrame(storage: &storage)
       build(&frame)
     }
+    storage.resolveLayouts()
     storage.finish(
       input: input, dt: dt, primaryShortcut: primaryShortcut, onKey: onKey, onCopy: onCopy,
       dispatchInput: dispatchInput, inputElapsed: inputElapsed)

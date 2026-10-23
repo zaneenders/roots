@@ -18,9 +18,9 @@ extension NativeSessionTests {
     ]
     let stroke = try #require(PolylineStroke(points: points, width: 4))
     let draws = [
-      DrawRect(Rect(0, 0, 48, 40), Color(0, 0, 0)),
-      DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Rect(4, 4, 32, 28)),
-      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0))
+      DrawRect(Region(0, 0, 48, 40), Color(0, 0, 0)),
+      DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Region(4, 4, 32, 28)),
+      DrawRect(Region(40, 30, 4, 4), Color(1, 0, 0))
     ]
     try renderer.beginFrame(width: 48, height: 40, bufferScale: scale)
     renderer.withFrame { $0.render(draws.span) }
@@ -36,11 +36,11 @@ extension NativeSessionTests {
     let s = Float(scale)
     let physicalStroke = try #require(PolylineStroke(points: points.map { $0 * s }, width: 4 * s))
     let physical = [
-      DrawRect(Rect(0, 0, Float(width), Float(height)), Color(0, 0, 0)),
+      DrawRect(Region(0, 0, Float(width), Float(height)), Color(0, 0, 0)),
       DrawRect(
         polyline: physicalStroke, color: Color(1, 1, 1, 0.5),
-        clip: Rect(4 * s, 4 * s, 32 * s, 28 * s)),
-      DrawRect(Rect(40 * s, 30 * s, 4 * s, 4 * s), Color(1, 0, 0))
+        clip: Region(4 * s, 4 * s, 32 * s, 28 * s)),
+      DrawRect(Region(40 * s, 30 * s, 4 * s, 4 * s), Color(1, 0, 0))
     ]
     let cpu = CPURenderer(width: width, height: height)
     cpu.render(physical.span)

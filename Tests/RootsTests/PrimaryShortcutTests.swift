@@ -6,7 +6,7 @@ import Testing
   var ui = UIStore()
   var copied: [String] = []
   func build(_ frame: inout UIFrame) {
-    frame.beginColumn(in: Rect(0, 0, 200, 40))
+    frame.beginColumn(in: Region(0, 0, 200, 40))
     frame.label(key: 1, "Selectable text", extent: 40)
     frame.end()
   }

@@ -28,9 +28,9 @@ extension NativeSessionTests {
       unsafe glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &framebuffer)
       #expect(framebuffer != 0)
       let draws = [
-        DrawRect(Rect(0, 0, Float(input.width), Float(input.height)), Color(0.1, 0.2, 0.4)),
-        DrawRect(Rect(8 + Float(frames * 4), 8, 32, 24), Color(1, 0, 0)),
-        DrawRect(Rect(8, Float(input.height) - 32, 32, 24), Color(0, 1, 0))
+        DrawRect(Region(0, 0, Float(input.width), Float(input.height)), Color(0.1, 0.2, 0.4)),
+        DrawRect(Region(8 + Float(frames * 4), 8, 32, 24), Color(1, 0, 0)),
+        DrawRect(Region(8, Float(input.height) - 32, 32, 24), Color(0, 1, 0))
       ]
       frame.render(draws.span)
       frames += 1
@@ -102,7 +102,7 @@ extension NativeSessionTests {
         grab: false,
         frame: { input, frame in
           let draws = [
-            DrawRect(Rect(0, 0, Float(input.width), Float(input.height)), Color(0, 0.5, 1, 0.5))
+            DrawRect(Region(0, 0, Float(input.width), Float(input.height)), Color(0, 0.5, 1, 0.5))
           ]
           frame.render(draws.span)
           popupFrames += 1
@@ -149,18 +149,18 @@ extension NativeSessionTests {
     try #require(ready)
     try host.renderer.makeCurrent()
     try host.renderer.beginFrame(width: 96, height: 48, transparent: true)
-    let alphaDraws = [DrawRect(Rect(0, 0, 8, 8), Color(1, 0, 0, 0.5))]
+    let alphaDraws = [DrawRect(Region(0, 0, 8, 8), Color(1, 0, 0, 0.5))]
     host.renderer.withFrame { $0.render(alphaDraws.span) }
     try host.renderer.endFrame(surfaceless: true)
     var rgba = [UInt8](repeating: 0, count: 4)
     unsafe glReadPixels(4, 44, 1, 1, GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), &rgba)
     #expect(abs(Int(rgba[0]) - 128) <= 1 && abs(Int(rgba[3]) - 128) <= 1)
     let draws = [
-      DrawRect(Rect(0, 0, 96, 48), Color(0, 0, 0)),
-      DrawRect(Rect(0, 0, 24, 48), Color(0, 1, 0, 0.5), clip: Rect(8, 8, 16, 24)),
-      DrawRect(Rect(28, 4, 20, 36), .text, glyphUV: FontAtlas.shared.glyphUV("A")),
+      DrawRect(Region(0, 0, 96, 48), Color(0, 0, 0)),
+      DrawRect(Region(0, 0, 24, 48), Color(0, 1, 0, 0.5), clip: Region(8, 8, 16, 24)),
+      DrawRect(Region(28, 4, 20, 36), .text, glyphUV: FontAtlas.shared.glyphUV("A")),
       DrawRect(
-        Rect(56, 4, 32, 36), .text, glyphUV: EmojiAtlas.shared.glyphUV("🙂"), colorGlyph: true)
+        Region(56, 4, 32, 36), .text, glyphUV: EmojiAtlas.shared.glyphUV("🙂"), colorGlyph: true)
     ]
     try host.renderer.beginFrame(width: 96, height: 48)
     host.renderer.withFrame { $0.render(draws.span) }

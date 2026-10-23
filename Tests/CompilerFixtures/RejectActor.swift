@@ -1,3 +1,3 @@
 import Roots
 
-func invalid() { _ = LabelBlock(key: 1, "off actor") }
+func invalid() { _ = Text("off actor") }

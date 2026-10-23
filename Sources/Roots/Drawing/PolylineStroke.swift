@@ -2,7 +2,7 @@ public final class PolylineStroke: Sendable {
   public static let maximumPointCount = 128
   public let points: [SIMD2<Float>]
   public let width: Float
-  public let bounds: Rect
+  public let bounds: Region
 
   public init?(points: [SIMD2<Float>], width: Float) {
     guard !points.isEmpty, points.count <= Self.maximumPointCount, width > 0, width.isFinite,
@@ -15,7 +15,7 @@ public final class PolylineStroke: Sendable {
       high = SIMD2(max(high.x, point.x), max(high.y, point.y))
     }
     let padding = width / 2 + 1
-    let bounds = Rect(
+    let bounds = Region(
       low.x - padding, low.y - padding, high.x - low.x + 2 * padding, high.y - low.y + 2 * padding)
     guard bounds.x.isFinite, bounds.y.isFinite, bounds.width.isFinite, bounds.height.isFinite,
       (bounds.x + bounds.width).isFinite, (bounds.y + bounds.height).isFinite,

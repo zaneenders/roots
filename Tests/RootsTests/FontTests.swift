@@ -182,10 +182,10 @@ private func bundledAtlasData() throws -> Data {
   let end = storage.drawText("Aé🙂\nx", x: 2, y: 3, font: font, color: .text, clip: nil)
   #expect(end == 2 + font.advance)
   #expect(storage.draws.count == 4)
-  #expect(storage.draws[0].rect == Rect(2, 3, 17.5, 24.5))
+  #expect(storage.draws[0].region == Region(2, 3, 17.5, 24.5))
   #expect(storage.draws[2].colorGlyph == true)
   #expect(storage.draws[2].glyphUV == EmojiAtlas.shared.glyphUV("🙂"))
-  #expect(storage.draws[3].rect.y == 3 + font.lineHeight)
+  #expect(storage.draws[3].region.y == 3 + font.lineHeight)
 }
 
 @Test func explicitFontRefreshesLabelGeometry() {
@@ -194,15 +194,15 @@ private func bundledAtlasData() throws -> Data {
     let font = MonospaceFont(size: size)
     ui.frame(
       build: { frame in
-        frame.beginColumn(in: Rect(0, 0, 200, 100))
+        frame.beginColumn(in: Region(0, 0, 200, 100))
         frame.label(key: 1, "A\nA", extent: 100, font: font)
         frame.end()
       },
       present: { draws in
         #expect(draws.count == 3)
         #expect(
-          draws[1].rect == Rect(12, (100 - font.height(of: "A\nA")) / 2, size, font.glyphHeight))
-        #expect(draws[2].rect.y == draws[1].rect.y + font.lineHeight)
+          draws[1].region == Region(12, (100 - font.height(of: "A\nA")) / 2, size, font.glyphHeight))
+        #expect(draws[2].region.y == draws[1].region.y + font.lineHeight)
         #expect(draws[1].glyphUV == draws[2].glyphUV)
       })
   }
@@ -212,7 +212,7 @@ private func bundledAtlasData() throws -> Data {
 func invalidFontSizesAreRejected(size: Float) async {
   let bits = size.bitPattern
   await #expect(processExitsWith: .failure) { [bits = bits as UInt32] in
-    _ = MonospaceFont(size: Float(bitPattern: bits))
+    await MainActor.run { _ = Button(key: 1, "", size: Float(bitPattern: bits)) }
   }
 }
 
@@ -323,18 +323,18 @@ func invalidFontSizesAreRejected(size: Float) async {
   for overflow: TextOverflow in [.truncateTail, .clip, .truncateTail] {
     ui.frame(
       build: { frame in
-        frame.beginColumn(in: Rect(0, 0, 80, 40))
+        frame.beginColumn(in: Region(0, 0, 80, 40))
         let button = frame.button(key: 1, "ABCDE", font: font, textOverflow: overflow)
         frame.focus(button)
         frame.end()
       },
       present: { draws in
-        var glyphs: [Rect] = []
+        var glyphs: [Region] = []
         for draw in draws where draw.glyphUV != nil {
-          glyphs.append(draw.rect)
-          #expect(draw.rect.width == font.glyphWidth)
+          glyphs.append(draw.region)
+          #expect(draw.region.width == font.glyphWidth)
           if overflow == .truncateTail {
-            #expect(draw.rect.x + draw.rect.width <= 68)
+            #expect(draw.region.x + draw.region.width <= 68)
             if glyphs.count == 4 { #expect(draw.glyphUV == FontAtlas.shared.glyphUV("…")) }
           }
         }

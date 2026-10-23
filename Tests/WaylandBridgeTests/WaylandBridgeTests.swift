@@ -7,7 +7,7 @@ import Testing
 
 @Test @MainActor func rectangleBatchCopiesOneInstanceAndReusesBoundedStorage() {
   var batch = RectangleBatch()
-  let draw = DrawRect(Rect(10, 20, 30, 40), Color(0.1, 0.2, 0.3, 0.4), radius: 5)
+  let draw = DrawRect(Region(10, 20, 30, 40), Color(0.1, 0.2, 0.3, 0.4), radius: 5)
   batch.append(draw)
   let expected: [Float] = [10, 20, 30, 40, 0.1, 0.2, 0.3, 0.4, 5, 0, 0, 0, 0, 0, 0, 1, 0]
   #expect(batch.vertices.count == 17)
@@ -17,37 +17,37 @@ import Testing
   #expect(batch.vertices.count == RectangleBatch.capacity * 17)
   batch.reset()
   #expect(batch.vertices.count == 0)
-  batch.append(DrawRect(Rect(1, 2, 3, 4), .text))
+  batch.append(DrawRect(Region(1, 2, 3, 4), .text))
   let reused = batch.vertices.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }
   #expect(address == reused && batch.count == 1)
   #expect(batch.vertices[0] == 1 && batch.vertices[3] == 4)
 }
 
 @Test @MainActor func invalidRectanglesAreNotStaged() {
-  #expect(RectangleBatch.accepts(DrawRect(Rect(0, 0, 1, 1), .text)))
-  for rect in [
-    Rect(0, 0, 0, 1), Rect(0, 0, 1, -1), Rect(.nan, 0, 1, 1), Rect(0, 0, .infinity, 1),
-    Rect(.greatestFiniteMagnitude, 0, .greatestFiniteMagnitude, 1),
-    Rect(0, .greatestFiniteMagnitude, 1, .greatestFiniteMagnitude)
+  #expect(RectangleBatch.accepts(DrawRect(Region(0, 0, 1, 1), .text)))
+  for region in [
+    Region(0, 0, 0, 1), Region(0, 0, 1, -1), Region(.nan, 0, 1, 1), Region(0, 0, .infinity, 1),
+    Region(.greatestFiniteMagnitude, 0, .greatestFiniteMagnitude, 1),
+    Region(0, .greatestFiniteMagnitude, 1, .greatestFiniteMagnitude)
   ] {
-    #expect(!RectangleBatch.accepts(DrawRect(rect, .text)))
+    #expect(!RectangleBatch.accepts(DrawRect(region, .text)))
   }
-  #expect(!RectangleBatch.accepts(DrawRect(Rect(0, 0, 1, 1), Color(0, 0, 0, .nan))))
-  #expect(!RectangleBatch.accepts(DrawRect(Rect(0, 0, 1, 1), .text, radius: .infinity)))
+  #expect(!RectangleBatch.accepts(DrawRect(Region(0, 0, 1, 1), Color(0, 0, 0, .nan))))
+  #expect(!RectangleBatch.accepts(DrawRect(Region(0, 0, 1, 1), .text, radius: .infinity)))
 }
 
 @Test @MainActor func clippingIncludesPixelCentersClampsAndRejectsInvalidBounds() {
-  let clip = ScissorRect(Rect(-2.5, 3.5, 12.75, 200), width: 100, height: 80)
+  let clip = ScissorRect(Region(-2.5, 3.5, 12.75, 200), width: 100, height: 80)
   #expect(clip.x == 0 && clip.y == 3 && clip.width == 10 && clip.height == 77)
-  let outside = ScissorRect(Rect(200, 200, 10, 10), width: 100, height: 80)
+  let outside = ScissorRect(Region(200, 200, 10, 10), width: 100, height: 80)
   #expect(outside.width == 0 && outside.height == 0)
-  for rect in [Rect(0, 0, -1, 1), Rect(.nan, 0, 1, 1), Rect(0, 0, .infinity, 1)] {
-    let empty = ScissorRect(rect, width: 100, height: 80)
+  for region in [Region(0, 0, -1, 1), Region(.nan, 0, 1, 1), Region(0, 0, .infinity, 1)] {
+    let empty = ScissorRect(region, width: 100, height: 80)
     #expect(empty.width == 0 && empty.height == 0)
   }
-  let fractional = ScissorRect(Rect(0.1, 0.1, 0.9, 0.9), width: 100, height: 80)
+  let fractional = ScissorRect(Region(0.1, 0.1, 0.9, 0.9), width: 100, height: 80)
   #expect(fractional.width == 1 && fractional.height == 1)
-  let large = ScissorRect(Rect(0, 0, .greatestFiniteMagnitude, 1), width: .max, height: 80)
+  let large = ScissorRect(Region(0, 0, .greatestFiniteMagnitude, 1), width: .max, height: 80)
   #expect(large.width == Int32.max)
 }
 
@@ -79,10 +79,10 @@ extension NativeSessionTests {
       #expect(throws: NativeWindowError.alreadyRunning) {
         try NativeWindow.run(configuration: configuration, surfaceless: true) { _, _ in }
       }
-      var draws = [DrawRect](repeating: DrawRect(Rect(0, 0, 16, 16), Color(1, 0, 0)), count: 1025)
-      draws.append(DrawRect(Rect(0, 0, 16, 16), Color(0, 1, 0), clip: Rect(0, 0, 8, 8)))
-      draws.append(DrawRect(Rect(12, 12, 4, 4), Color(0, 0, 1)))
-      draws.append(DrawRect(Rect(0, 0, 16, 16), .text, clip: Rect(.nan, 0, 1, 1)))
+      var draws = [DrawRect](repeating: DrawRect(Region(0, 0, 16, 16), Color(1, 0, 0)), count: 1025)
+      draws.append(DrawRect(Region(0, 0, 16, 16), Color(0, 1, 0), clip: Region(0, 0, 8, 8)))
+      draws.append(DrawRect(Region(12, 12, 4, 4), Color(0, 0, 1)))
+      draws.append(DrawRect(Region(0, 0, 16, 16), .text, clip: Region(.nan, 0, 1, 1)))
       renderer.render(draws.span)
     }
     #expect(frames == 2)
@@ -128,8 +128,14 @@ extension NativeSessionTests {
   var input = WaylandInput(width: 100, height: 80)
   var ui = UIHost()
   @MainActor func build() -> some Block {
-    ScrollColumnBlock(key: 100, in: Rect(0, 0, 100, 80)) {
-      LabelBlock(key: 1, "", extent: 1000)
+    ScrollColumn(key: 100, in: Region(0, 0, 100, 80)) {
+      Text("")
+        .size(20)
+        .selectable(key: 1)
+        .alignment(.leading)
+        .padding(horizontal: 12)
+        .frame(width: .fill, height: .fixed(1000))
+        .background(.panel)
     }
   }
   for time: UInt32 in [100, 110] {
@@ -157,15 +163,15 @@ extension NativeSessionTests {
 
 @Test @MainActor func glyphBatchCarriesUVsAndRejectsInvalidCoordinates() {
   var batch = RectangleBatch()
-  let uv = Rect(0.1, 0.2, 0.3, 0.4)
-  batch.append(DrawRect(Rect(1, 2, 3, 4), .text, glyphUV: uv))
+  let uv = Region(0.1, 0.2, 0.3, 0.4)
+  batch.append(DrawRect(Region(1, 2, 3, 4), .text, glyphUV: uv))
   #expect(batch.vertices[9] == uv.x)
   #expect(batch.vertices[10] == uv.y)
   #expect(batch.vertices[11] == uv.width)
   #expect(batch.vertices[12] == uv.height)
   #expect(batch.vertices[13] == 1)
-  for invalid in [Rect(.nan, 0, 1, 1), Rect(0, 0, -1, 1), Rect(0, 0, 2, 1)] {
-    #expect(!RectangleBatch.accepts(DrawRect(Rect(0, 0, 1, 1), .text, glyphUV: invalid)))
+  for invalid in [Region(.nan, 0, 1, 1), Region(0, 0, -1, 1), Region(0, 0, 2, 1)] {
+    #expect(!RectangleBatch.accepts(DrawRect(Region(0, 0, 1, 1), .text, glyphUV: invalid)))
   }
 }
 
@@ -181,11 +187,11 @@ extension NativeSessionTests {
       let uv = FontAtlas.shared.glyphUV("A")
       renderer.render(
         [
-          DrawRect(Rect(-10, -10, 84, 60), Color(0, 0, 0)),
-          DrawRect(Rect(4.25, 3.5, 17.5, 24.5), Color(1, 1, 1), glyphUV: uv),
+          DrawRect(Region(-10, -10, 84, 60), Color(0, 0, 0)),
+          DrawRect(Region(4.25, 3.5, 17.5, 24.5), Color(1, 1, 1), glyphUV: uv),
           DrawRect(
-            Rect(34.25, 3.5, 17.5, 24.5), Color(1, 1, 1), clip: Rect(43, 0, 21, 40), glyphUV: uv),
-          DrawRect(Rect(60, 36, 4, 4), Color(1, 0, 0))
+            Region(34.25, 3.5, 17.5, 24.5), Color(1, 1, 1), clip: Region(43, 0, 21, 40), glyphUV: uv),
+          DrawRect(Region(60, 36, 4, 4), Color(1, 0, 0))
         ].span)
     }
     let data = try Data(contentsOf: path)
@@ -228,12 +234,12 @@ extension NativeSessionTests {
 }
 
 @Test @MainActor func hidpiClipsRoundInPhysicalPixelsAndInputStaysLogical() {
-  let clip = ScissorRect(Rect(1.25, 2.25, 4.5, 3.5), width: 200, height: 160, scale: 2)
+  let clip = ScissorRect(Region(1.25, 2.25, 4.5, 3.5), width: 200, height: 160, scale: 2)
   #expect(clip.x == 2 && clip.y == 4 && clip.width == 9 && clip.height == 7)
-  let edge = ScissorRect(Rect(95, 75, 20, 20), width: 200, height: 160, scale: 2)
+  let edge = ScissorRect(Region(95, 75, 20, 20), width: 200, height: 160, scale: 2)
   #expect(edge.x == 190 && edge.y == 150 && edge.width == 10 && edge.height == 10)
   for scale: Float in [0, -1, .nan, .infinity] {
-    let empty = ScissorRect(Rect(0, 0, 10, 10), width: 200, height: 160, scale: scale)
+    let empty = ScissorRect(Region(0, 0, 10, 10), width: 200, height: 160, scale: scale)
     #expect(empty.width == 0 && empty.height == 0)
   }
   var input = WaylandInput(width: 100, height: 80)
@@ -261,9 +267,9 @@ extension NativeSessionTests {
     try renderer.setup(input: input)
     try renderer.beginFrame(width: input.width, height: input.height, bufferScale: scale)
     let draws = [
-      DrawRect(Rect(0, 0, 16, 16), Color(1, 0, 0)),
-      DrawRect(Rect(0, 0, 16, 16), Color(0, 1, 0), clip: Rect(2, 3, 5, 4)),
-      DrawRect(Rect(12, 12, 4, 4), Color(0, 0, 1))
+      DrawRect(Region(0, 0, 16, 16), Color(1, 0, 0)),
+      DrawRect(Region(0, 0, 16, 16), Color(0, 1, 0), clip: Region(2, 3, 5, 4)),
+      DrawRect(Region(12, 12, 4, 4), Color(0, 0, 1))
     ]
     renderer.withFrame { $0.render(draws.span) }
     try renderer.endFrame(surfaceless: true)
@@ -292,15 +298,15 @@ extension NativeSessionTests {
 }
 
 @Test(arguments: [Float(1), 2]) func fractionalScissorsMatchHalfOpenPixelCenters(scale: Float) {
-  let parent = Rect(1.75, 0.5, 1.5, 6)
-  for rect in [parent, parent.intersection(Rect(2.25, 1.75, 4, 2.5)), Rect(0.5, 0.5, 1, 1)] {
-    let scissor = ScissorRect(rect, width: 16, height: 16, scale: scale)
+  let parent = Region(1.75, 0.5, 1.5, 6)
+  for region in [parent, parent.intersection(Region(2.25, 1.75, 4, 2.5)), Region(0.5, 0.5, 1, 1)] {
+    let scissor = ScissorRect(region, width: 16, height: 16, scale: scale)
     for y: Int32 in 0..<16 {
       for x: Int32 in 0..<16 {
         let included =
           x >= scissor.x && x < scissor.x + scissor.width
           && y >= scissor.y && y < scissor.y + scissor.height
-        #expect(included == rect.contains(x: (Float(x) + 0.5) / scale, y: (Float(y) + 0.5) / scale))
+        #expect(included == region.contains(x: (Float(x) + 0.5) / scale, y: (Float(y) + 0.5) / scale))
       }
     }
   }

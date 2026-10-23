@@ -38,8 +38,8 @@ struct WaylandPopupTests {
     }
     let runtime = session.makeRuntime(
       content: { viewport in
-        ColumnBlock(in: viewport.bounds) {
-          ButtonBlock(key: 1, "Action", onClick: {})
+        Column(in: viewport.bounds) {
+          Button(key: 1, "Action", onClick: {})
           FocusBlock(key: 1)
         }
       }, offscreen: true)

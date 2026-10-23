@@ -18,8 +18,8 @@ struct WaylandInputTests {
     var events: [PointerEvent] = []
     let runtime = DesktopRuntime(
       content: { viewport in
-        ColumnBlock(in: viewport.bounds) {
-          ElementBlock(key: 1, extent: 100, onPointer: { events.append($0) }) { _ in }
+        Column(in: viewport.bounds) {
+          Element(key: 1, extent: 100, onPointer: { events.append($0) }) { _ in }
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {})
     defer { runtime.stop() }

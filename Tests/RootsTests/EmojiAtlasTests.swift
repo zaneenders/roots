@@ -89,7 +89,7 @@ import Testing
   for (index, character) in text.enumerated() {
     let color = character != "A" && character != "✔" && character != "☀︎" && character != "你"
     #expect(storage.draws[index].colorGlyph == color, "\(character)")
-    #expect(storage.draws[index].rect.width == (color ? 2 * font.advance : font.glyphWidth))
-    #expect(storage.draws[index].rect.x == 2 + font.width(of: text.prefix(index)))
+    #expect(storage.draws[index].region.width == (color ? 2 * font.advance : font.glyphWidth))
+    #expect(storage.draws[index].region.x == 2 + font.width(of: text.prefix(index)))
   }
 }

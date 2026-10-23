@@ -1,20 +1,26 @@
-public struct ColumnBlock<Content: Block>: Block {
+public struct Column<Content: Block>: Block {
   public typealias Body = Never
-  @usableFromInline
-  let rect: Rect
-  @usableFromInline
+  let region: Region?
   let gap: Float
-  @usableFromInline
+  let alignment: Alignment
   let content: Content
-  @inlinable
-  public init(in rect: Rect, gap: Float = 8, @BlockBuilder content: () -> Content) {
-    self.rect = rect
+
+  public init(
+    in region: Region? = nil, gap: Float = 8, alignment: Alignment = .topLeading,
+    @BlockBuilder content: () -> Content
+  ) {
+    self.region = region
     self.gap = gap
+    self.alignment = alignment
     self.content = content()
   }
-  @inlinable
+
   public borrowing func _build(into frame: inout UIFrame) {
-    frame.beginColumn(in: rect, gap: gap)
+    if let region, alignment == .topLeading {
+      frame.beginColumn(in: region, gap: gap)
+    } else {
+      frame.beginLayout(LayoutStyle(kind: .column, alignment: alignment, gap: gap), in: region)
+    }
     defer { frame.end() }
     content._build(into: &frame)
   }
@@ -22,41 +28,101 @@ public struct ColumnBlock<Content: Block>: Block {
 
 public struct RowBlock<Content: Block>: Block {
   public typealias Body = Never
-  let rect: Rect
+  let region: Region?
   let gap: Float
+  let alignment: Alignment
   let content: Content
-  public init(in rect: Rect, gap: Float = 8, @BlockBuilder content: () -> Content) {
-    self.rect = rect
+
+  public init(
+    in region: Region? = nil, gap: Float = 8, alignment: Alignment = .topLeading,
+    @BlockBuilder content: () -> Content
+  ) {
+    self.region = region
     self.gap = gap
+    self.alignment = alignment
     self.content = content()
   }
+
   public borrowing func _build(into frame: inout UIFrame) {
-    frame.beginRow(in: rect, gap: gap)
+    if let region, alignment == .topLeading {
+      frame.beginRow(in: region, gap: gap)
+    } else {
+      frame.beginLayout(LayoutStyle(kind: .row, alignment: alignment, gap: gap), in: region)
+    }
     defer { frame.end() }
     content._build(into: &frame)
   }
 }
 
-public struct ScrollColumnBlock<Content: Block>: Block {
+public struct ZStack<Content: Block>: Block {
+  public typealias Body = Never
+  let region: Region?
+  let alignment: Alignment
+  let content: Content
+
+  public init(
+    in region: Region? = nil, alignment: Alignment = .center, @BlockBuilder content: () -> Content
+  ) {
+    self.region = region
+    self.alignment = alignment
+    self.content = content()
+  }
+
+  public borrowing func _build(into frame: inout UIFrame) {
+    frame.beginLayout(LayoutStyle(alignment: alignment), in: region)
+    defer { frame.end() }
+    content._build(into: &frame)
+  }
+}
+
+/// Equal-sized cells in row-major order. Nested containers occupy one cell.
+public struct Grid<Content: Block>: Block {
+  public typealias Body = Never
+  let region: Region?
+  let columns: Int
+  let gap: Float
+  let alignment: Alignment
+  let content: Content
+
+  public init(
+    in region: Region? = nil, columns: Int, gap: Float = 8, alignment: Alignment = .center,
+    @BlockBuilder content: () -> Content
+  ) {
+    precondition(columns > 0)
+    self.region = region
+    self.columns = columns
+    self.gap = gap
+    self.alignment = alignment
+    self.content = content()
+  }
+
+  public borrowing func _build(into frame: inout UIFrame) {
+    frame.beginLayout(LayoutStyle(kind: .grid(columns), alignment: alignment, gap: gap), in: region)
+    defer { frame.end() }
+    content._build(into: &frame)
+  }
+}
+
+public struct ScrollColumn<Content: Block>: Block {
   public typealias Body = Never
   let key: UInt64
-  let rect: Rect
+  let region: Region
   let gap: Float
   let showsScrollIndicator: Bool
   let content: Content
   public init(
-    key: UInt64, in rect: Rect, gap: Float = 8, showsScrollIndicator: Bool = false,
+    key: UInt64, in region: Region, gap: Float = 8, showsScrollIndicator: Bool = false,
     @BlockBuilder content: () -> Content
   ) {
     self.key = key
-    self.rect = rect
+    self.region = region
     self.gap = gap
     self.showsScrollIndicator = showsScrollIndicator
     self.content = content()
   }
   public borrowing func _build(into frame: inout UIFrame) {
     frame.beginScrollColumn(
-      key: key, in: rect, gap: gap, showsScrollIndicator: showsScrollIndicator)
+      key: key, in: region, gap: gap, showsScrollIndicator: showsScrollIndicator)
     defer { frame.end() }
     content._build(into: &frame)
   }

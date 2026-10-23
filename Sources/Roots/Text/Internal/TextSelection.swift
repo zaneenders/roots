@@ -1,5 +1,8 @@
 extension UIStorage {
   var selectedText: String? {
+    if let selection = activeGroupSelection, !selection.range.isEmpty {
+      return String(selection.text.dropFirst(selection.range.lowerBound).prefix(selection.range.count))
+    }
     guard let i = resolve(focused), let layout = nodes[i].textLayout, !nodes[i].selection.isEmpty
     else { return nil }
     return String(
@@ -7,15 +10,16 @@ extension UIStorage {
   }
 
   mutating func pointer(_ phase: PointerEvent.Phase, input: Input, to i: Int) {
-    let rect = nodes[i].rect
+    let region = nodes[i].region
     nodes[i].interaction.handlePointer(
-      PointerEvent(phase: phase, x: input.x - rect.x, y: input.y - rect.y, rect: rect))
+      PointerEvent(phase: phase, x: input.x - region.x, y: input.y - region.y, region: region))
   }
 
   mutating func handleTextKey(
     _ event: KeyEvent, at i: Int, primaryShortcut: KeyModifiers, onCopy: ((String) -> Void)?
   ) {
     guard event.phase != .released, let layout = nodes[i].textLayout else { return }
+    if handleGroupSelectionKey(event, at: i, primaryShortcut: primaryShortcut, onCopy: onCopy) { return }
     let modifiers = event.modifiers.intersection([.control, .alt, .super])
     if modifiers == primaryShortcut {
       switch event.key {
@@ -48,21 +52,52 @@ extension UIStorage {
   }
 
   mutating func paintText(_ layout: TextLayout, node: Node, selected: Bool) {
-    let clip = node.clip.map { $0.intersection(node.rect) } ?? node.rect
+    let clip = node.clip.map { $0.intersection(node.region) } ?? node.region
+    if !layout.flowLines.isEmpty {
+      for fragment in layout.fragments {
+        if let background = fragment.background {
+          emit(
+            DrawRect(
+              Region(
+                node.region.x + fragment.region.x, node.region.y + fragment.region.y,
+                fragment.advance, fragment.region.height), background, clip: clip))
+        }
+      }
+      if selected {
+        for line in layout.flowLines {
+          let start = max(line.start, node.selection.lowerBound)
+          let end = min(line.end, node.selection.upperBound)
+          if end > start {
+            let x = line.stops[start - line.start]
+            let right = line.stops[end - line.start]
+            emit(
+              DrawRect(
+                Region(node.region.x + x, node.region.y + line.region.y, right - x, line.region.height),
+                Color(0.28, 0.24, 0.42), clip: clip))
+          }
+        }
+      }
+      for fragment in layout.fragments {
+        drawText(
+          fragment.text, x: node.region.x + fragment.region.x, y: node.region.y + fragment.region.y,
+          font: fragment.font, color: fragment.color, clip: clip)
+      }
+      return
+    }
     for (index, line) in layout.lines.enumerated() {
       let content = line.content
       let font = content.font
-      let y = node.rect.y + content.y
+      let y = node.region.y + content.y
       guard y + font.lineHeight > clip.y, y < clip.y + clip.height else { continue }
       if let background = content.background {
         emit(
-          DrawRect(Rect(node.rect.x, y, node.rect.width, font.lineHeight), background, clip: clip))
+          DrawRect(Region(node.region.x, y, node.region.width, font.lineHeight), background, clip: clip))
       }
-      var x = node.rect.x + content.x
+      var x = node.region.x + content.x
       for run in line.paintRuns where !run.text.isEmpty {
         if let background = run.background {
           emit(
-            DrawRect(Rect(x, y, font.width(of: run.text), font.lineHeight), background, clip: clip))
+            DrawRect(Region(x, y, font.width(of: run.text), font.lineHeight), background, clip: clip))
         }
         x += font.width(of: run.text)
       }
@@ -74,15 +109,15 @@ extension UIStorage {
         if end > start {
           emit(
             DrawRect(
-              Rect(
-                node.rect.x + content.x + Float(line.column(at: start - line.start)) * font.advance,
+              Region(
+                node.region.x + content.x + Float(line.column(at: start - line.start)) * font.advance,
                 y,
                 Float(line.column(at: end - line.start) - line.column(at: start - line.start))
                   * font.advance,
                 font.lineHeight), Color(0.28, 0.24, 0.42), clip: clip))
         }
       }
-      x = node.rect.x + content.x
+      x = node.region.x + content.x
       for run in line.paintRuns where !run.text.isEmpty {
         x = drawText(run.text, x: x, y: y, font: font, color: run.color, clip: clip)
       }

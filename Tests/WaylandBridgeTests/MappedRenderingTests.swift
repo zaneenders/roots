@@ -20,7 +20,7 @@ extension NativeSessionTests {
     for (index, count) in [1, 1025, 3, 2049, 0].enumerated() {
       try renderer.beginFrame(width: input.width, height: input.height)
       let color = index % 2 == 0 ? Color(1, 0, 0) : Color(0, 1, 0)
-      let draws = [DrawRect](repeating: DrawRect(Rect(0, 0, 17, 13), color), count: count)
+      let draws = [DrawRect](repeating: DrawRect(Region(0, 0, 17, 13), color), count: count)
       renderer.withFrame { frame in
         frame.render(draws.span)
         frame.render(draws.span)
@@ -57,7 +57,7 @@ extension NativeSessionTests {
     defer { renderer.cleanup() }
     try renderer.beginFrame(width: 8, height: 8)
     glEnable(GLenum(GL_ARRAY_BUFFER))
-    let draws = [DrawRect(Rect(0, 0, 8, 8), Color(1, 0, 0))]
+    let draws = [DrawRect(Region(0, 0, 8, 8), Color(1, 0, 0))]
     renderer.withFrame { $0.render(draws.span) }
     #expect(throws: NativeWindowError.rendering) { try renderer.endFrame(surfaceless: true) }
     var mapped: GLint = -1
@@ -79,7 +79,7 @@ extension NativeSessionTests {
     defer { renderer.cleanup() }
     try renderer.beginFrame(width: 8, height: 8)
     renderer.withFrame { frame in
-      let draws = [DrawRect(Rect(0, 0, 8, 8), Color(0, 0, 1))]
+      let draws = [DrawRect(Region(0, 0, 8, 8), Color(0, 0, 1))]
       frame.render(draws.span)
     }
     try renderer.endFrame(surfaceless: true)
@@ -100,12 +100,12 @@ extension NativeSessionTests {
     let path = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString + ".ppm")
     defer { try? FileManager.default.removeItem(at: path) }
-    var draws = [DrawRect(Rect(0, 0, 240, 60), Color(14 / 255, 20 / 255, 30 / 255))]
+    var draws = [DrawRect(Region(0, 0, 240, 60), Color(14 / 255, 20 / 255, 30 / 255))]
     for (index, character) in "🙂👍🏽👩‍💻🇳🇿❤️1️⃣".enumerated() {
       draws.append(
         DrawRect(
-          Rect(Float(index) * 36, 4, 30, 42), Color(1, 0, 0, index.isMultiple(of: 2) ? 1 : 0.5),
-          clip: Rect(0, 12, 240, 40), glyphUV: EmojiAtlas.shared.glyphUV(character),
+          Region(Float(index) * 36, 4, 30, 42), Color(1, 0, 0, index.isMultiple(of: 2) ? 1 : 0.5),
+          clip: Region(0, 12, 240, 40), glyphUV: EmojiAtlas.shared.glyphUV(character),
           colorGlyph: true))
     }
     let cpu = CPURenderer(width: 240, height: 60)
@@ -131,7 +131,7 @@ extension NativeSessionTests {
     try renderer.setup(input: input)
     defer { renderer.cleanup() }
     try renderer.beginFrame(width: 8, height: 8, transparent: true)
-    let draws = [DrawRect(Rect(0, 0, 4, 8), Color(1, 0, 0, 0.5))]
+    let draws = [DrawRect(Region(0, 0, 4, 8), Color(1, 0, 0, 0.5))]
     renderer.withFrame { $0.render(draws.span) }
     try renderer.endFrame(surfaceless: true)
     var pixels = [UInt8](repeating: 0, count: 8 * 8 * 4)

@@ -214,7 +214,7 @@ private struct MetalFrameSlot: ~Copyable {
       let clip =
         run.scissor
         ?? MetalScissorRect(
-          Rect(0, 0, logicalSize.x, logicalSize.y), logicalSize: logicalSize,
+          Region(0, 0, logicalSize.x, logicalSize.y), logicalSize: logicalSize,
           drawableSize: drawableSize)
       encoder.setScissorRect(
         MTLScissorRect(x: clip.x, y: clip.y, width: clip.width, height: clip.height))

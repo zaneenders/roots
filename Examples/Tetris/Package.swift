@@ -45,7 +45,7 @@ let package = Package(
     ),
     .testTarget(
       name: "TetrisTests",
-      dependencies: ["Tetris"],
+      dependencies: ["Tetris", .product(name: "RootsCPU", package: "roots")],
       swiftSettings: swiftSettings
     )
   ]

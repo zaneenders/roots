@@ -90,7 +90,7 @@ public struct FontAtlas: Sendable {
 
   public func contains(_ character: Character) -> Bool { indices[character] != nil }
 
-  public func glyphUV(_ character: Character) -> Rect {
+  public func glyphUV(_ character: Character) -> Region {
     let index: Int
     if let supported = indices[character] {
       index = supported
@@ -101,12 +101,12 @@ public struct FontAtlas: Sendable {
     return glyphUV(index: index)
   }
 
-  func glyphUVIfPresent(_ character: Character) -> Rect? {
+  func glyphUVIfPresent(_ character: Character) -> Region? {
     indices[character].map { glyphUV(index: $0) }
   }
 
-  private func glyphUV(index: Int) -> Rect {
-    Rect(
+  private func glyphUV(index: Int) -> Region {
+    Region(
       Float((index % 32) * 66 + 3) / Float(width),
       Float((index / 32) * 90 + 3) / Float(height),
       60 / Float(width), 84 / Float(height))

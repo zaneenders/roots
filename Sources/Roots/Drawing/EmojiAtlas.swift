@@ -113,16 +113,16 @@ public struct EmojiAtlas: Sendable {
       || (indices[character] != nil && !FontAtlas.shared.contains(character))
   }
 
-  public func preferredGlyphUV(_ character: Character) -> Rect? {
+  public func preferredGlyphUV(_ character: Character) -> Region? {
     guard preferred.contains(character) else { return nil }
     return glyphUV(character)
   }
 
-  public func glyphUV(_ character: Character) -> Rect {
+  public func glyphUV(_ character: Character) -> Region {
     guard let index = indices[character] else {
       preconditionFailure("EmojiAtlas has no glyph for \(String(character).debugDescription)")
     }
-    return Rect(
+    return Region(
       Float((index % 64) * 42 + 3) / Float(width),
       Float((index / 64) * 48 + 3) / Float(height),
       36 / Float(width), 42 / Float(height))

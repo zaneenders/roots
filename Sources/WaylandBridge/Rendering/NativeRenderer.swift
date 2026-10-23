@@ -76,8 +76,8 @@ import SwiftWayland
     glUseProgram(program)
   }
 
-  private func setClip(_ rect: Rect?) {
-    let next = rect.map { ScissorRect($0, width: width, height: height, scale: Float(bufferScale)) }
+  private func setClip(_ region: Region?) {
+    let next = region.map { ScissorRect($0, width: width, height: height, scale: Float(bufferScale)) }
     guard next != clip else { return }
     flush()
     clip = next

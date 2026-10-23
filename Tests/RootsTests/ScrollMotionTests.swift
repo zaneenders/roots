@@ -4,7 +4,7 @@ import Testing
 
 private func motionColumn(_ frame: inout UIFrame) {
   for key: UInt64 in 1...2 {
-    frame.beginScrollColumn(key: key, in: Rect(Float(key - 1) * 120, 0, 100, 100), gap: 0)
+    frame.beginScrollColumn(key: key, in: Region(Float(key - 1) * 120, 0, 100, 100), gap: 0)
     frame.label(key: key + 10, "", extent: 2000)
     frame.end()
   }
@@ -66,7 +66,7 @@ func interactionsResetAcceleration(input: Input) throws {
   var ui = UIStore(scrollAcceleration: 1)
   var distances: [Float] = []
   func build(_ frame: inout UIFrame) {
-    frame.beginScrollColumn(key: 1, in: Rect(0, 0, 100, 100), gap: 0)
+    frame.beginScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0)
     frame.element(key: 2, extent: 2000, onScroll: { distances.append($0.deltaY) }, paint: { _ in })
     frame.end()
   }

@@ -3,7 +3,7 @@ import Testing
 @testable import Roots
 
 private func row(_ frame: inout UIFrame, _ keys: [UInt64], action: (() -> Void)? = nil) {
-  frame.beginRow(in: Rect(0, 0, 1000, 40), gap: 0)
+  frame.beginRow(in: Region(0, 0, 1000, 40), gap: 0)
   for key in keys { frame.button(key: key, "", extent: 80, onClick: action) }
   frame.end()
 }
@@ -29,10 +29,10 @@ private func requiredHandle(
   #expect(ui.handle(for: 1) == first)
   #expect(ui.handle(for: 2) == second)
   #expect(ui.state(for: first)?.clicks == 1)
-  #expect(ui.state(for: first)?.rect == Rect(80, 0, 80, 40))
+  #expect(ui.state(for: first)?.region == Region(80, 0, 80, 40))
   #expect(ui.state(for: first)?.focused == true)
   #expect(ui.state(for: second)?.clicks == 0)
-  #expect(ui.state(for: second)?.rect == Rect(0, 0, 80, 40))
+  #expect(ui.state(for: second)?.region == Region(0, 0, 80, 40))
   #expect(ui.state(for: second)?.focused == false)
 }
 
@@ -180,7 +180,7 @@ private func requiredHandle(
   ui.frame(
     input: Input(x: 10, y: 10, released: true, keyEvents: [KeyEvent(.tab), KeyEvent(.enter)]),
     build: { frame in
-      frame.beginRow(in: Rect(0, 0, 1000, 40))
+      frame.beginRow(in: Region(0, 0, 1000, 40))
       frame.label(key: 1, "", extent: 80)
       frame.end()
     }, present: { _ in })
@@ -195,15 +195,15 @@ private func requiredHandle(
   var ui = UIStore()
   ui.frame(
     build: { frame in
-      frame.beginColumn(in: Rect(10, 20, 30, 40))
+      frame.beginColumn(in: Region(10, 20, 30, 40))
       frame.label(key: 1, ".", extent: 16, color: Color(1, 0, 0), font: MonospaceFont(size: 10))
       frame.end()
     },
     present: { draws in
       #expect(draws.count == 2)
-      let expected = [Rect(10, 20, 30, 16), Rect(22, 21, 10, 14)]
+      let expected = [Region(10, 20, 30, 16), Region(22, 21, 10, 14)]
       guard draws.count == expected.count else { return }
-      for i in expected.indices { #expect(draws[i].rect == expected[i]) }
+      for i in expected.indices { #expect(draws[i].region == expected[i]) }
       #expect(draws[0].color == Color(1, 0, 0))
       #expect(draws[0].radius == 7)
       for i in 1..<draws.count {
@@ -213,16 +213,16 @@ private func requiredHandle(
     })
   ui.frame(
     build: { frame in
-      frame.beginRow(in: Rect(50, 60, 100, 20))
+      frame.beginRow(in: Region(50, 60, 100, 20))
       frame.label(key: 1, ".", extent: 40, color: Color(0, 1, 0))
       frame.end()
     },
     present: { draws in
       #expect(draws.count == 2)
       guard draws.count == 2 else { return }
-      #expect(draws[0].rect == Rect(50, 60, 40, 20))
+      #expect(draws[0].region == Region(50, 60, 40, 20))
       #expect(draws[0].color == Color(0, 1, 0))
-      #expect(draws[1].rect == Rect(62, 56, 20, 28))
+      #expect(draws[1].region == Region(62, 56, 20, 28))
       #expect(draws[1].glyphUV == FontAtlas.shared.glyphUV("."))
     })
   ui.frame(build: { row(&$0, [1]) }, present: { #expect($0.count == 1) })
@@ -236,7 +236,7 @@ private func requiredHandle(
       present: { draws in
         #expect(draws.count == min(capacity, 2))
         for i in 0..<draws.count {
-          #expect(draws[i].rect == Rect(Float(i) * 80, 0, 80, 40))
+          #expect(draws[i].region == Region(Float(i) * 80, 0, 80, 40))
         }
       })
     #expect(ui.droppedDraws == max(0, 2 - capacity))
@@ -252,7 +252,7 @@ private func requiredHandle(
   #expect(capacity >= 8)
   var address: UInt = 0
   for frame in 0..<2 {
-    for i in 0..<4 { storage.emit(DrawRect(Rect(Float(i), 0, 1, 1), .panel)) }
+    for i in 0..<4 { storage.emit(DrawRect(Region(Float(i), 0, 1, 1), .panel)) }
     #expect(storage.draws.count == 3)
     #expect(storage.droppedDraws == 1)
     #expect(storage.draws.capacity == capacity)

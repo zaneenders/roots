@@ -51,7 +51,7 @@ struct MetalDrawRun {
       let uv = draw.glyphUV.map { SIMD4($0.x, $0.y, $0.width, $0.height) } ?? .zero
       vertices.append(
         MetalVertex(
-          position: SIMD2(draw.rect.x, draw.rect.y), size: SIMD2(draw.rect.width, draw.rect.height),
+          position: SIMD2(draw.region.x, draw.region.y), size: SIMD2(draw.region.width, draw.region.height),
           color: SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a), radius: draw.radius,
           glyphUV: uv, textured: draw.glyphUV == nil ? 0 : (draw.colorGlyph ? 2 : 1),
           strokeWidth: draw.strokeWidth, axis: draw.axis))

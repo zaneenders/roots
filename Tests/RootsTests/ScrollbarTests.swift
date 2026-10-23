@@ -2,7 +2,7 @@ import Testing
 
 @testable import Roots
 
-private let scrollbarViewport = Rect(10, 20, 100, 100)
+private let scrollbarViewport = Region(10, 20, 100, 100)
 
 private func scrollbarColumn(_ frame: inout UIFrame, height: Float = 400, visible: Bool = true) {
   frame.beginScrollColumn(key: 100, in: scrollbarViewport, gap: 0, showsScrollIndicator: visible)
@@ -24,7 +24,7 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
   ui.frame(input: Input(x: 20, y: 30, scrollY: -1000), build: build, present: { _ in })
   let bar = try #require(
     VerticalScrollbar(viewport: scrollbarViewport, contentHeight: 400, offset: 0))
-  let x = bar.hitRect.x + 1
+  let x = bar.hitRegion.x + 1
   let y = bar.thumb.y + 3
   ui.frame(input: Input(x: x, y: y, pressed: true), build: build, present: { _ in })
   #expect(try scrollbarState(ui).scrollOffset == 0)
@@ -49,9 +49,9 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
     build: { scrollbarColumn(&$0) },
     present: { draws in
       #expect(draws.count == 3)
-      #expect(draws[0].rect.height == 400)
-      #expect(draws[1].rect == bar.track)
-      #expect(draws[2].rect.width == 6)
+      #expect(draws[0].region.height == 400)
+      #expect(draws[1].region == bar.track)
+      #expect(draws[2].region.width == 6)
       #expect(draws[2].clip == scrollbarViewport)
     })
   #expect(abs(try scrollbarState(ui).scrollOffset - 150) < 0.001)
@@ -108,7 +108,7 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
   var overlay = false
   func build(_ frame: inout UIFrame) {
     frame.beginScrollColumn(key: 100, in: scrollbarViewport, gap: 0, showsScrollIndicator: true)
-    frame.beginScrollColumn(key: 200, in: Rect(20, 80, 70, 100), gap: 0, showsScrollIndicator: true)
+    frame.beginScrollColumn(key: 200, in: Region(20, 80, 70, 100), gap: 0, showsScrollIndicator: true)
     frame.button(key: 1, "", extent: 400)
     frame.end()
     frame.end()
@@ -131,11 +131,11 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
     present: { draws in
       let background = draws[draws.count - 2]
       let outline = draws[draws.count - 1]
-      #expect(background.rect == scrollbarViewport)
+      #expect(background.region == scrollbarViewport)
       #expect(outline.color == .accent && outline.strokeWidth == 2)
       #expect(
-        outline.rect
-          == Rect(
+        outline.region
+          == Region(
             scrollbarViewport.x + 1, scrollbarViewport.y + 1,
             scrollbarViewport.width - 2, scrollbarViewport.height - 2))
     })
@@ -147,9 +147,9 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
   #expect(VerticalScrollbar(viewport: scrollbarViewport, contentHeight: 100, offset: 0) == nil)
   #expect(
     VerticalScrollbar(viewport: scrollbarViewport, contentHeight: .infinity, offset: 0) == nil)
-  #expect(VerticalScrollbar(viewport: Rect(0, 0, 10, 100), contentHeight: 400, offset: 0) == nil)
+  #expect(VerticalScrollbar(viewport: Region(0, 0, 10, 100), contentHeight: 400, offset: 0) == nil)
   let bar = try #require(
-    VerticalScrollbar(viewport: Rect(0, 0, 12, 12), contentHeight: 1000, offset: 500))
+    VerticalScrollbar(viewport: Region(0, 0, 12, 12), contentHeight: 1000, offset: 500))
   #expect(bar.thumb.height >= 2)
   #expect(bar.thumb.y >= bar.track.y)
   #expect(bar.thumb.y + bar.thumb.height <= bar.track.y + bar.track.height)

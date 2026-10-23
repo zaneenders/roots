@@ -18,11 +18,11 @@ extension NativeSessionTests {
     var physicalDraws: [DrawRect] = []
     ui.frame(
       build: {
-        RowBlock(in: Rect(0, 0, 64, 48)) {
-          CanvasBlock(key: 1, extent: 64) { context in
-            context.fillRect(context.rect, color: Color(0, 0, 0))
-            context.strokeRect(Rect(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
-            context.strokeRect(Rect(4, 32, 8, 8), color: Color(1, 0, 1), radius: 2, width: 10)
+        RowBlock(in: Region(0, 0, 64, 48)) {
+          Canvas(key: 1, extent: 64) { context in
+            context.fillRect(context.region, color: Color(0, 0, 0))
+            context.strokeRect(Region(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
+            context.strokeRect(Region(4, 32, 8, 8), color: Color(1, 0, 1), radius: 2, width: 10)
             context.strokeLine(
               from: .init(32, 6), to: .init(56, 24), color: Color(1, 1, 1, 0.6), width: 3)
             context.strokeLine(
@@ -41,11 +41,11 @@ extension NativeSessionTests {
         for draw in draws {
           var physical = draw
           let s = Float(scale)
-          physical.rect = Rect(
-            draw.rect.x * s, draw.rect.y * s, draw.rect.width * s, draw.rect.height * s)
+          physical.region = Region(
+            draw.region.x * s, draw.region.y * s, draw.region.width * s, draw.region.height * s)
           physical.radius *= s
           physical.strokeWidth *= s
-          physical.clip = draw.clip.map { Rect($0.x * s, $0.y * s, $0.width * s, $0.height * s) }
+          physical.clip = draw.clip.map { Region($0.x * s, $0.y * s, $0.width * s, $0.height * s) }
           physicalDraws.append(physical)
         }
       })

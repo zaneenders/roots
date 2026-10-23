@@ -13,12 +13,12 @@ extension NativeSessionTests {
     var draws: [DrawRect] = []
     ui.frame(
       build: {
-        RowBlock(in: Rect(0, 0, 8, 8)) {
-          CanvasBlock(key: 1, extent: 8) { context in
-            context.withClip(Rect(1.75, 0, 1.5, 8)) { clipped in
-              clipped.fillRect(Rect(-4, -4, 16, 16), color: Color(1, 0, 0))
-              clipped.withClip(Rect(2.25, 1.75, 4, 2.5)) { nested in
-                nested.fillRect(Rect(-4, -4, 16, 16), color: Color(0, 1, 0))
+        RowBlock(in: Region(0, 0, 8, 8)) {
+          Canvas(key: 1, extent: 8) { context in
+            context.withClip(Region(1.75, 0, 1.5, 8)) { clipped in
+              clipped.fillRect(Region(-4, -4, 16, 16), color: Color(1, 0, 0))
+              clipped.withClip(Region(2.25, 1.75, 4, 2.5)) { nested in
+                nested.fillRect(Region(-4, -4, 16, 16), color: Color(0, 1, 0))
               }
             }
           }
@@ -31,7 +31,7 @@ extension NativeSessionTests {
   func clearAndRoundedCoverageMatchCPUAtOddAndEvenHeights(height: Int32, textureTarget: Bool) throws {
     try expectReferenceParity([], width: 8, height: height, textureTarget: textureTarget)
     try expectReferenceParity(
-      [DrawRect(Rect(1, 1, 6, 5), Color(1, 0, 0), radius: 2)], width: 8, height: height,
+      [DrawRect(Region(1, 1, 6, 5), Color(1, 0, 0), radius: 2)], width: 8, height: height,
       textureTarget: textureTarget)
   }
 
@@ -76,9 +76,9 @@ extension NativeSessionTests {
     let s = Float(scale)
     let physical = draws.map { draw in
       var draw = draw
-      draw.rect = Rect(draw.rect.x * s, draw.rect.y * s, draw.rect.width * s, draw.rect.height * s)
+      draw.region = Region(draw.region.x * s, draw.region.y * s, draw.region.width * s, draw.region.height * s)
       draw.radius *= s
-      draw.clip = draw.clip.map { Rect($0.x * s, $0.y * s, $0.width * s, $0.height * s) }
+      draw.clip = draw.clip.map { Region($0.x * s, $0.y * s, $0.width * s, $0.height * s) }
       return draw
     }
     let cpu = CPURenderer(

@@ -62,7 +62,7 @@ import Testing
         #expect(!snapshot.input.released && snapshot.input.x == -1)
       }
       let draws = [
-        DrawRect(Rect(0, 0, snapshot.logicalSize.x, snapshot.logicalSize.y), Color(0, 1, 0))
+        DrawRect(Region(0, 0, snapshot.logicalSize.x, snapshot.logicalSize.y), Color(0, 1, 0))
       ]
       frame.render(draws.span)
     }
@@ -78,7 +78,7 @@ import Testing
       configuration: .init(logicalSize: .init(420, 320), title: "Quit test")
     ) { _, frame in
       frames += 1
-      let draws = [DrawRect(Rect(0, 0, 420, 320), Color(1, 0, 0))]
+      let draws = [DrawRect(Region(0, 0, 420, 320), Color(1, 0, 0))]
       frame.render(draws.span)
       if frames < 3 { MacOSWindow.requestRedraw() }
       if frames == 3 {

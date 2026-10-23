@@ -13,7 +13,7 @@ import Testing
     let cpu = CPURenderer(width: 32, height: 32)
     cpu.render(
       [
-        DrawRect(Rect(0, 0, 32, 32), Color(0, 0, 0)),
+        DrawRect(Region(0, 0, 32, 32), Color(0, 0, 0)),
         DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5))
       ].span)
     #expect(cpu.pixels.max() == 127)
@@ -27,6 +27,6 @@ import Testing
   let strokeCPU = CPURenderer(width: 32, height: 32)
   let circleCPU = CPURenderer(width: 32, height: 32)
   strokeCPU.render([DrawRect(polyline: stroke, color: .accent)].span)
-  circleCPU.render([DrawRect(Rect(12, 12, 8, 8), .accent, radius: 4)].span)
+  circleCPU.render([DrawRect(Region(12, 12, 8, 8), .accent, radius: 4)].span)
   #expect(strokeCPU.pixels == circleCPU.pixels)
 }

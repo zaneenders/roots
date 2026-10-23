@@ -6,12 +6,12 @@ public struct PointerEvent: Sendable {
   public var phase: Phase
   public var x: Float
   public var y: Float
-  public var rect: Rect
+  public var region: Region
 
-  public init(phase: Phase, x: Float, y: Float, rect: Rect) {
+  public init(phase: Phase, x: Float, y: Float, region: Region) {
     self.phase = phase
     self.x = x
     self.y = y
-    self.rect = rect
+    self.region = region
   }
 }
