@@ -46,13 +46,13 @@ private enum AsyncTestFailure: Error { case timeout }
       NativeWindow.requestClose()
     }
     defer { closer.cancel() }
-    try await NativeWindow.runAsync { _, _ in frames += 1 }
+    try await NativeWindow.runAsync(backend: .wayland) { _, _ in frames += 1 }
     try await closer.value
     #expect(timerRan && frames > 0)
 
     var started = false
     let session = Task {
-      try await NativeWindow.runAsync { _, _ in started = true }
+      try await NativeWindow.runAsync(backend: .wayland) { _, _ in started = true }
     }
     defer { session.cancel() }
     try await eventually { started }
@@ -64,7 +64,7 @@ private enum AsyncTestFailure: Error { case timeout }
       #expect(error is CancellationError)
     }
     var reopenedFrames = 0
-    try await NativeWindow.runAsync(configuration: .init(maxFrames: 2)) { _, _ in
+    try await NativeWindow.runAsync(configuration: .init(maxFrames: 2), backend: .wayland) { _, _ in
       reopenedFrames += 1
     }
     #expect(reopenedFrames == 2)
@@ -89,7 +89,7 @@ private enum AsyncTestFailure: Error { case timeout }
       NativeWindow.requestClose()
     }
     defer { driver.cancel() }
-    try await NativeWindow.runAsync { _, _ in frames += 1 }
+    try await NativeWindow.runAsync(backend: .wayland) { _, _ in frames += 1 }
     try await driver.value
   }
 
@@ -99,13 +99,14 @@ private enum AsyncTestFailure: Error { case timeout }
     })
   func frameRequestsDuringBuildArePacedAndFrameLimitsUseFixedTime() async throws {
     var frames = 0
-    try await NativeWindow.runAsync { _, _ in
+    try await NativeWindow.runAsync(backend: .wayland) { _, _ in
       frames += 1
       if frames == 4 { NativeWindow.requestClose() } else { NativeWindow.requestRedraw() }
     }
     #expect(frames == 4)
     frames = 0
-    try await NativeWindow.runAsync(configuration: .init(maxFrames: 4)) { input, _ in
+    try await NativeWindow.runAsync(configuration: .init(maxFrames: 4), backend: .wayland) {
+      input, _ in
       #expect(input.timeSeconds == Double(frames) / 60)
       frames += 1
     }
@@ -180,7 +181,9 @@ extension NativeSessionTests {
       UUID().uuidString + ".ppm")
     defer { try? FileManager.default.removeItem(at: path) }
     var lastInput: NativeWindowInput?
-    try await NativeWindow.runAsync(configuration: .init(maxFrames: 3, screenshotPath: path.path)) {
+    try await NativeWindow.runAsync(
+      configuration: .init(maxFrames: 3, screenshotPath: path.path), backend: .wayland
+    ) {
       input, _ in
       #expect(input.width > 0 && input.height > 0 && input.bufferScale >= 1)
       lastInput = input

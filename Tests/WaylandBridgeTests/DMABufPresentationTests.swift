@@ -22,7 +22,7 @@ extension NativeSessionTests {
     try await NativeWindow.runAsync(
       configuration: .init(
         width: 160, height: 120, maxFrames: frameLimit, title: "Swift dma-buf experiment",
-        minimumWidth: 0, minimumHeight: 0)
+        minimumWidth: 0, minimumHeight: 0), backend: .wayland
     ) { input, frame in
       var framebuffer: GLint = 0
       unsafe glGetIntegerv(GLenum(GL_FRAMEBUFFER_BINDING), &framebuffer)

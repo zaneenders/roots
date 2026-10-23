@@ -99,7 +99,7 @@ var targets: [Target] = [
       resources: [.copy("Protocols")], swiftSettings: swiftSettings),
     .target(
       name: "WaylandBridge",
-      dependencies: ["CEGLGLES", "Roots", "SwiftWayland"],
+      dependencies: ["CEGLGLES", "CX11", "Roots", "SwiftWayland"],
       exclude: ["Shaders"],
       swiftSettings: swiftSettings, plugins: [.plugin(name: "ShaderSourcePlugin")]),
     .executableTarget(name: "ShaderSourceGenerator", swiftSettings: swiftSettings),
@@ -118,10 +118,13 @@ var targets: [Target] = [
     .testTarget(
       name: "WaylandBridgeTests",
       dependencies: [
-        "WaylandBridge", "RootsCPU", "CEGLGLES", "SwiftWayland", "DesktopTestSupport",
+        "WaylandBridge", "RootsCPU", "CEGLGLES", "CX11", "SwiftWayland", "DesktopTestSupport",
       ],
       swiftSettings: swiftSettings),
     .systemLibrary(name: "CEGLGLES"),
+    .systemLibrary(
+      name: "CX11", pkgConfig: "xkbcommon-x11",
+      providers: [.apt(["libxcb1-dev", "libxcb-xkb-dev", "libxkbcommon-x11-dev"])]),
   ]
 #elseif os(macOS)
   products += [.library(name: "MacOSBridge", targets: ["MacOSBridge"])]

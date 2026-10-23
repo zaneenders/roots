@@ -172,20 +172,25 @@ import SwiftWayland
   }
 
   func setup(
-    input: NativeWindowInput, ownsDisplay: Bool = true
+    input: NativeWindowInput, ownsDisplay: Bool = true, x11: X11Connection? = nil
   ) throws {
     self.ownsDisplay = ownsDisplay
     let pixels = try BufferSize(width: input.width, height: input.height, scale: input.bufferScale)
-    guard let entry = unsafe eglGetProcAddress("eglGetPlatformDisplayEXT") else {
-      throw NativeWindowError.egl(eglGetError())
+    if let x11 {
+      unsafe display = try x11.makeEGLDisplay()
+    } else {
+      // Wayland exports textures from offscreen EGL, never a native Wayland surface.
+      guard let entry = unsafe eglGetProcAddress("eglGetPlatformDisplayEXT") else {
+        throw NativeWindowError.egl(eglGetError())
+      }
+      let getPlatform = unsafe unsafeBitCast(entry, to: PFNEGLGETPLATFORMDISPLAYEXTPROC.self)
+      unsafe display = getPlatform(UInt32(EGL_PLATFORM_SURFACELESS_MESA), nil, nil)
     }
-    let getPlatform = unsafe unsafeBitCast(entry, to: PFNEGLGETPLATFORMDISPLAYEXTPROC.self)
-    unsafe display = getPlatform(UInt32(EGL_PLATFORM_SURFACELESS_MESA), nil, nil)
     guard unsafe display != nil, unsafe !ownsDisplay || eglInitialize(display, nil, nil) != 0,
       eglBindAPI(EGLenum(EGL_OPENGL_ES_API)) != 0
     else { throw NativeWindowError.egl(eglGetError()) }
     let attributes: [EGLint] = [
-      EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+      EGL_SURFACE_TYPE, x11 == nil ? EGL_PBUFFER_BIT : EGL_WINDOW_BIT,
       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8,
       EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE,
     ]
@@ -197,8 +202,15 @@ import SwiftWayland
     unsafe context = eglCreateContext(
       display, config, nil, [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE])
     guard unsafe context != nil else { throw NativeWindowError.egl(eglGetError()) }
-    unsafe surface = eglCreatePbufferSurface(
-      display, config, [EGL_WIDTH, pixels.width, EGL_HEIGHT, pixels.height, EGL_NONE])
+    if let x11 {
+      guard let display = unsafe display, let config = unsafe config else {
+        throw NativeWindowError.rendering
+      }
+      unsafe surface = try x11.createWindow(display: display, config: config)
+    } else {
+      unsafe surface = eglCreatePbufferSurface(
+        display, config, [EGL_WIDTH, pixels.width, EGL_HEIGHT, pixels.height, EGL_NONE])
+    }
     guard unsafe surface != nil, unsafe eglMakeCurrent(display, surface, surface, context) != 0
     else {
       throw NativeWindowError.egl(eglGetError())
@@ -210,7 +222,7 @@ import SwiftWayland
       unsafe glGetString(GLenum(GL_RENDERER)).map { unsafe String(cString: $0) } ?? "unknown"
     let version =
       unsafe glGetString(GLenum(GL_VERSION)).map { unsafe String(cString: $0) } ?? "unknown"
-    nativeLog("Offscreen EGL renderer: \(renderer) | \(version)")
+    nativeLog("\(x11 == nil ? "Offscreen" : "X11") EGL renderer: \(renderer) | \(version)")
     guard glGetError() == GL_NO_ERROR else { throw NativeWindowError.rendering }
   }
 
