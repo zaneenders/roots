@@ -8,8 +8,8 @@ struct MarkdownPage: Block {
   }
 
   var body: some Block {
-    ZStack(in: bounds) {
-      ScrollColumn(key: 1, in: bounds, gap: 0, showsScrollIndicator: true) {
+    Stack(in: bounds) {
+      Scroll(key: 1, in: bounds, showsScrollIndicator: true) {
         Column(gap: 22) {
           Text("ROOTS / TEXT PLAYGROUND")
             .size(12)
@@ -96,7 +96,7 @@ struct MarkdownPage: Block {
             .selectable(key: 33)
 
           Column(gap: 14) {
-            RowBlock(gap: 12, alignment: .center) {
+            Row(gap: 12, alignment: .center) {
               Text("SWIFT")
                 .size(12)
                 .color(Ink.muted)
@@ -130,7 +130,7 @@ struct MarkdownPage: Block {
         }
         .padding(32)
         .frame(width: .fill)
-        .selectionGroup(key: 100)
+        .textSelectionGroup(key: 100)
       }
     }
     .background(Ink.page)

@@ -7,7 +7,7 @@ import Testing
   var ui = UIHost()
   ui.frame(
     build: {
-      RowBlock(in: Region(0, 0, 32, 24)) {
+      Row(in: Region(0, 0, 32, 24)) {
         Canvas(key: 1, extent: 32, color: Color(0, 0, 1)) { context in
           context.fillRect(context.region, color: Color(0, 0, 1))
           context.strokeRect(Region(4, 4, 16, 16), color: Color(1, 0, 0, 0.5), radius: 4, width: 2)
@@ -29,7 +29,7 @@ import Testing
   var ui = UIHost()
   ui.frame(
     build: {
-      RowBlock(in: Region(0, 0, 40, 32)) {
+      Row(in: Region(0, 0, 40, 32)) {
         Canvas(key: 1, extent: 40) { context in
           context.fillRect(context.region, color: Color(0, 0, 0))
           context.strokeLine(from: .init(x: 8, y: 8), to: .init(x: 24, y: 8), color: Color(1, 1, 1), width: 4)

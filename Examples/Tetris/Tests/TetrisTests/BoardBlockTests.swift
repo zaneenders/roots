@@ -13,7 +13,7 @@ struct BoardBlockTests {
     var host = UIHost()
     var draws: [DrawRect] = []
     host.frame(
-      build: { ZStack(in: bounds) { BoardBlock(game: game) } },
+      build: { Stack(in: bounds) { BoardBlock(game: game) } },
       present: { batch in
         for draw in batch { draws.append(draw) }
       })
@@ -40,7 +40,7 @@ struct BoardBlockTests {
     game.status = .gameOver
     var host = UIHost()
     host.frame(
-      build: { ZStack(in: Region(0, 0, 160, 320)) { BoardBlock(game: game) } },
+      build: { Stack(in: Region(0, 0, 160, 320)) { BoardBlock(game: game) } },
       present: { batch in
         #expect(batch.count == 201)
         #expect(batch[0].color == Palette.well)
@@ -62,11 +62,11 @@ struct BoardBlockTests {
     var host = UIHost()
     var reference = UIHost()
     host.frame(
-      build: { ZStack(in: bounds) { BoardBlock(game: game) } },
+      build: { Stack(in: bounds) { BoardBlock(game: game) } },
       present: { actual.render($0) })
     reference.frame(
       build: {
-        ZStack(in: bounds) {
+        Stack(in: bounds) {
           Canvas(key: 1, color: Palette.well) { context in
             ReferencePainter.draw(game, into: &context, cellSize: size)
           }
@@ -83,11 +83,11 @@ struct BoardBlockTests {
     var host = UIHost()
     var reference = UIHost()
     host.frame(
-      build: { ZStack(in: bounds) { PiecePreview(kind: kind) } },
+      build: { Stack(in: bounds) { PiecePreview(kind: kind) } },
       present: { actual.render($0) })
     reference.frame(
       build: {
-        ZStack(in: bounds) {
+        Stack(in: bounds) {
           Canvas(key: 1, color: Color(0, 0, 0, 0)) { context in
             ReferencePainter.drawPreview(kind, into: &context)
           }
@@ -105,18 +105,18 @@ struct BoardBlockTests {
     var reference = UIHost()
     host.frame(
       build: {
-        ZStack(in: bounds) {
+        Stack(in: bounds) {
           BoardBlock(game: game)
-          Rect().color(Color(0.03, 0.04, 0.07, 0.86))
+          Rectangle().color(Color(0.03, 0.04, 0.07, 0.86))
         }
       }, present: { actual.render($0) })
     reference.frame(
       build: {
-        ZStack(in: bounds) {
+        Stack(in: bounds) {
           Canvas(key: 1, color: Palette.well) { context in
             ReferencePainter.draw(game, into: &context, cellSize: 16)
           }
-          Rect().color(Color(0.03, 0.04, 0.07, 0.86))
+          Rectangle().color(Color(0.03, 0.04, 0.07, 0.86))
         }
       }, present: { expected.render($0) })
     #expect(actual.pixels.elementsEqual(expected.pixels))

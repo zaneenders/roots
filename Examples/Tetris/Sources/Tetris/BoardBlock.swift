@@ -9,10 +9,10 @@ struct BoardBlock: Block {
     let ghostCells = ghost?.cells ?? []
     let activeCells = game.active?.cells ?? []
 
-    ZStack {
-      Rect().radius(7).color(Palette.well)
+    Stack {
+      Rectangle().radius(7).color(Palette.well)
       CellGrid(columns: Game.width, rows: Game.height) { _ in
-        Rect().radius(3).stroke(width: 0.5).color(Palette.grid).padding(1)
+        Rectangle().radius(3).stroke(width: 0.5).color(Palette.grid).padding(1)
           .frame(width: .fill, height: .fill)
       }
       CellGrid(columns: Game.width, rows: Game.height) { cell in
@@ -22,7 +22,7 @@ struct BoardBlock: Block {
       }
       CellGrid(columns: Game.width, rows: Game.height) { cell in
         if let ghost, ghostCells.contains(cell) {
-          Rect().radius(3).stroke(width: 1.5).color(Palette.color(ghost.kind))
+          Rectangle().radius(3).stroke(width: 1.5).color(Palette.color(ghost.kind))
             .padding(1).frame(width: .fill, height: .fill)
         }
       }
@@ -40,9 +40,9 @@ struct TileBlock: Block {
   let kind: Tetromino
 
   var body: some Block {
-    ZStack(alignment: .top) {
-      Rect().radius(3).color(Palette.color(kind))
-      Rect().radius(1).color(Color(1, 1, 1, 0.28))
+    Stack(alignment: .top) {
+      Rectangle().radius(3).color(Palette.color(kind))
+      Rectangle().radius(1).color(Color(1, 1, 1, 0.28))
         .frame(width: .fill, height: .fixed(2))
         .padding(2).frame(width: .fill)
     }
@@ -84,7 +84,7 @@ private struct CellGrid<Content: Block>: Block {
   var body: some Block {
     Grid(columns: columns, gap: 0) {
       ForEach(0..<(columns * rows)) { index in
-        ZStack {
+        Stack {
           content(Cell(index % columns, index / columns))
         }
         .frame(width: .fill, height: .fill)

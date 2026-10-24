@@ -484,8 +484,10 @@ func unrelatedInteractiveOverlayBlocksScroll(withHandler: Bool) {
   host.frame(
     input: Input(mousePosition: .init(x: 10, y: 10), scrollY: 40),
     build: {
-      ScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0) {
-        Canvas(key: 2, extent: 400) { _ in }
+      Scroll(key: 1, in: Region(0, 0, 100, 100)) {
+        Column(gap: 0) {
+          Canvas(key: 2, extent: 400) { _ in }
+        }
       }
       Column(in: Region(0, 0, 100, 100)) {
         Element(
@@ -504,8 +506,10 @@ func unrelatedInteractiveOverlayBlocksScroll(withHandler: Bool) {
   host.frame(
     input: Input(mousePosition: .init(x: 10, y: 10), scrollY: 40),
     build: {
-      ScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0) {
-        Element(key: 2, extent: 400) { _ in }
+      Scroll(key: 1, in: Region(0, 0, 100, 100)) {
+        Column(gap: 0) {
+          Element(key: 2, extent: 400) { _ in }
+        }
       }
     }, present: { _ in })
   #expect(host.state(for: 1)?.scrollOffset == 40)

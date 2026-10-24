@@ -121,7 +121,7 @@ import Testing
     var draws: [DrawRect] = []
     ui.frame(
       build: {
-        RowBlock(in: Region(0, 0, 64, 48)) {
+        Row(in: Region(0, 0, 64, 48)) {
           Canvas(key: 1, extent: 64) { context in
             context.fillRect(context.region, color: Color(0, 0, 0))
             context.strokeRect(Region(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)

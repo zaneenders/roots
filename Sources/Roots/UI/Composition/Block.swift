@@ -24,34 +24,34 @@ extension Never: Block {
 @MainActor
 @resultBuilder
 public enum BlockBuilder {
-  public static func buildBlock() -> EmptyBlock { EmptyBlock() }
+  public static func buildBlock() -> _Empty { _Empty() }
   public static func buildExpression<Content: Block>(_ content: Content) -> Content { content }
   public static func buildPartialBlock<Content: Block>(first: Content) -> Content { first }
   public static func buildPartialBlock<First: Block, Next: Block>(
     accumulated: First, next: Next
-  ) -> PairBlock<First, Next> { PairBlock(first: accumulated, next: next) }
-  public static func buildEither<First: Block, Second: Block>(first: First) -> ConditionalBlock<
+  ) -> _Pair<First, Next> { _Pair(first: accumulated, next: next) }
+  public static func buildEither<First: Block, Second: Block>(first: First) -> _Conditional<
     First, Second
   > {
-    .first(first)
+    _Conditional(content: .first(first))
   }
-  public static func buildEither<First: Block, Second: Block>(second: Second) -> ConditionalBlock<
+  public static func buildEither<First: Block, Second: Block>(second: Second) -> _Conditional<
     First, Second
   > {
-    .second(second)
+    _Conditional(content: .second(second))
   }
-  public static func buildOptional<Content: Block>(_ content: Content?) -> OptionalBlock<Content> {
-    OptionalBlock(content: content)
+  public static func buildOptional<Content: Block>(_ content: Content?) -> _OptionalContent<Content> {
+    _OptionalContent(content: content)
   }
 }
 
-public struct EmptyBlock: Block {
+public struct _Empty: Block {
   public typealias Body = Never
-  public init() {}
+  init() {}
   public borrowing func _build(into frame: inout UIFrame) {}
 }
 
-public struct PairBlock<First: Block, Next: Block>: Block {
+public struct _Pair<First: Block, Next: Block>: Block {
   public typealias Body = Never
   let first: First
   let next: Next
@@ -61,19 +61,22 @@ public struct PairBlock<First: Block, Next: Block>: Block {
   }
 }
 
-public enum ConditionalBlock<First: Block, Second: Block>: Block {
+public struct _Conditional<First: Block, Second: Block>: Block {
   public typealias Body = Never
-  case first(First)
-  case second(Second)
+  enum Content {
+    case first(First)
+    case second(Second)
+  }
+  let content: Content
   public borrowing func _build(into frame: inout UIFrame) {
-    switch copy self {
+    switch content {
     case .first(let content): content._build(into: &frame)
     case .second(let content): content._build(into: &frame)
     }
   }
 }
 
-public struct OptionalBlock<Content: Block>: Block {
+public struct _OptionalContent<Content: Block>: Block {
   public typealias Body = Never
   let content: Content?
   public borrowing func _build(into frame: inout UIFrame) { content?._build(into: &frame) }

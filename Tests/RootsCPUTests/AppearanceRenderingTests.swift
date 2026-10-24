@@ -7,14 +7,16 @@ import Testing
   var host = UIHost()
   host.frame(
     build: {
-      ZStack(in: Region(0, 0, 40, 32)) {
-        ScrollColumn(key: 1, in: Region(4, 4, 32, 24), gap: 0) {
-          Column {
-            Column {}.frame(width: .fixed(32), height: .fixed(40))
-              .background(Color(1, 0, 0, 0.5))
-          }.background(Color(0, 1, 0))
+      Stack(in: Region(0, 0, 40, 32)) {
+        Scroll(key: 1, in: Region(4, 4, 32, 24)) {
+          Column(gap: 0) {
+            Column {
+              Column {}.frame(width: .fixed(32), height: .fixed(40))
+                .background(Color(1, 0, 0, 0.5))
+            }.background(Color(0, 1, 0))
+          }
         }
-        ScrollToBlock(8, in: 1)
+        ScrollTo(8, in: 1)
       }.background(Color(0, 0, 1))
     }, present: { renderer.render($0) })
 

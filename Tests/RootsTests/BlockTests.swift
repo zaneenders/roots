@@ -58,7 +58,7 @@ struct BlockTests {
               Canvas(key: 1, extent: 32) { _ in }
               Button(key: 2, "Action", extent: 40) { clicks += 1 }
             }
-            RowBlock(in: Region(200, 0, 100, 20), gap: 3) {
+            Row(in: Region(200, 0, 100, 20), gap: 3) {
               Canvas(key: 3, extent: 20) { _ in }
               Canvas(key: 4, extent: 30) { _ in }
             }
@@ -85,7 +85,7 @@ struct BlockTests {
     for alternate in [false, true, false] {
       host.frame(
         build: {
-          EmptyBlock()
+          BlockBuilder.buildBlock()
           Column(in: Region(0, 0, 100, 100), gap: 0) {
             if alternate {
               Button(key: 1, "Button")
@@ -119,14 +119,16 @@ struct BlockTests {
     host.frame(
       input: Input(keyEvents: [KeyEvent(.enter)]), dt: 0,
       build: {
-        ScrollColumn(key: 10, in: Region(0, 0, 100, 50), gap: 0) {
-          Text("").selectable(key: 1).frame(width: .fill, height: .fixed(100))
-          Element(key: 2, extent: 30, onKey: { _ in activated = true }) { _ in
-            painted = activated
+        Scroll(key: 10, in: Region(0, 0, 100, 50)) {
+          Column(gap: 0) {
+            Text("").selectable(key: 1).frame(width: .fill, height: .fixed(100))
+            Element(key: 2, extent: 30, onKey: { _ in activated = true }) { _ in
+              painted = activated
+            }
           }
         }
-        ScrollToBlock(10, in: 10)
-        FocusBlock(key: 2, reveal: true)
+        ScrollTo(10, in: 10)
+        Focus(key: 2, reveal: true)
       }, present: { _ in })
     #expect(host.state(for: 2)?.focused == true)
     #expect(host.state(for: 10)?.scrollOffset == 80)
@@ -185,16 +187,20 @@ struct BlockTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumn(key: 10, in: Region(0, 0, 100, 50), gap: 0) {
-          Button(key: 1, "", extent: 200)
+        Scroll(key: 10, in: Region(0, 0, 100, 50)) {
+          Column(gap: 0) {
+            Button(key: 1, "", extent: 200)
+          }
         }
       }, present: { _ in })
     host.frame(
       build: {
-        FocusBlock(key: 1)
-        ScrollToBlock(100, in: 10)
-        ScrollColumn(key: 10, in: Region(0, 0, 100, 50), gap: 0) {
-          Button(key: 1, "", extent: 200)
+        Focus(key: 1)
+        ScrollTo(100, in: 10)
+        Scroll(key: 10, in: Region(0, 0, 100, 50)) {
+          Column(gap: 0) {
+            Button(key: 1, "", extent: 200)
+          }
         }
       }, present: { _ in })
     #expect(host.state(for: 1)?.focused == false)

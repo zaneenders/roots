@@ -128,14 +128,16 @@ extension NativeSessionTests {
   var input = WaylandInput(width: 100, height: 80)
   var ui = UIHost()
   @MainActor func build() -> some Block {
-    ScrollColumn(key: 100, in: Region(0, 0, 100, 80)) {
-      Text("")
-        .size(20)
-        .selectable(key: 1)
-        .alignment(.leading)
-        .padding(horizontal: 12)
-        .frame(width: .fill, height: .fixed(1000))
-        .background(.panel)
+    Scroll(key: 100, in: Region(0, 0, 100, 80)) {
+      Column(gap: 8) {
+        Text("")
+          .size(20)
+          .selectable(key: 1)
+          .alignment(.leading)
+          .padding(horizontal: 12)
+          .frame(width: .fill, height: .fixed(1000))
+          .background(.panel)
+      }
     }
   }
   for time: UInt32 in [100, 110] {

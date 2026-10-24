@@ -122,7 +122,7 @@ struct IdentifiedForEachTests {
             ForEach(["first", "second"], id: \.self) { item in
               Text(item).size(10).selectable()
             }
-          }.selectionGroup(key: 100)
+          }.textSelectionGroup(key: 100)
         }, present: { _ in })
     }
     render(Input(mousePosition: .init(x: 0, y: 5), pressed: true, released: true))
@@ -175,7 +175,7 @@ struct IdentifiedForEachTests {
               .selectable(key: 42)
           }
         }
-        FocusBlock(key: 42)
+        Focus(key: 42)
       }, present: { _ in })
     #expect(host.state(for: 42)?.focused == true)
     #expect(host.selectedText == "first")

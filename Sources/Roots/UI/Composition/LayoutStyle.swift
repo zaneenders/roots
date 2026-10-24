@@ -38,7 +38,7 @@ public struct Alignment: Equatable, Sendable {
 
 struct LayoutStyle {
   enum Kind {
-    case leaf, row, column, stack, frame
+    case leaf, row, column, stack, frame, scroll
     case grid(Int)
   }
   var kind: Kind = .stack
@@ -50,7 +50,7 @@ struct LayoutStyle {
   var scrollsVertically = false
 }
 
-public struct FrameBlock<Content: Block>: Block {
+public struct _Frame<Content: Block>: Block {
   public typealias Body = Never
   let content: Content
   let style: LayoutStyle
@@ -65,17 +65,17 @@ public struct FrameBlock<Content: Block>: Block {
 extension Block {
   public func frame(
     width: LayoutSize = .fit, height: LayoutSize = .fit, alignment: Alignment = .center
-  ) -> FrameBlock<Self> {
-    FrameBlock(content: self, style: LayoutStyle(kind: .frame, width: width, height: height, alignment: alignment))
+  ) -> _Frame<Self> {
+    _Frame(content: self, style: LayoutStyle(kind: .frame, width: width, height: height, alignment: alignment))
   }
 
-  public func padding(_ amount: Float) -> FrameBlock<Self> {
+  public func padding(_ amount: Float) -> _Frame<Self> {
     precondition(amount.isFinite && amount >= 0)
     return padding(horizontal: amount, vertical: amount)
   }
 
-  public func padding(horizontal: Float = 0, vertical: Float = 0) -> FrameBlock<Self> {
+  public func padding(horizontal: Float = 0, vertical: Float = 0) -> _Frame<Self> {
     precondition(horizontal.isFinite && horizontal >= 0 && vertical.isFinite && vertical >= 0)
-    return FrameBlock(content: self, style: LayoutStyle(kind: .frame, padding: SIMD2(horizontal, vertical)))
+    return _Frame(content: self, style: LayoutStyle(kind: .frame, padding: SIMD2(horizontal, vertical)))
   }
 }

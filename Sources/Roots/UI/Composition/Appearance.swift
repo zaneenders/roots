@@ -1,4 +1,4 @@
-public struct Background<Content: Block>: Block {
+public struct _Background<Content: Block>: Block {
   public typealias Body = Never
   let content: Content
   let color: Color
@@ -11,7 +11,7 @@ public struct Background<Content: Block>: Block {
   }
 }
 
-public struct Foreground<Content: Block>: Block {
+public struct _Foreground<Content: Block>: Block {
   public typealias Body = Never
   let content: Content
   let color: Color
@@ -25,11 +25,11 @@ public struct Foreground<Content: Block>: Block {
 }
 
 extension Block {
-  public func background(_ color: Color) -> Background<Self> {
-    Background(content: self, color: color)
+  public func background(_ color: Color) -> _Background<Self> {
+    _Background(content: self, color: color)
   }
 
-  public func color(_ color: Color) -> Foreground<Self> {
-    Foreground(content: self, color: color)
+  public func color(_ color: Color) -> _Foreground<Self> {
+    _Foreground(content: self, color: color)
   }
 }

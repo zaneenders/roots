@@ -15,7 +15,7 @@ struct GameBlock: Block {
   private var sidebar: Region { Region(left + boardWidth + 24, top, 240, boardHeight) }
 
   var body: some Block {
-    ZStack(in: bounds) {
+    Stack(in: bounds) {
       Column(in: Region(left, 25, boardWidth, 66), gap: 4) {
         Text("ROOTS / PLAYGROUND")
           .size(12)
@@ -34,7 +34,7 @@ struct GameBlock: Block {
           .size(12)
           .color(Palette.muted)
       }
-      ZStack(in: Region(left, top, boardWidth, boardHeight)) {
+      Stack(in: Region(left, top, boardWidth, boardHeight)) {
         BoardBlock(game: controller.game)
         if controller.game.status != .playing {
           Canvas(key: 10, color: Color(0.03, 0.04, 0.07, 0.86), blocksPointer: true) { _ in }
@@ -48,7 +48,7 @@ struct GameBlock: Block {
           }
         }
       }
-      ScrollColumn(key: 9, in: sidebar, gap: 10, showsScrollIndicator: true) {
+      Scroll(key: 9, in: sidebar, showsScrollIndicator: true) {
         Column(gap: 10) {
           Column(gap: 12) {
             Text("UP NEXT")

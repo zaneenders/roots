@@ -15,7 +15,7 @@ struct DesktopSessionTests {
     session.close = { events.append("close") }
     do {
       try await session.run(
-        content: { _ in EmptyBlock() },
+        content: { _ in BlockBuilder.buildBlock() },
         present: { runtime in
           #expect(events == ["start"])
           events.append("present")
@@ -50,7 +50,7 @@ struct DesktopSessionTests {
       return true
     }
     try await session.run(
-      content: { _ in EmptyBlock() }, offscreen: true,
+      content: { _ in BlockBuilder.buildBlock() }, offscreen: true,
       present: { runtime in
         runtime.frame(
           input: Input(keyEvents: [KeyEvent(.enter)]),

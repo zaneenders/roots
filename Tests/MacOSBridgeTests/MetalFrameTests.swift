@@ -103,7 +103,7 @@ import Testing
   var ui = UIHost()
   ui.frame(
     build: {
-      RowBlock(in: Region(0, 0, 80, 40)) {
+      Row(in: Region(0, 0, 80, 40)) {
         Canvas(key: 1, extent: 80, color: .panel) { context in
           context.fillRect(Region(4, 4, 8, 8), color: .accent)
         }

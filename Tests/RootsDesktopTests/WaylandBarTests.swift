@@ -11,7 +11,7 @@ import Testing
 private struct BarApp: RootsApp {
   var window: some Window {
     WaylandBar(height: 26, namespace: "org.example.bar") { viewport in
-      RowBlock(in: viewport.bounds) {
+      Row(in: viewport.bounds) {
         Text("Status")
           .size(20)
           .selectable(key: 1)
@@ -36,7 +36,7 @@ struct WaylandBarTests {
     let bar = WaylandBar(
       height: 26, namespace: "org.example.bar", overlayHeight: 32, maxFrames: 2,
       screenshotPath: "bar.ppm"
-    ) { _ in EmptyBlock() }
+    ) { _ in BlockBuilder.buildBlock() }
     try bar.validate()
     let configuration = bar.configuration
     #expect(configuration.topBar)
@@ -48,23 +48,23 @@ struct WaylandBarTests {
   }
 
   @Test func invalidConfigurationNeverStartsLifecycleOrBuildsContent() async {
-    let configurations: [WaylandBar<EmptyBlock>] = [
-      .init(height: 0) { _ in EmptyBlock() },
-      .init(height: -1) { _ in EmptyBlock() },
-      .init(height: 8193) { _ in EmptyBlock() },
-      .init(height: .max) { _ in EmptyBlock() },
-      .init(namespace: "") { _ in EmptyBlock() },
-      .init(namespace: "invalid\0namespace") { _ in EmptyBlock() },
-      .init(overlayHeight: -1) { _ in EmptyBlock() },
-      .init(overlayHeight: .max) { _ in EmptyBlock() },
-      .init(height: 8192, overlayHeight: 1) { _ in EmptyBlock() },
-      .init(maxFrames: -1) { _ in EmptyBlock() },
-      .init(screenshotPath: "bar.ppm") { _ in EmptyBlock() },
-      .init(nodeCapacity: -1) { _ in EmptyBlock() },
-      .init(scrollAcceleration: -.infinity) { _ in EmptyBlock() },
-      .init(scrollAcceleration: .nan) { _ in EmptyBlock() },
-      .init(scrollDeceleration: 0) { _ in EmptyBlock() },
-      .init(scrollDeceleration: .infinity) { _ in EmptyBlock() }
+    let configurations: [WaylandBar<_Empty>] = [
+      .init(height: 0) { _ in BlockBuilder.buildBlock() },
+      .init(height: -1) { _ in BlockBuilder.buildBlock() },
+      .init(height: 8193) { _ in BlockBuilder.buildBlock() },
+      .init(height: .max) { _ in BlockBuilder.buildBlock() },
+      .init(namespace: "") { _ in BlockBuilder.buildBlock() },
+      .init(namespace: "invalid\0namespace") { _ in BlockBuilder.buildBlock() },
+      .init(overlayHeight: -1) { _ in BlockBuilder.buildBlock() },
+      .init(overlayHeight: .max) { _ in BlockBuilder.buildBlock() },
+      .init(height: 8192, overlayHeight: 1) { _ in BlockBuilder.buildBlock() },
+      .init(maxFrames: -1) { _ in BlockBuilder.buildBlock() },
+      .init(screenshotPath: "bar.ppm") { _ in BlockBuilder.buildBlock() },
+      .init(nodeCapacity: -1) { _ in BlockBuilder.buildBlock() },
+      .init(scrollAcceleration: -.infinity) { _ in BlockBuilder.buildBlock() },
+      .init(scrollAcceleration: .nan) { _ in BlockBuilder.buildBlock() },
+      .init(scrollDeceleration: 0) { _ in BlockBuilder.buildBlock() },
+      .init(scrollDeceleration: .infinity) { _ in BlockBuilder.buildBlock() }
     ]
     var events: [String] = []
     for bar in configurations {
@@ -76,7 +76,7 @@ struct WaylandBarTests {
     await #expect(throws: WaylandBarError.invalidConfiguration) {
       try await WaylandBar(height: 0) { _ in
         builds += 1
-        return EmptyBlock()
+        return BlockBuilder.buildBlock()
       }.run()
     }
     #expect(events.isEmpty && builds == 0)
@@ -87,7 +87,7 @@ struct WaylandBarTests {
     let task = Task { @MainActor in
       try await WaylandBar { _ in
         events.append("content")
-        return EmptyBlock()
+        return BlockBuilder.buildBlock()
       }
       .onStart { events.append("start") }
       .onClose { events.append("close") }
@@ -104,7 +104,7 @@ struct WaylandBarTests {
     let task = Task { @MainActor in
       try await WaylandBar { _ in
         events.append("content")
-        return EmptyBlock()
+        return BlockBuilder.buildBlock()
       }
       .onStart {
         events.append("start")
@@ -126,7 +126,7 @@ struct WaylandBarTests {
       builds += 1
       #expect(viewport.bounds == Region(0, 0, 100, 58))
       #expect(viewport.scale == 2)
-      return RowBlock(in: viewport.bounds) {
+      return Row(in: viewport.bounds) {
         Canvas(key: 1, extent: 100) { context in
           context.fillRect(context.region, color: Color(model.red, 0, 0))
         }
@@ -167,7 +167,7 @@ struct WaylandBarRenderingTests {
       viewport in
       #expect(viewport.bounds.width > 0 && viewport.bounds.height == 58 && viewport.scale >= 1)
       frames += 1
-      return RowBlock(in: Region(0, 0, viewport.bounds.width, 26)) {
+      return Row(in: Region(0, 0, viewport.bounds.width, 26)) {
         Canvas(key: 1, extent: viewport.bounds.width) { context in
           context.fillRect(context.region, color: Color(0.2, 0.3, 0.4))
         }
@@ -180,7 +180,7 @@ struct WaylandBarRenderingTests {
     frames = 0
     try await DesktopWindow("After bar", width: 100, height: 100, maxFrames: 1) { _ in
       frames += 1
-      return EmptyBlock()
+      return BlockBuilder.buildBlock()
     }.run()
     #expect(frames == 1)
   }

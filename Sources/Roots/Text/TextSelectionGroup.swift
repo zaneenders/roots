@@ -1,4 +1,5 @@
-public struct SelectionGroup<Content: Block>: Block {
+/// Shares a selection across descendant text that has opted in with `.selectable()`.
+public struct TextSelectionGroup<Content: Block>: Block {
   public typealias Body = Never
   let key: UInt64
   let content: Content
@@ -22,7 +23,7 @@ public struct SelectionGroup<Content: Block>: Block {
 }
 
 extension Block {
-  public func selectionGroup(key: UInt64) -> SelectionGroup<Self> {
-    SelectionGroup(key: key, content: self)
+  public func textSelectionGroup(key: UInt64) -> TextSelectionGroup<Self> {
+    TextSelectionGroup(key: key, content: self)
   }
 }

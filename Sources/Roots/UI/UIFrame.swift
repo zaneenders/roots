@@ -77,6 +77,19 @@ public struct UIFrame: ~Copyable, ~Escapable {
         region: region, startOrder: storage.value.order.count, gap: gap, horizontal: true,
         scrollParent: storage.value.scrollParent))
   }
+  mutating func beginScroll(
+    key: UInt64, in region: Region, showsScrollIndicator: Bool = false
+  ) {
+    precondition(region.x.isFinite && region.y.isFinite && region.width.isFinite && region.height.isFinite)
+    precondition(region.width >= 0 && region.height >= 0)
+    let handle = storage.value.declare(
+      key: key, title: "", region: region, color: .panel, scrollable: true,
+      showsScrollIndicator: showsScrollIndicator)
+    storage.value.beginLayout(LayoutStyle(kind: .scroll), in: region)
+    storage.value.cursors[storage.value.cursors.count - 1].scrollParent = handle.slot
+    storage.value.layouts[storage.value.layouts.count - 1].scrollParent = handle.slot
+  }
+
   @discardableResult
   mutating func beginScrollColumn(
     key: UInt64, in region: Region, gap: Float = 8, showsScrollIndicator: Bool = false

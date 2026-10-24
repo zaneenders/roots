@@ -34,7 +34,7 @@ struct TextTests {
       host.frame(
         input: input, onCopy: { copied = $0 },
         build: {
-          ZStack(in: Region(0, 0, 100, 80)) {
+          Stack(in: Region(0, 0, 100, 80)) {
             Text("AB\nC")
               .size(10)
               .alignment(.center)
@@ -63,7 +63,7 @@ struct TextTests {
             .overflow(.truncateTail)
             .frame(width: .fixed(22), height: .fixed(14))
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       },
       present: { batch in
         var glyphs: [DrawRect] = []
@@ -128,7 +128,7 @@ struct TextTests {
               text
             }
           }
-          if selectable { FocusBlock(key: 1) }
+          if selectable { Focus(key: 1) }
         }, present: { _ in })
     }
     render(
@@ -147,11 +147,13 @@ struct TextTests {
     host.frame(
       input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
       build: {
-        ScrollColumn(key: 10, in: Region(0, 0, 100, 20), gap: 0) {
-          Text("A\nB\nC").size(10).selectable(key: 1)
+        Scroll(key: 10, in: Region(0, 0, 100, 20)) {
+          Column(gap: 0) {
+            Text("A\nB\nC").size(10).selectable(key: 1)
+          }
         }
-        ScrollToBlock(16, in: 10)
-        FocusBlock(key: 1)
+        ScrollTo(16, in: 10)
+        Focus(key: 1)
       },
       present: { batch in
         for draw in batch { #expect(draw.clip == Region(0, 0, 10, 20)) }
@@ -171,7 +173,7 @@ struct TextTests {
             .overflow(.truncateTail)
             .selectable(key: 1)
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(host.selectedText == "AB…\n😀é")
   }
@@ -209,7 +211,7 @@ struct TextTests {
               .selectable(key: 1)
               .overflow(.truncateTail)
           }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }, present: { _ in })
     }
     render(width: 100, input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]))
@@ -246,7 +248,7 @@ struct TextTests {
             Text("ABC")
               .selectable(key: key)
           }
-          FocusBlock(key: key)
+          Focus(key: key)
         }, present: { _ in })
       #expect(host.selectedText == (key == 1 ? "ABC" : nil))
       #expect(host.state(for: key)?.focused == true)

@@ -2,7 +2,7 @@
 @resultBuilder
 public enum ParagraphBuilder {
   public static func buildExpression(_ text: Text) -> [Text] { [text] }
-  public static func buildExpression(_ background: Background<Text>) -> [Text] {
+  public static func buildExpression(_ background: _Background<Text>) -> [Text] {
     [background.content.withInlineBackground(background.color)]
   }
   public static func buildBlock() -> [Text] { [] }
