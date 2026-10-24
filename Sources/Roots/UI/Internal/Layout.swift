@@ -20,9 +20,9 @@ extension UIStorage {
     interaction: NodeInteraction = .none,
     selectable: Bool = false, textLines: [TextLine]? = nil, focusable: Bool = true,
     showsScrollIndicator: Bool = false, participatesInLayout: Bool = true,
-    plainText: PlainTextStyle? = nil, paragraph: ParagraphContent? = nil, identity: IdentityLocation? = nil
+    plainText: PlainTextStyle? = nil, paragraph: ParagraphContent? = nil, identity: ImplicitNodeIdentity? = nil
   ) -> NodeHandle {
-    let implicitIdentity = identity.map { ImplicitNodeIdentity(path: identityPath, location: $0) }
+    let implicitIdentity = identity
     let index: Int
     if let key, let old = keys[key] {
       index = old

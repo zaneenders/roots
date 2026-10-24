@@ -56,8 +56,12 @@ public struct _Pair<First: Block, Next: Block>: Block {
   let first: First
   let next: Next
   public borrowing func _build(into frame: inout UIFrame) {
+    frame.beginChild(0)
     first._build(into: &frame)
+    frame.endIdentity()
+    frame.beginChild(1)
     next._build(into: &frame)
+    frame.endIdentity()
   }
 }
 
@@ -70,9 +74,14 @@ public struct _Conditional<First: Block, Second: Block>: Block {
   let content: Content
   public borrowing func _build(into frame: inout UIFrame) {
     switch content {
-    case .first(let content): content._build(into: &frame)
-    case .second(let content): content._build(into: &frame)
+    case .first(let content):
+      frame.beginChild(0)
+      content._build(into: &frame)
+    case .second(let content):
+      frame.beginChild(1)
+      content._build(into: &frame)
     }
+    frame.endIdentity()
   }
 }
 
@@ -122,7 +131,7 @@ public struct ForEach<Data: RandomAccessCollection, Content: Block>: Block {
         frame.beginItem(id, at: location)
         let row = content(element)
         row._build(into: &frame)
-        frame.endItem()
+        frame.endIdentity()
       }
     } else {
       for element in data {
