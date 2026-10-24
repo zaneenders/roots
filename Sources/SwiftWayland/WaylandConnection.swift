@@ -608,14 +608,8 @@ import NIOCore
   }
   public func readClipboard() async -> String? {
     guard running, let fd = clipboard.beginRead() else { return nil }
-    let transfer = Task.detached(executorPreference: BlockingIOExecutor.shared) {
-      ClipboardTransfer.read(from: fd)
-    }
-    return await withTaskCancellationHandler {
-      await transfer.value
-    } onCancel: {
-      transfer.cancel()
-    }
+    guard let bytes = try? await clipboard.io.read(from: fd) else { return nil }
+    return String(bytes: bytes, encoding: .utf8)
   }
   @discardableResult public func writeClipboard(_ text: String) -> Bool {
     running && clipboard.write(text)
@@ -648,6 +642,8 @@ import NIOCore
     dismissPopup()
     dmabuf.close()
     clipboard.close()
+    let io = clipboard.io
+    Task { await io.shutdown() }
     typing.leave(input: &input)
     input.leavePointer()
     idleInhibitor = 0

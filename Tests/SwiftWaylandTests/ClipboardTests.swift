@@ -9,129 +9,259 @@ private func clipboardPipe() throws -> [Int32] {
   return [pipe.readEnd.rawValue, pipe.writeEnd.rawValue]
 }
 
-@Test func clipboardTransfersLargeUTF8TextWithoutBlockingTheReaderOrWriter() async throws {
-  let fds = try clipboardPipe()
-  let text = String(repeating: "hello café 🙂\n", count: 20_000)
-  let writer = blockingTestTask { ClipboardTransfer.write(Array(text.utf8), to: fds[1]) }
-  let reader = blockingTestTask { ClipboardTransfer.read(from: fds[0]) }
-  #expect(await reader.value == text)
-  await writer.value
+// Exit tests can briefly inherit another test's pipe before exec closes CLOEXEC FDs.
+private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
+  for _ in 0..<100 {
+    var peer = pollfd(fd: descriptor, events: 0, revents: 0)
+    if unsafe poll(&peer, 1, 0) == 1,
+      peer.revents & Int16(writing ? POLLERR : POLLHUP) != 0
+    {
+      return true
+    }
+    try? await Task.sleep(for: .milliseconds(10))
+  }
+  return false
 }
 
-@Test func clipboardRejectsInvalidUTF8AndOversizedTransfers() async throws {
-  for bytes in [[UInt8(0xFF)], [UInt8](repeating: 65, count: ClipboardTransfer.maximumBytes + 1)] {
-    let fds = try clipboardPipe()
-    let writer = blockingTestTask { ClipboardTransfer.write(bytes, to: fds[1]) }
-    let reader = blockingTestTask { ClipboardTransfer.read(from: fds[0]) }
-    #expect(await reader.value == nil)
-    await writer.value
+@Test func clipboardTransfersLargeUTF8TextWithoutBlockingTheReaderOrWriter() async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  let text = String(repeating: "hello café 🙂\n", count: 20_000)
+  async let write: Void = io.write(Array(text.utf8), to: OwnedFD(taking: fds[1]))
+  let bytes = try await io.read(from: OwnedFD(taking: fds[0]))
+  #expect(String(bytes: bytes, encoding: .utf8) == text)
+  try await write
+}
+
+@Test func clipboardPreservesInvalidUTF8ForTheCallerToReject() async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  async let write: Void = io.write([0xFF], to: OwnedFD(taking: fds[1]))
+  let bytes = try await io.read(from: OwnedFD(taking: fds[0]))
+  #expect(bytes == [0xFF])
+  #expect(String(bytes: bytes, encoding: .utf8) == nil)
+  try await write
+}
+
+@Test func clipboardRejectsOversizedReadsAndWrites() async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  let writer = Task { try await io.write([1, 2, 3], to: OwnedFD(taking: fds[1])) }
+  await #expect(throws: ClipboardIO.Failure.tooLarge) {
+    try await io.read(from: OwnedFD(taking: fds[0]), limit: 2)
   }
+  _ = await writer.result
+  let oversized = try clipboardPipe()
+  defer { _ = close(oversized[0]) }
+  await #expect(throws: ClipboardIO.Failure.tooLarge) {
+    try await io.write(
+      [UInt8](repeating: 65, count: ClipboardIO.maximumBytes + 1),
+      to: OwnedFD(taking: oversized[1]))
+  }
+  #expect(await peerClosed(oversized[0], writing: false))
 }
 
 @Test func clipboardReadCanBeCancelledWhileTheSourceStalls() async throws {
+  let io = ClipboardIO()
   let fds = try clipboardPipe()
   defer { _ = close(fds[1]) }
-  let reader = blockingTestTask { ClipboardTransfer.read(from: fds[0]) }
+  let reader = Task { try await io.read(from: OwnedFD(taking: fds[0])) }
   try await Task.sleep(for: .milliseconds(20))
   reader.cancel()
-  #expect(await reader.value == nil)
-  await blockingTestTask {
-    var writer = pollfd(fd: fds[1], events: 0, revents: 0)
-    #expect(unsafe poll(&writer, 1, 1000) == 1)
-    #expect(writer.revents & Int16(POLLERR) != 0)
-  }.value
+  await #expect(throws: CancellationError.self) { try await reader.value }
+  #expect(await peerClosed(fds[1], writing: true))
+}
+
+@Test func clipboardCancellationBeforeRegistrationClosesTheDescriptor() async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  defer { _ = close(fds[1]) }
+  let reader = Task {
+    unsafe withUnsafeCurrentTask { unsafe $0?.cancel() }
+    return try await io.read(from: OwnedFD(taking: fds[0]))
+  }
+  await #expect(throws: CancellationError.self) { try await reader.value }
+  #expect(await peerClosed(fds[1], writing: true))
+}
+
+@Test func clipboardWriteCanBeCancelledWhileTheRecipientStalls() async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  defer { _ = close(fds[0]) }
+  let writer = Task {
+    try await io.write([UInt8](repeating: 42, count: 1024 * 1024), to: OwnedFD(taking: fds[1]))
+  }
+  try await Task.sleep(for: .milliseconds(20))
+  writer.cancel()
+  await #expect(throws: CancellationError.self) { try await writer.value }
+  #expect(await peerClosed(fds[0], writing: false))
+}
+
+@Test(arguments: [false, true])
+func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  let active = fds[writing ? 1 : 0]
+  defer { _ = close(fds[writing ? 0 : 1]) }
+  await #expect(throws: ClipboardIO.Failure.timedOut) {
+    if writing {
+      try await io.write(
+        [UInt8](repeating: 42, count: 1024 * 1024), to: OwnedFD(taking: active),
+        timeout: .milliseconds(20))
+    } else {
+      _ = try await io.read(from: OwnedFD(taking: active), timeout: .milliseconds(20))
+    }
+  }
+  #expect(await peerClosed(fds[writing ? 0 : 1], writing: !writing))
 }
 
 @Test func clipboardWriteSurvivesAClosedRecipientAndClosesItsDescriptor() async throws {
+  let io = ClipboardIO()
   var fds: [Int32] = [-1, -1]
   try #require(
     unsafe socketpair(
-      AF_UNIX, Int32(SOCK_STREAM.rawValue | SOCK_NONBLOCK.rawValue | SOCK_CLOEXEC.rawValue), 0, &fds
-    )
-      == 0)
+      AF_UNIX, Int32(SOCK_STREAM.rawValue | SOCK_NONBLOCK.rawValue | SOCK_CLOEXEC.rawValue),
+      0, &fds) == 0)
   defer { _ = close(fds[0]) }
   try #require(shutdown(fds[0], Int32(SHUT_RD)) == 0)
-  ClipboardTransfer.write(Array("no recipient".utf8), to: fds[1])
-  let recipient = fds[0]
-  await blockingTestTask {
-    var peer = pollfd(fd: recipient, events: 0, revents: 0)
-    #expect(unsafe poll(&peer, 1, 1000) == 1)
-    #expect(peer.revents & Int16(POLLHUP) != 0)
-  }.value
+  await #expect(throws: (any Error).self) {
+    try await io.write(Array("no recipient".utf8), to: OwnedFD(taking: fds[1]))
+  }
+  #expect(await peerClosed(fds[0], writing: false))
 }
 
-@Test(arguments: [false, true])
-func clipboardWriteRestoresUnblockedSIGPIPE(recipientOpen: Bool) async {
-  await #expect(processExitsWith: .success) { [recipientOpen] in
-    try checkUnblockedSIGPIPE(recipientOpen: recipientOpen)
+@Test func clipboardBrokenPipeDoesNotTerminateTheProcess() async {
+  await #expect(processExitsWith: .success) {
+    _ = signal(SIGPIPE, SIG_DFL)
+    let pipe = try FileDescriptor.pipe(options: .closeOnExec)
+    try pipe.readEnd.close()
+    do {
+      try await ClipboardIO().write([42], to: OwnedFD(taking: pipe.writeEnd.rawValue))
+      Issue.record("Writing to a closed pipe unexpectedly succeeded")
+    } catch {}
   }
 }
 
-private func checkUnblockedSIGPIPE(recipientOpen: Bool) throws {
-  _ = signal(SIGPIPE, SIG_DFL)
-  let pipe = try FileDescriptor.pipe(options: .closeOnExec)
-  defer { try? pipe.writeEnd.close() }
-  if !recipientOpen { try pipe.readEnd.close() }
-  defer { if recipientOpen { try? pipe.readEnd.close() } }
+@Test func clipboardRejectsNonpollableDescriptorsWithoutUsingCapacity() async throws {
+  let io = ClipboardIO(maximumTransfers: 1)
+  // NIO only accepts pollable descriptors; reject files and devices before adoption.
+  for path in ["/proc/self/status", "/dev/null"] {
+    let fd = try FileDescriptor.open(FilePath(path), .readOnly, options: .closeOnExec)
+    await #expect(throws: ClipboardIO.Failure.invalidDescriptor) {
+      try await io.read(from: OwnedFD(taking: fd.rawValue))
+    }
+  }
+  let fds = try clipboardPipe()
+  _ = close(fds[1])
+  let bytes = try await io.read(from: OwnedFD(taking: fds[0]))
+  #expect(bytes.isEmpty)
+}
 
-  var previous = sigset_t()
-  try #require(unsafe pthread_sigmask(SIG_BLOCK, nil, &previous) == 0)
-  var unblocked = previous
-  _ = unsafe sigdelset(&unblocked, SIGPIPE)
-  try #require(unsafe pthread_sigmask(SIG_SETMASK, &unblocked, nil) == 0)
-  defer { _ = unsafe pthread_sigmask(SIG_SETMASK, &previous, nil) }
+@Test func clipboardEmptyTransferReachesEOF() async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  async let write: Void = io.write([], to: OwnedFD(taking: fds[1]))
+  let bytes = try await io.read(from: OwnedFD(taking: fds[0]), limit: 0)
+  #expect(bytes.isEmpty)
+  try await write
+}
 
-  try [UInt8(42)].withUnsafeBytes { buffer -> Void in
-    if recipientOpen {
-      let count = try unsafe ClipboardTransfer.writeWithoutSIGPIPE(buffer, to: pipe.writeEnd)
-      #expect(count == 1)
+@Test func clipboardAdmissionBoundsTransfersAndBytes() async throws {
+  let io = ClipboardIO(maximumTransfers: 1, maximumBufferedBytes: 16)
+  let first = try clipboardPipe()
+  defer { _ = close(first[1]) }
+  let reader = Task { try await io.read(from: OwnedFD(taking: first[0]), limit: 16) }
+  try await Task.sleep(for: .milliseconds(20))
+  let second = try clipboardPipe()
+  defer { _ = close(second[1]) }
+  await #expect(throws: ClipboardIO.Failure.busy) {
+    try await io.read(from: OwnedFD(taking: second[0]), limit: 1)
+  }
+  #expect(await peerClosed(second[1], writing: true))
+  reader.cancel()
+  _ = await reader.result
+
+  let third = try clipboardPipe()
+  defer { _ = close(third[1]) }
+  await #expect(throws: ClipboardIO.Failure.busy) {
+    try await io.read(from: OwnedFD(taking: third[0]), limit: 17)
+  }
+  #expect(await peerClosed(third[1], writing: true))
+}
+
+@Test func clipboardReservationsBoundCombinedBufferUsage() async throws {
+  let io = ClipboardIO(maximumTransfers: 2, maximumBufferedBytes: 16)
+  let first = try clipboardPipe()
+  defer { _ = close(first[1]) }
+  let reader = Task { try await io.read(from: OwnedFD(taking: first[0]), limit: 16) }
+  try await Task.sleep(for: .milliseconds(20))
+  let second = try clipboardPipe()
+  defer { _ = close(second[1]) }
+  await #expect(throws: ClipboardIO.Failure.busy) {
+    try await io.read(from: OwnedFD(taking: second[0]), limit: 1)
+  }
+  reader.cancel()
+  _ = await reader.result
+  let third = try clipboardPipe()
+  _ = close(third[1])
+  let bytes = try await io.read(from: OwnedFD(taking: third[0]), limit: 16)
+  #expect(bytes.isEmpty)
+}
+
+@Test(arguments: [false, true])
+func clipboardShutdownCancelsTransfersAndRejectsNewOnes(writing: Bool) async throws {
+  let io = ClipboardIO()
+  let fds = try clipboardPipe()
+  let active = fds[writing ? 1 : 0]
+  let peer = fds[writing ? 0 : 1]
+  defer { _ = close(peer) }
+  let transfer = Task {
+    if writing {
+      try await io.write([UInt8](repeating: 42, count: 1024 * 1024), to: OwnedFD(taking: active))
     } else {
-      #expect(throws: Errno.brokenPipe) {
-        try unsafe ClipboardTransfer.writeWithoutSIGPIPE(buffer, to: pipe.writeEnd)
-      }
+      _ = try await io.read(from: OwnedFD(taking: active))
     }
   }
-  var current = sigset_t()
-  try #require(unsafe pthread_sigmask(SIG_BLOCK, nil, &current) == 0)
-  #expect(unsafe sigismember(&current, SIGPIPE) == 0)
+  try await Task.sleep(for: .milliseconds(20))
+  await io.shutdown()
+  await #expect(throws: ClipboardIO.Failure.closed) { try await transfer.value }
+  #expect(await peerClosed(peer, writing: !writing))
+  let next = try clipboardPipe()
+  defer { _ = close(next[1]) }
+  await #expect(throws: ClipboardIO.Failure.closed) {
+    try await io.read(from: OwnedFD(taking: next[0]))
+  }
+  #expect(await peerClosed(next[1], writing: true))
 }
 
-@Test(arguments: [false, true])
-func clipboardWritePreservesBlockedAndPendingSIGPIPE(pendingBefore: Bool) async {
-  await #expect(processExitsWith: .success) { [pendingBefore] in
-    try checkPendingSIGPIPE(pendingBefore: pendingBefore)
+@Test func clipboardImmediateCompletionsMoveContinuationsThroughValueSlots() async throws {
+  let io = ClipboardIO(maximumTransfers: 1)
+  for _ in 0..<32 {
+    let fds = try clipboardPipe()
+    try FileDescriptor(rawValue: fds[1]).writeAll([UInt8(42)])
+    _ = close(fds[1])
+    let bytes = try await io.read(from: OwnedFD(taking: fds[0]), limit: 1)
+    #expect(bytes == [42])
   }
+  await io.shutdown()
 }
 
-private func checkPendingSIGPIPE(pendingBefore: Bool) throws {
-  _ = signal(SIGPIPE, SIG_DFL)
-  let pipe = try FileDescriptor.pipe(options: .closeOnExec)
-  try pipe.readEnd.close()
-  defer { try? pipe.writeEnd.close() }
-  var blocked = sigset_t()
-  var previous = sigset_t()
-  _ = unsafe sigemptyset(&blocked)
-  _ = unsafe sigaddset(&blocked, SIGPIPE)
-  try #require(unsafe pthread_sigmask(SIG_BLOCK, &blocked, &previous) == 0)
-  defer {
-    if pendingBefore {
-      var timeout = timespec(tv_sec: 0, tv_nsec: 0)
-      _ = unsafe sigtimedwait(&blocked, nil, &timeout)
-    }
-    _ = unsafe pthread_sigmask(SIG_SETMASK, &previous, nil)
+@Test func clipboardSlotsCanBeReusedAfterCancellationAndLateCallbacks() async throws {
+  let io = ClipboardIO(maximumTransfers: 1)
+  for _ in 0..<10 {
+    let fds = try clipboardPipe()
+    let reader = Task { try await io.read(from: OwnedFD(taking: fds[0])) }
+    try await Task.sleep(for: .milliseconds(1))
+    reader.cancel()
+    _ = await reader.result
+    _ = close(fds[1])
+
+    let next = try clipboardPipe()
+    let writer = Task { try await io.write([42], to: OwnedFD(taking: next[1])) }
+    try await writer.value
+    let bytes = try await io.read(from: OwnedFD(taking: next[0]), timeout: .seconds(1))
+    #expect(bytes == [42])
   }
-  if pendingBefore { try #require(raise(SIGPIPE) == 0) }
-  [UInt8(42)].withUnsafeBytes { buffer -> Void in
-    #expect(throws: Errno.brokenPipe) {
-      try unsafe ClipboardTransfer.writeWithoutSIGPIPE(buffer, to: pipe.writeEnd)
-    }
-  }
-  var current = sigset_t()
-  var pending = sigset_t()
-  try #require(unsafe pthread_sigmask(SIG_BLOCK, nil, &current) == 0)
-  try #require(unsafe sigpending(&pending) == 0)
-  #expect(unsafe sigismember(&current, SIGPIPE) == 1)
-  #expect(unsafe sigismember(&pending, SIGPIPE) == (pendingBefore ? 1 : 0))
 }
 
 @Test @MainActor func clipboardIsUnavailableWithoutANativeSessionOrFocus() async {
@@ -140,7 +270,8 @@ private func checkPendingSIGPIPE(pendingBefore: Bool) throws {
   #expect(await connection.readClipboard() == nil)
   let clipboard = WaylandClipboard(objects: WaylandObjects())
   #expect(!clipboard.write("text"))
-  #expect(clipboard.beginRead() == nil)
+  let unavailable = clipboard.beginRead() == nil
+  #expect(unavailable)
   clipboard.close()
   clipboard.close()
 }
