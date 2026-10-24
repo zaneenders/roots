@@ -12,12 +12,13 @@ struct IdentityLocation: Hashable {
   }
 }
 
-struct ItemIdentity: Hashable {
-  let location: IdentityLocation
-  let value: AnyHashable
+@usableFromInline
+enum IdentityComponent: Hashable {
+  case child(Int)
+  case item(IdentityLocation, AnyHashable)
 }
 
 struct ImplicitNodeIdentity: Hashable {
-  let path: [ItemIdentity]
+  let path: [IdentityComponent]
   let location: IdentityLocation
 }

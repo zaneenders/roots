@@ -1,19 +1,27 @@
 public struct UIFrame: ~Copyable, ~Escapable {
   private var storage: MutableRef<UIStorage>
+  // Traversal is frame-local; only implicit nodes retain a path snapshot.
+  @usableFromInline
+  var identityPath: [IdentityComponent] = []
 
   @_lifetime(&storage)
   init(storage: inout UIStorage) {
     self.storage = MutableRef(&storage)
   }
 
-  @usableFromInline
+  @inlinable
   mutating func beginItem(_ id: AnyHashable, at location: IdentityLocation) {
-    storage.value.identityPath.append(ItemIdentity(location: location, value: id))
+    identityPath.append(.item(location, id))
   }
 
-  @usableFromInline
-  mutating func endItem() {
-    _ = storage.value.identityPath.removeLast()
+  @inlinable
+  mutating func beginChild(_ index: Int) {
+    identityPath.append(.child(index))
+  }
+
+  @inlinable
+  mutating func endIdentity() {
+    _ = identityPath.removeLast()
   }
 
   mutating func withSelectionGroup(_ key: UInt64, _ body: (inout UIFrame) -> Void) {
@@ -216,7 +224,7 @@ public struct UIFrame: ~Copyable, ~Escapable {
       runs: runs, font: font, alignment: alignment, selectable: key != nil || identity != nil)
     _ = storage.value.declare(
       key: key, title: "", region: Region(0, 0, 0, 0), color: Color(0, 0, 0, 0),
-      paragraph: content, identity: identity)
+      paragraph: content, identity: identity.map { ImplicitNodeIdentity(path: identityPath, location: $0) })
     let leaf = storage.value.layouts.count - 1
     storage.value.layouts[leaf].style = LayoutStyle(kind: .leaf, width: .fill)
     storage.value.layouts[leaf].measured =
@@ -229,7 +237,8 @@ public struct UIFrame: ~Copyable, ~Escapable {
   mutating func plainText(_ text: String, key: UInt64?, identity: IdentityLocation? = nil, style: PlainTextStyle) {
     storage.value.ensureLayout()
     _ = storage.value.declare(
-      key: key, title: text, region: Region(0, 0, 0, 0), color: Color(0, 0, 0, 0), plainText: style, identity: identity)
+      key: key, title: text, region: Region(0, 0, 0, 0), color: Color(0, 0, 0, 0), plainText: style,
+      identity: identity.map { ImplicitNodeIdentity(path: identityPath, location: $0) })
     let leaf = storage.value.layouts.count - 1
     storage.value.layouts[leaf].style = LayoutStyle(kind: .leaf)
     storage.value.layouts[leaf].measured = style.size(of: text)

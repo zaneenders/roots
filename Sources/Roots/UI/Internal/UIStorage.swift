@@ -9,7 +9,6 @@ struct UIStorage: ~Copyable {
   var nodes = UniqueArray<Node>()
   var keys: [UInt64: Int] = [:]
   var implicitKeys: [ImplicitNodeIdentity: Int] = [:]
-  var identityPath: [ItemIdentity] = []
   var free = UniqueArray<Int>()
   var order = UniqueArray<Int>()
   var cursors = UniqueArray<Cursor>()
