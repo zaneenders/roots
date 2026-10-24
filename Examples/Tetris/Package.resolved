@@ -22,10 +22,10 @@
     {
       "identity" : "swift-nio",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/zaneenders/swift-nio.git",
+      "location" : "https://github.com/apple/swift-nio.git",
       "state" : {
-        "branch" : "shape-tree/unix-fd-messages",
-        "revision" : "79e0e576d485abe8aa2fdda45b83ce85dbbbbc8b"
+        "revision" : "6db9d9abd92ad7399b8a564cafbb87d3507245fa",
+        "version" : "2.104.0"
       }
     },
     {
