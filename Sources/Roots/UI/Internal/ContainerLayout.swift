@@ -1,7 +1,12 @@
 struct LayoutElement {
   var style: LayoutStyle
   var depth: Int = 0
-  var children: [Int] = []
+  // Intrusive indices keep child storage in the frame arena instead of allocating per container.
+  var firstChild: Int?
+  var lastChild: Int?
+  var nextSibling: Int?
+  var childCount = 0
+  var allocatedLength: Float = 0
   var node: Int?
   var bounds: Region?
   var scrollParent: Int?
@@ -45,7 +50,7 @@ extension UIStorage {
     let index = layouts.count
     layouts.append(LayoutElement(style: style, depth: cursors.count, bounds: bounds, scrollParent: scrollParent))
     if bounds == nil, let parent = currentCursor?.layout {
-      layouts[parent].children.append(index)
+      appendLayoutChild(index, to: parent)
     }
     cursors.append(
       Cursor(
@@ -53,30 +58,45 @@ extension UIStorage {
         layout: index, scrollParent: scrollParent))
   }
 
+  private mutating func appendLayoutChild(_ child: Int, to parent: Int) {
+    if let previous = layouts[parent].lastChild {
+      layouts[previous].nextSibling = child
+    } else {
+      layouts[parent].firstChild = child
+    }
+    layouts[parent].lastChild = child
+    layouts[parent].childCount += 1
+  }
+
   mutating func endLayout(_ index: Int) {
     let element = layouts[index]
-    let children = element.children
     var size = SIMD2<Float>.zero
     switch element.style.kind {
     case .leaf: return
     case .row, .column:
       let axis = element.style.kind.isRow ? 0 : 1
-      for child in children {
+      var next = element.firstChild
+      while let child = next {
+        next = layouts[child].nextSibling
         size[axis] += layouts[child].measured[axis]
         size[1 - axis] = max(size[1 - axis], layouts[child].measured[1 - axis])
       }
-      size[axis] += Float(max(0, children.count - 1)) * element.style.gap
+      size[axis] += Float(max(0, element.childCount - 1)) * element.style.gap
     case .stack, .frame, .scroll:
-      for child in children {
+      var next = element.firstChild
+      while let child = next {
+        next = layouts[child].nextSibling
         size = SIMD2(max(size.x, layouts[child].measured.x), max(size.y, layouts[child].measured.y))
       }
     case .grid(let columns):
       precondition(columns > 0)
-      for child in children {
+      var next = element.firstChild
+      while let child = next {
+        next = layouts[child].nextSibling
         size = SIMD2(max(size.x, layouts[child].measured.x), max(size.y, layouts[child].measured.y))
       }
-      let rows = (children.count + columns - 1) / columns
-      let usedColumns = children.isEmpty ? 0 : columns
+      let rows = (element.childCount + columns - 1) / columns
+      let usedColumns = element.childCount == 0 ? 0 : columns
       size = SIMD2(
         size.x * Float(usedColumns) + Float(max(0, usedColumns - 1)) * element.style.gap,
         size.y * Float(rows) + Float(max(0, rows - 1)) * element.style.gap)
@@ -94,7 +114,7 @@ extension UIStorage {
         style: style, depth: cursors.count, node: node,
         measured: SIMD2(
           style.width.measured(size.x), style.height.measured(size.y))))
-    layouts[parent].children.append(index)
+    appendLayoutChild(index, to: parent)
   }
 
   mutating func resolveLayouts() {
@@ -132,30 +152,46 @@ extension UIStorage {
         continue
       }
       let inner = element.region.insetBy(dx: element.style.padding.x, dy: element.style.padding.y)
-      let children = element.children
       switch element.style.kind {
       case .leaf: break
       case .row, .column:
         let axis = element.style.kind.isRow ? 0 : 1
         let available = axis == 0 ? inner.width : inner.height
-        var sizes = children.map { layouts[$0].measured[axis] }
-        let modes = children.map { axis == 0 ? layouts[$0].style.width : layouts[$0].style.height }
-        let gap = Float(max(0, children.count - 1)) * element.style.gap
-        if !element.style.scrollsVertically {
-          distribute(&sizes, modes: modes, available: max(0, available - gap))
+        var child = element.firstChild
+        var used: Float = 0
+        while let current = child {
+          let size = layouts[current].measured[axis]
+          layouts[current].allocatedLength = size
+          used += size
+          child = layouts[current].nextSibling
         }
-        let used = sizes.reduce(0, +) + gap
+        let gap = Float(max(0, element.childCount - 1)) * element.style.gap
+        if !element.style.scrollsVertically {
+          distributeLayoutChildren(of: index, axis: axis, remaining: max(0, available - gap) - used)
+          used = 0
+          child = element.firstChild
+          while let current = child {
+            used += layouts[current].allocatedLength
+            child = layouts[current].nextSibling
+          }
+        }
+        used += gap
         var position = max(0, available - used) * (axis == 0 ? element.style.alignment.x : element.style.alignment.y)
-        for (offset, child) in children.enumerated() {
+        child = element.firstChild
+        while let current = child {
+          let size = layouts[current].allocatedLength
           let slot =
             axis == 0
-            ? Region(inner.x + position, inner.y, sizes[offset], inner.height)
-            : Region(inner.x, inner.y + position, inner.width, sizes[offset])
-          placeLayout(child, in: slot, alignment: element.style.alignment, fixedAxis: axis)
-          position += sizes[offset] + element.style.gap
+            ? Region(inner.x + position, inner.y, size, inner.height)
+            : Region(inner.x, inner.y + position, inner.width, size)
+          placeLayout(current, in: slot, alignment: element.style.alignment, fixedAxis: axis)
+          position += size + element.style.gap
+          child = layouts[current].nextSibling
         }
       case .stack, .frame:
-        for child in children {
+        var next = element.firstChild
+        while let child = next {
+          next = layouts[child].nextSibling
           placeLayout(child, in: inner, alignment: element.style.alignment)
           if case .frame = element.style.kind, !layouts[child].style.kind.isLeaf {
             if layouts[child].style.width == .fit {
@@ -169,7 +205,9 @@ extension UIStorage {
           }
         }
       case .scroll:
-        for child in children {
+        var next = element.firstChild
+        while let child = next {
+          next = layouts[child].nextSibling
           // Constrain width for text reflow, but preserve the content's full height.
           let slot = Region(inner.x, inner.y, inner.width, max(inner.height, layouts[child].measured.y))
           placeLayout(child, in: slot, alignment: .topLeading)
@@ -178,16 +216,68 @@ extension UIStorage {
           }
         }
       case .grid(let columns):
-        let rows = (children.count + columns - 1) / columns
+        let rows = (element.childCount + columns - 1) / columns
         let width = max(0, inner.width - Float(columns - 1) * element.style.gap) / Float(columns)
         let height = rows == 0 ? 0 : max(0, inner.height - Float(rows - 1) * element.style.gap) / Float(rows)
-        for (offset, child) in children.enumerated() {
+        var offset = 0
+        var next = element.firstChild
+        while let child = next {
+          next = layouts[child].nextSibling
           let slot = Region(
             inner.x + Float(offset % columns) * (width + element.style.gap),
             inner.y + Float(offset / columns) * (height + element.style.gap), width, height)
           placeLayout(child, in: slot, alignment: element.style.alignment)
+          offset += 1
         }
       }
+    }
+  }
+
+  private mutating func distributeLayoutChildren(of parent: Int, axis: Int, remaining: Float) {
+    var remaining = remaining
+    let growing = remaining > 0
+    while abs(remaining) > 0.001 {
+      var extreme = growing ? Float.infinity : 0
+      var next = growing ? Float.infinity : 0
+      var activeCount = 0
+      var child = layouts[parent].firstChild
+      while let current = child {
+        child = layouts[current].nextSibling
+        let mode = axis == 0 ? layouts[current].style.width : layouts[current].style.height
+        let size = layouts[current].allocatedLength
+        if growing {
+          guard mode == .fill else { continue }
+        } else {
+          if case .fixed = mode { continue }
+          guard size > 0 else { continue }
+        }
+        if size == extreme {
+          activeCount += 1
+        } else if growing ? size < extreme : size > extreme {
+          next = extreme
+          extreme = size
+          activeCount = 1
+        } else {
+          next = growing ? min(next, size) : max(next, size)
+        }
+      }
+      guard activeCount > 0 else { return }
+      let share = remaining / Float(activeCount)
+      let amount = growing ? min(share, next - extreme) : max(share, next - extreme)
+      child = layouts[parent].firstChild
+      while let current = child {
+        child = layouts[current].nextSibling
+        let mode = axis == 0 ? layouts[current].style.width : layouts[current].style.height
+        if growing {
+          guard mode == .fill else { continue }
+        } else if case .fixed = mode {
+          continue
+        }
+        if layouts[current].allocatedLength == extreme {
+          layouts[current].allocatedLength += amount
+        }
+      }
+      remaining -= amount * Float(activeCount)
     }
   }
 
@@ -231,27 +321,4 @@ extension UIStorage {
 extension LayoutStyle.Kind {
   var isLeaf: Bool { if case .leaf = self { true } else { false } }
   var isRow: Bool { if case .row = self { true } else { false } }
-}
-
-private func distribute(_ sizes: inout [Float], modes: [LayoutSize], available: Float) {
-  var remaining = available - sizes.reduce(0, +)
-  let growing = remaining > 0
-  var candidates = sizes.indices.filter {
-    if growing { return modes[$0] == .fill }
-    if case .fixed = modes[$0] { return false }
-    return sizes[$0] > 0
-  }
-  while !candidates.isEmpty && abs(remaining) > 0.001 {
-    let extreme = candidates.map { sizes[$0] }.reduce(growing ? Float.infinity : 0, growing ? min : max)
-    let active = candidates.filter { sizes[$0] == extreme }
-    let next = candidates.map { sizes[$0] }.filter { growing ? $0 > extreme : $0 < extreme }
-      .reduce(growing ? Float.infinity : 0, growing ? min : max)
-    let amount =
-      growing
-      ? min(remaining / Float(active.count), next - extreme)
-      : max(remaining / Float(active.count), next - extreme)
-    for index in active { sizes[index] += amount }
-    remaining -= amount * Float(active.count)
-    if !growing { candidates.removeAll { sizes[$0] <= 0 } }
-  }
 }
