@@ -2,6 +2,7 @@ import CWaylandTestSupport
 import Glibc
 import NIOCore
 import NIOPosix
+import SystemPackage
 import Testing
 
 @testable import SwiftWayland
@@ -58,9 +59,14 @@ private func sockets() throws -> [Int32] {
     unsafe setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &size, socklen_t(MemoryLayout<Int32>.size))
       == 0)
   let (transport, _) = try await WaylandTransport.takingSocket(pair[0])
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
+  let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
+  let fd = pipe.writeEnd.rawValue
   let owned = WireDescriptor(taking: fd)
-  defer { owned.close() }
+  let readEnd = WireDescriptor(taking: pipe.readEnd.rawValue)
+  defer {
+    owned.close()
+    readEnd.close()
+  }
   var packets: [WirePacket] = []
   for index in 0..<40 {
     packets.append(
@@ -73,6 +79,8 @@ private func sockets() throws -> [Int32] {
   }
   let expected = packets.reduce(0) { $0 + $1.bytes.readableBytes }
   try await transport.send(packets, objects: [:])
+  for packet in packets { for descriptor in packet.descriptors { descriptor.close() } }
+  owned.close()
   let reader = blockingTestTask { () throws -> (Int, Int) in
     let deadline = ContinuousClock.now.advanced(by: .seconds(5))
     var total = 0
@@ -98,7 +106,131 @@ private func sockets() throws -> [Int32] {
   }
   let (total, count) = try await reader.value
   #expect(total == expected && count == packets.count)
+  #expect(await pipeReachesEOF(pipe.readEnd.rawValue))
   await transport.close()
+}
+
+@Test(arguments: [16, 30_000])
+func nioTransportPreservesMixedBatchByteAndDescriptorOrder(payloadSize: Int) async throws {
+  let pair = try sockets()
+  let peer = WireDescriptor(taking: pair[1])
+  defer { peer.close() }
+  var size: Int32 = 4096
+  try #require(
+    unsafe setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &size, socklen_t(MemoryLayout<Int32>.size))
+      == 0)
+  let (transport, _) = try await WaylandTransport.takingSocket(pair[0])
+  let expectedValues: [UInt8] = [11, 22]
+  var descriptors: [WireDescriptor] = []
+  defer { for descriptor in descriptors { descriptor.close() } }
+  for var value in expectedValues {
+    let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
+    descriptors.append(WireDescriptor(taking: pipe.readEnd.rawValue))
+    let writer = WireDescriptor(taking: pipe.writeEnd.rawValue)
+    defer { writer.close() }
+    try #require(unsafe write(pipe.writeEnd.rawValue, &value, 1) == 1)
+  }
+  var packets: [WirePacket] = []
+  var expected = ByteBuffer()
+  for index in 0..<4 {
+    var arguments: [WireValue] = [
+      .uint(UInt32(index)), .string(String(repeating: "\(index)", count: payloadSize)),
+    ]
+    if index % 2 == 1 { arguments.append(.fd(descriptors[index / 2])) }
+    let packet = try WirePacket(object: 2, opcode: 0, arguments: arguments)
+    packets.append(packet)
+    expected.writeImmutableBuffer(packet.bytes)
+  }
+  try await transport.send(packets, objects: [:])
+  for descriptor in descriptors { descriptor.close() }
+  let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+  var received = ByteBuffer()
+  var values: [UInt8] = []
+  var bytes = [UInt8](repeating: 0, count: 65_536)
+  while received.readableBytes < expected.readableBytes && ContinuousClock.now < deadline {
+    var fds = [Int32](repeating: -1, count: 256)
+    var count = fds.count
+    let n = peer.borrow { unsafe cwl_receive($0, &bytes, bytes.count, &fds, &count) }
+    for fd in fds.prefix(count) {
+      let descriptor = WireDescriptor(taking: fd)
+      var value: UInt8 = 0
+      #expect(descriptor.borrow { unsafe read($0, &value, 1) } == 1)
+      values.append(value)
+      descriptor.close()
+    }
+    if n > 0 {
+      received.writeBytes(bytes.prefix(n))
+    } else if n < 0 && errno == EAGAIN {
+      try await Task.sleep(for: .milliseconds(1))
+    } else {
+      Issue.record("Unexpected receive result: \(n), errno: \(errno)")
+      break
+    }
+  }
+  await transport.close()
+  #expect(received == expected)
+  #expect(values == expectedValues)
+}
+
+@Test func nioTransportRejectsMultipleDescriptorsBeforeQueuingAnyPackets() async throws {
+  let pair = try sockets()
+  let peer = WireDescriptor(taking: pair[1])
+  defer { peer.close() }
+  let (transport, _) = try await WaylandTransport.takingSocket(pair[0])
+  let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
+  let reader = WireDescriptor(taking: pipe.readEnd.rawValue)
+  let writer = WireDescriptor(taking: pipe.writeEnd.rawValue)
+  defer {
+    reader.close()
+    writer.close()
+  }
+  let valid = try WirePacket(object: 2, opcode: 0, arguments: [.fd(writer)])
+  let invalid = try WirePacket(object: 2, opcode: 0, arguments: [.fd(writer), .fd(writer)])
+  await #expect(throws: WaylandError.invalidConfiguration) {
+    try await transport.send([valid, invalid], objects: [:])
+  }
+  try await transport.send([], objects: [:])
+  var pending = pollfd(fd: pair[1], events: Int16(POLLIN), revents: 0)
+  #expect(unsafe poll(&pending, 1, 0) == 0)
+  await transport.close()
+}
+
+@Test func nioTransportClosesQueuedDescriptorDuplicatesOnClose() async throws {
+  let pair = try sockets()
+  let peer = WireDescriptor(taking: pair[1])
+  defer { peer.close() }
+  var size: Int32 = 4096
+  try #require(
+    unsafe setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &size, socklen_t(MemoryLayout<Int32>.size))
+      == 0)
+  let (transport, _) = try await WaylandTransport.takingSocket(pair[0])
+  let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
+  let reader = WireDescriptor(taking: pipe.readEnd.rawValue)
+  let writer = WireDescriptor(taking: pipe.writeEnd.rawValue)
+  defer {
+    reader.close()
+    writer.close()
+  }
+  let blocking = try WirePacket(
+    object: 2, opcode: 0, arguments: [.string(String(repeating: "x", count: 60_000))])
+  let descriptor = try WirePacket(object: 2, opcode: 0, arguments: [.fd(writer)])
+  try await transport.send([blocking, descriptor], objects: [:])
+  writer.close()
+  var pending = pollfd(fd: pipe.readEnd.rawValue, events: Int16(POLLIN), revents: 0)
+  #expect(unsafe poll(&pending, 1, 0) == 0)
+  await transport.close()
+  #expect(await pipeReachesEOF(pipe.readEnd.rawValue))
+}
+
+private func pipeReachesEOF(_ descriptor: Int32) async -> Bool {
+  for _ in 0..<100 {
+    var pending = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
+    if unsafe poll(&pending, 1, 0) == 1, pending.revents & Int16(POLLHUP) != 0 {
+      return true
+    }
+    try? await Task.sleep(for: .milliseconds(10))
+  }
+  return false
 }
 
 @Test func nioTransportRegistersServerCreatedObjectsBeforeDecodingNextEvent() async throws {
@@ -164,20 +296,28 @@ private func sockets() throws -> [Int32] {
   await transport.close()
 }
 
-@Test func nioTransportEOFClosesDescriptorsWaitingForTheirMessage() async throws {
+@Test(arguments: [false, true])
+func nioTransportClosesUndeliveredDescriptors(malformedMessage: Bool) async throws {
   let pair = try sockets()
+  let peer = WireDescriptor(taking: pair[1])
+  defer { peer.close() }
   let (transport, stream) = try await WaylandTransport.takingSocket(pair[0])
   var iterator = stream.makeAsyncIterator()
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  let owned = WireDescriptor(taking: fd)
-  defer { owned.close() }
-  let bytes: [UInt8] = [1]
-  let fds = [fd]
-  #expect(unsafe cwl_send(pair[1], bytes, bytes.count, fds, 1) == 1)
-  _ = close(pair[1])
-  do {
-    _ = try await iterator.next()
-    Issue.record("Expected EOF")
-  } catch { #expect(error as? WaylandError == .connection) }
+  let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
+  let reader = WireDescriptor(taking: pipe.readEnd.rawValue)
+  let writer = WireDescriptor(taking: pipe.writeEnd.rawValue)
+  defer {
+    reader.close()
+    writer.close()
+  }
+  let bytes: [UInt8] = malformedMessage ? Array(repeating: 0, count: 8) : [1]
+  let fds = [pipe.writeEnd.rawValue, pipe.writeEnd.rawValue]
+  #expect(unsafe cwl_send(pair[1], bytes, bytes.count, fds, fds.count) == bytes.count)
+  writer.close()
+  peer.close()
+  await #expect(throws: malformedMessage ? WaylandError.dispatch : WaylandError.connection) {
+    try await iterator.next()
+  }
   await transport.close()
+  #expect(await pipeReachesEOF(pipe.readEnd.rawValue))
 }
