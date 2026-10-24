@@ -40,7 +40,9 @@ public struct FontAtlas: Sendable {
       defer { cursor += 4 }
       return bytes.load(fromByteOffset: cursor, as: UInt32.self, .littleEndian)
     }
-    guard try word() == 0x4C54_4143, try word() == 1 else { throw .invalidAtlas }
+    guard try word() == 0x4C54_4143 else { throw .invalidAtlas }
+    let version = try word()
+    guard version == 1 || version == 2 else { throw .invalidAtlas }
     let width = Int(try word())
     let height = Int(try word())
     let count = Int(try word())
@@ -49,9 +51,16 @@ public struct FontAtlas: Sendable {
     else { throw .invalidAtlas }
     var indices: [Character: Int] = [:]
     for index in 0..<count {
-      guard let scalar = UnicodeScalar(try word()),
-        indices.updateValue(index, forKey: Character(String(scalar))) == nil
-      else { throw .invalidAtlas }
+      let scalarCount = version == 1 ? 1 : Int(try word())
+      guard scalarCount > 0, scalarCount <= 16 else { throw .invalidAtlas }
+      var text = ""
+      for _ in 0..<scalarCount {
+        guard let scalar = UnicodeScalar(try word()) else { throw .invalidAtlas }
+        text.unicodeScalars.append(scalar)
+      }
+      guard text.count == 1, indices.updateValue(index, forKey: Character(text)) == nil else {
+        throw .invalidAtlas
+      }
     }
     guard let fallback = indices["�"] else { throw .invalidAtlas }
     if let space = indices[" "] {
@@ -64,9 +73,7 @@ public struct FontAtlas: Sendable {
       }
     }
     for (character, index) in Array(indices) {
-      if character.unicodeScalars.count == 1 {
-        indices[Character(String(character) + "\u{FE0E}")] = index
-      }
+      indices[Character(String(character) + "\u{FE0E}")] = index
     }
     var levels: [MipLevel] = []
     var w = width

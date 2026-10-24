@@ -23,8 +23,8 @@ struct FontAtlasGenerator {
     let coverageURL = URL(fileURLWithPath: arguments[2])
     let outputURL = URL(fileURLWithPath: arguments[3])
 
-    let scalars = try loadCoverage(coverageURL)
-    var atlas = Atlas(scalars: scalars)
+    let sequences = try loadCoverage(coverageURL)
+    var atlas = Atlas(sequences: sequences)
 
     var library: FT_Library?
     guard unsafe FT_Init_FreeType(&library) == 0, let library = unsafe library else {
@@ -48,7 +48,20 @@ struct FontAtlasGenerator {
 
     var fontRendered = 0
     var symbolRendered = 0
-    for (index, scalar) in scalars.enumerated() {
+    for (index, sequence) in sequences.enumerated() {
+      let scalar = sequence[0]
+      if sequence.count > 1 {
+        var cell = try unsafe render(scalar, face: face)
+        for mark in sequence.dropFirst() {
+          guard UnicodeScalar(UInt32(mark))?.properties.canonicalCombiningClass == .above else {
+            throw GeneratorError.coverage("only above-base combining marks are supported")
+          }
+          cell = try unsafe render(mark, face: face, above: cell)
+        }
+        atlas.paste(cell, index: index)
+        fontRendered += 1
+        continue
+      }
       if (0x2800...0x28FF).contains(scalar) {
         atlas.paste(Self.brailleCell(scalar), index: index)
         continue
@@ -64,7 +77,7 @@ struct FontAtlasGenerator {
       fontRendered += 1
     }
     writeStderr(
-      "FontAtlasGenerator: \(scalars.count) cells (\(fontRendered) from typeface, \(symbolRendered) symbols, \(scalars.count - fontRendered - symbolRendered) braille)\n"
+      "FontAtlasGenerator: \(sequences.count) cells (\(fontRendered) from typeface, \(symbolRendered) symbols, \(sequences.count - fontRendered - symbolRendered) braille)\n"
     )
     try Data(atlas.encoded()).write(to: outputURL)
   }
@@ -73,26 +86,34 @@ struct FontAtlasGenerator {
     try? FileHandle.standardError.write(contentsOf: Data(text.utf8))
   }
 
-  static func loadCoverage(_ url: URL) throws -> [FT_ULong] {
+  static func loadCoverage(_ url: URL) throws -> [[FT_ULong]] {
     let text = String(decoding: try Data(contentsOf: url), as: UTF8.self)
-    var scalars: [FT_ULong] = []
-    var seen = Set<FT_ULong>()
+    var sequences: [[FT_ULong]] = []
+    var seen = Set<Character>()
     for line in text.split(whereSeparator: \.isNewline) {
-      guard let scalar = FT_ULong(line, radix: 16) else {
-        throw GeneratorError.coverage("invalid coverage line: \(line)")
+      var sequence: [FT_ULong] = []
+      var character = ""
+      for value in line.split(separator: " ") {
+        guard let scalar = UInt32(value, radix: 16), let unicode = UnicodeScalar(scalar) else {
+          throw GeneratorError.coverage("invalid coverage line: \(line)")
+        }
+        sequence.append(FT_ULong(scalar))
+        character.unicodeScalars.append(unicode)
       }
-      guard seen.insert(scalar).inserted else {
-        throw GeneratorError.coverage("duplicate coverage scalar U+\(String(scalar, radix: 16))")
+      guard sequence.count <= 16, character.count == 1, seen.insert(Character(character)).inserted else {
+        throw GeneratorError.coverage("invalid or duplicate coverage character: \(line)")
       }
-      scalars.append(scalar)
+      sequences.append(sequence)
     }
-    guard scalars.contains(0xFFFD) else {
+    guard sequences.contains([0xFFFD]) else {
       throw GeneratorError.coverage("coverage must contain U+FFFD")
     }
-    return scalars
+    return sequences
   }
 
-  static func render(_ scalar: FT_ULong, face: FT_Face) throws -> [UInt8] {
+  static func render(
+    _ scalar: FT_ULong, face: FT_Face, above base: [UInt8]? = nil
+  ) throws -> [UInt8] {
     let glyphIndex = unsafe FT_Get_Char_Index(face, scalar)
     guard glyphIndex != 0 else {
       throw GeneratorError.missingGlyph(scalar)
@@ -107,7 +128,7 @@ struct FontAtlasGenerator {
       throw GeneratorError.freeType("FT_Render_Glyph failed for U+\(String(scalar, radix: 16))")
     }
     let bitmap = unsafe slot.pointee.bitmap
-    var cell = [UInt8](repeating: 0, count: cellWidth * cellHeight)
+    var cell = base ?? [UInt8](repeating: 0, count: cellWidth * cellHeight)
     if unsafe bitmap.width == 0 || bitmap.rows == 0 { return cell }
     let pixelMode = unsafe bitmap.pixel_mode
     guard pixelMode == FT_PIXEL_MODE_GRAY.rawValue, let buffer = unsafe bitmap.buffer else {
@@ -116,10 +137,19 @@ struct FontAtlasGenerator {
     let width = Int(unsafe bitmap.width)
     let rows = Int(unsafe bitmap.rows)
     let pitch = Int(unsafe bitmap.pitch)
-    let left = Int(unsafe slot.pointee.bitmap_left)
-    let top = Int(unsafe slot.pointee.bitmap_top)
+    var left = Int(unsafe slot.pointee.bitmap_left)
+    var firstRow = baselineRow - Int(unsafe slot.pointee.bitmap_top)
+    if let base {
+      let ink = base.indices.filter { base[$0] > 0 }
+      guard let top = ink.first.map({ $0 / cellWidth }),
+        let minX = ink.map({ $0 % cellWidth }).min(),
+        let maxX = ink.map({ $0 % cellWidth }).max(), top - rows - 2 >= pad
+      else { throw GeneratorError.coverage("combining mark exceeds glyph bounds") }
+      left = (minX + maxX + 1 - width) / 2 - pad
+      firstRow = top - rows - 2
+    }
     for row in 0..<rows {
-      let y = baselineRow - top + row
+      let y = firstRow + row
       guard y >= pad, y < pad + glyphHeight else { continue }
       for column in 0..<width {
         let x = pad + left + column
@@ -157,15 +187,15 @@ enum GeneratorError: Error {
 }
 
 struct Atlas {
-  let scalars: [FT_ULong]
+  let sequences: [[FT_ULong]]
   let rows: Int
   var cells: [[UInt8]]
 
-  init(scalars: [FT_ULong]) {
-    self.scalars = scalars
-    self.rows = (scalars.count + FontAtlasGenerator.columns - 1) / FontAtlasGenerator.columns
+  init(sequences: [[FT_ULong]]) {
+    self.sequences = sequences
+    self.rows = (sequences.count + FontAtlasGenerator.columns - 1) / FontAtlasGenerator.columns
     self.cells = []
-    cells.reserveCapacity(scalars.count)
+    cells.reserveCapacity(sequences.count)
   }
 
   mutating func paste(_ cell: [UInt8], index: Int) {
@@ -183,11 +213,14 @@ struct Atlas {
       out.append(UInt8((value >> 24) & 0xFF))
     }
     out.append(contentsOf: [0x43, 0x41, 0x54, 0x4C])
-    append(1)
+    append(2)
     append(UInt32(width))
     append(UInt32(height))
-    append(UInt32(scalars.count))
-    for scalar in scalars { append(UInt32(scalar)) }
+    append(UInt32(sequences.count))
+    for sequence in sequences {
+      append(UInt32(sequence.count))
+      for scalar in sequence { append(UInt32(scalar)) }
+    }
     var level = [UInt8](repeating: 0, count: width * height)
     for (index, cell) in cells.enumerated() {
       let cellX = (index % FontAtlasGenerator.columns) * FontAtlasGenerator.cellWidth

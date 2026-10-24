@@ -3,7 +3,7 @@
 `FontAtlasPlugin` generates both atlases into `Bundle.module`; neither atlas is checked in.
 
 ```text
-NotoSansMono + SymbolGlyphs.swift + AtlasCoverage ─► FontAtlasGenerator ─► CATL v1
+NotoSansMono + SymbolGlyphs.swift + AtlasCoverage ─► FontAtlasGenerator ─► CATL v2
 NotoColorEmoji + EmojiSequences                  ─► EmojiAtlasGenerator ─► EATL v2
 
 Character ─► ASCII/text or default-emoji/VS16 lookup ─► DrawRect(glyphUV, colorGlyph)
@@ -17,12 +17,15 @@ Character ─► ASCII/text or default-emoji/VS16 lookup ─► DrawRect(glyphUV
 | Columns | 32 | 64 |
 | Cell / glyph box | 66×90 / 60×84 | 42×48 / 36×42 |
 | Padding | 3 | 3 |
-| Mapping | scalar → cell | UTF-8 extended grapheme → deduplicated cell |
+| Mapping | scalar sequence → cell | UTF-8 extended grapheme → deduplicated cell |
 | Missing glyph | U+FFFD, log once | fall through to text/replacement |
 
 ```swift
 // Both headers and records use little-endian UInt32.
-// CATL v1: magic, version, width, height, count, scalars[count], coverage mip chain.
+// CATL v1 (read-only): magic, version, width, height, count, scalars[count], coverage mip chain.
+// CATL v2: magic, version, width, height, count,
+//          (scalarCount, scalars[scalarCount])[count], coverage mip chain.
+// AtlasCoverage.txt: "00E9" → é; "00E9 0301" → é́ (above-base marks stacked at build time).
 // EATL v2: magic, version, width, height, count, cells,
 //          (utf8Count, utf8Bytes, cellIndex)[count], BGRA mip chain.
 // Mips: 2×2 box filter, (sum + 2) >> 2, dimensions max(1, previous / 2).
