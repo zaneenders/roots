@@ -55,6 +55,20 @@ Run from the `roots` directory:
 swift test
 ```
 
+`swift test` also compiles the external-client fixtures in
+`Tests/CompilerFixtureTests/Inputs`. Valid clients must compile, and `Reject*`
+fixtures must fail with their `// expected-error:` diagnostics. These checks run
+full compilation so ownership and lifetime errors are checked beyond type checking.
+Use the same Swift toolchain for building and running tests: the fixture runner
+uses `SWIFT_EXEC` when set, otherwise `swiftc` from `PATH`. Each compiler invocation
+has a 30-second timeout; compiler crashes and missing modules fail the test.
+
+To run only the compiler fixtures:
+
+```sh
+swift test --filter compilerFixturesEnforceThePublicAPIAndLifetimes
+```
+
 ## License
 
 Roots is licensed under [Apache-2.0](LICENSE). Copyright 2026 Zane Enders.

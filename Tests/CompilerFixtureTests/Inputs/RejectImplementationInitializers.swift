@@ -1,4 +1,6 @@
 import Roots
+// expected-error: '_Empty' initializer is inaccessible due to 'internal' protection level
+// expected-error: '_Pair<First, Next>' initializer is inaccessible due to 'internal' protection level
 
 @MainActor func invalid() {
   _ = _Empty()
