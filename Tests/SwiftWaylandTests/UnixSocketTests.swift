@@ -33,7 +33,7 @@ private func unixSocketPair(type: Int32 = Int32(SOCK_STREAM.rawValue)) throws ->
   #expect(throws: WaylandError.connection) { try UnixSocket.prepareConnected(unconnected) }
 }
 
-@Test(arguments: [0, 1, 3])
+@Test(arguments: [0, 1, 3, 253])
 func unixSocketReceivesDescriptorsFromCPeer(count: Int) throws {
   let pair = try unixSocketPair()
   defer { for fd in pair { _ = close(fd) } }
@@ -71,10 +71,36 @@ func unixSocketClosesDescriptorsOnControlTruncation(limit: Int) throws {
   #expect(unsafe poll(&status, 1, 1000) == 1 && status.revents & Int16(POLLHUP) != 0)
 }
 
+@Test(arguments: [0, 1, 3, 253])
+func unixSocketSendsDescriptorsToCPeer(count: Int) throws {
+  let pair = try unixSocketPair()
+  defer { for fd in pair { _ = close(fd) } }
+  let original = try FileDescriptor.open(FilePath("/dev/null"), .readOnly, options: .closeOnExec)
+  defer { try? original.close() }
+  let descriptors = Array(repeating: original.rawValue, count: count)
+  let bytes: [UInt8] = [42]
+  let sent = try bytes.withUnsafeBytes {
+    try unsafe UnixSocket.send(pair[0], bytes: $0, descriptors: descriptors)
+  }
+  try #require(sent == 1)
+  var buffer = [UInt8](repeating: 0, count: 16)
+  var receivedDescriptors = [Int32](repeating: -1, count: count)
+  var receivedCount = receivedDescriptors.count
+  let received = unsafe cwl_receive(
+    pair[1], &buffer, buffer.count, &receivedDescriptors, &receivedCount)
+  defer { for fd in receivedDescriptors.prefix(receivedCount) { _ = close(fd) } }
+  #expect(received == 1)
+  #expect(buffer[0] == 42)
+  #expect(receivedCount == count)
+  for fd in receivedDescriptors.prefix(receivedCount) {
+    #expect(fcntl(fd, F_GETFD) & FD_CLOEXEC != 0)
+  }
+}
+
 @Test func unixSocketRejectsTooManyOutboundDescriptorsWithoutSendingBytes() throws {
   let pair = try unixSocketPair()
   defer { for fd in pair { _ = close(fd) } }
-  let descriptors = [Int32](repeating: -1, count: UnixSocket.maximumDescriptors + 1)
+  let descriptors = [Int32](repeating: -1, count: 254)
   let bytes: [UInt8] = [42]
   #expect(throws: Errno.messageTooLong) {
     try bytes.withUnsafeBytes { try unsafe UnixSocket.send(pair[0], bytes: $0, descriptors: descriptors) }

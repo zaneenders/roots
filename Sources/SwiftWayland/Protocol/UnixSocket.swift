@@ -4,7 +4,8 @@ import SystemPackage
 
 // C only exposes the ancillary-data macros; Swift owns I/O and descriptor lifetimes.
 enum UnixSocket {
-  static let maximumDescriptors = 256
+  // Linux's SCM_MAX_FD limit for a single SCM_RIGHTS transfer.
+  static let maximumDescriptors = 253
 
   static func prepareConnected(_ socket: Int32) throws {
     var address = sockaddr_storage()
