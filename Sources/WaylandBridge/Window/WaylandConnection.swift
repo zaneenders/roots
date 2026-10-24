@@ -53,7 +53,10 @@ import SwiftWayland
       throw NativeWindowError.rendering
     }
     do {
-      try renderer.setup(input: input)
+      let device = try (!surfaceless ? connection.dmabufPreferences?.mainDevice : nil).map {
+        try DMABufDevice(device: $0)
+      }
+      try renderer.setup(input: input, device: device)
       if !surfaceless { renderer.enableDMABuf(connection: connection) }
       rendererReady = true
     } catch {
@@ -80,7 +83,8 @@ import SwiftWayland
   }
 
   func preparePresentation() throws -> Bool {
-    try renderer.preparePresentation(
+    try renderer.updateDMABufDevice(input: input, connection: connection)
+    return try renderer.preparePresentation(
       width: connection.input.width, height: connection.input.height,
       bufferScale: connection.input.bufferScale)
   }
@@ -140,10 +144,14 @@ import SwiftWayland
     else { return }
     do {
       if !popupRendererReady {
-        try renderer.setup(input: NativeWindowInput(snapshot), ownsDisplay: false)
+        try renderer.setup(
+          input: NativeWindowInput(snapshot), ownsDisplay: false, device: self.renderer.device)
         renderer.enableDMABuf(connection: connection, popup: true)
         popupRendererReady = true
       }
+      try renderer.updateDMABufDevice(
+        input: NativeWindowInput(snapshot), connection: connection, popup: true,
+        sharedDevice: self.renderer.device)
       try renderer.makeCurrent()
       guard
         try renderer.preparePresentation(

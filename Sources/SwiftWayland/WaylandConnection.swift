@@ -123,6 +123,7 @@ import NIOCore
         throw WaylandError.missingGlobals
       }
       surface = objects.create(compositor, 0, "wl_surface")
+      dmabuf.watch(surface: surface)
       if configuration.topBar {
         guard layerShell != 0 else { throw WaylandError.missingGlobals }
         layerSurface = objects.create(
@@ -143,7 +144,9 @@ import NIOCore
           toplevel, 8, [.int(configuration.minimumWidth), .int(configuration.minimumHeight)])
       }
       objects.request(surface, 6)
-      while !configured && running { try await waitForEvent() }
+      while running && (!configured || !dmabuf.ready(surface: surface)) {
+        try await waitForEvent()
+      }
       try Task.checkCancellation()
       guard running, lifecycle != .closed else { throw WaylandError.connection }
       lifecycle = .connected
@@ -404,6 +407,11 @@ import NIOCore
     case "wl_pointer": pointerEvent(opcode, a)
     case "wl_keyboard": keyboardEvent(opcode, a)
     case "wl_data_device", "wl_data_offer", "wl_data_source": clipboard.event(message)
+    case "zwp_linux_dmabuf_feedback_v1":
+      if try dmabuf.feedbackEvent(message) {
+        requestRedraw()
+        requestPopupRedraw()
+      }
     case "zwp_linux_dmabuf_v1", "zwp_linux_buffer_params_v1", "wl_buffer": dmabuf.event(message)
     default: break
     }
@@ -431,7 +439,9 @@ import NIOCore
       clipboard.manager = objects.bind(registry, name, interface, 1)
       managerName = name
     case "zwp_linux_dmabuf_v1" where dmabuf.factory == 0 && version >= 3:
-      dmabuf.factory = objects.bind(registry, name, interface, 3)
+      dmabuf.version = min(version, 4)
+      dmabuf.factory = objects.bind(registry, name, interface, dmabuf.version)
+      dmabuf.watch()
       dmabufName = name
     default: break
     }
@@ -450,7 +460,7 @@ import NIOCore
     }
     if dmabufName == name {
       objects.request(dmabuf.factory, 0)
-      dmabuf.factory = 0
+      dmabuf.close()
       dmabufName = nil
     }
     if managerName == name {
@@ -599,6 +609,7 @@ import NIOCore
       parent: xdgSurface, layerParent: layerSurface, seat: grab ? seat : 0, serial: pointerSerial,
       objects: objects,
       onDismiss: onDismiss)
+    if let popup { dmabuf.watch(surface: popup.surface) }
     pointerSerial = nil
     signal()
   }
@@ -612,6 +623,7 @@ import NIOCore
     pointerInPopup = false
     if keyboardInPopup { typing.leave(input: &child.input) }
     keyboardInPopup = false
+    dmabuf.unwatch(surface: child.surface)
     child.close()
     signal()
   }
@@ -633,6 +645,10 @@ import NIOCore
       on: popup.surface, objects: objects,
       continuously: continuously || (keyboardInPopup && typing.isRepeating))
   }
+  public var dmabufPreferences: WaylandDMABufFeedback? { dmabuf.preferences(surface: surface) }
+  public var popupDMABufPreferences: WaylandDMABufFeedback? {
+    popup.flatMap { dmabuf.preferences(surface: $0.surface) }
+  }
   public func importDMABuf(
     width: Int32, height: Int32, format: UInt32, modifier: UInt64,
     planes: borrowing Span<WaylandDMABufPlane>, popup: Bool = false
@@ -641,6 +657,7 @@ import NIOCore
     guard let frame = popup ? self.popup?.frame : frame else { throw WaylandError.connection }
     return try dmabuf.importBuffer(
       width: width, height: height, format: format, modifier: modifier, planes: planes,
+      surface: popup ? self.popup?.surface ?? 0 : surface,
       changed: { [weak self, weak frame] in
         guard let frame, frame.waitingForBuffer else { return }
         frame.waitingForBuffer = false

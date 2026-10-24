@@ -102,7 +102,7 @@ targets += [
     resources: [.copy("Protocols")], swiftSettings: swiftSettings),
   .target(
     name: "WaylandBridge",
-    dependencies: ["CEGLGLES", "Roots", "SwiftWayland"],
+    dependencies: ["CEGLGLES", "CGBM", "CDRM", "Roots", "SwiftWayland"],
     exclude: ["Shaders"],
     swiftSettings: swiftSettings, plugins: [.plugin(name: "ShaderSourcePlugin")]),
   .executableTarget(name: "ShaderSourceGenerator", swiftSettings: swiftSettings),
@@ -124,6 +124,8 @@ targets += [
       "WaylandBridge", "RootsCPU", "CEGLGLES", "SwiftWayland", "DesktopTestSupport"
     ],
     swiftSettings: swiftSettings),
+  .systemLibrary(name: "CGBM", pkgConfig: "gbm"),
+  .systemLibrary(name: "CDRM", pkgConfig: "libdrm"),
   .systemLibrary(name: "CEGLGLES")
 ]
 #elseif os(macOS)

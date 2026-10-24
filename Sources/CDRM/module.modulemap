@@ -1,0 +1,5 @@
+module CDRM [system] {
+  header "shim.h"
+  link "drm"
+  export *
+}

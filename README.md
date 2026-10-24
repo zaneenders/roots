@@ -35,7 +35,7 @@ Requires Swift 6.4.1 (`pkg-config` on Linux), plus:
 | Platform | System libraries |
 | --- | --- |
 | macOS | zlib (provided by the SDK) |
-| Linux / Wayland | Development headers and libraries for zlib, xkbcommon, EGL, and GLES 3 |
+| Linux / Wayland | Development headers and libraries for zlib, xkbcommon, EGL, GLES 3, GBM, and libdrm |
 
 ```sh
 git clone --recurse-submodules https://github.com/zaneenders/roots.git

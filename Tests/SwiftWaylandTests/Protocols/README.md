@@ -17,7 +17,7 @@ wl_compositor v3…6 → surfaces / transforms / integer buffer scale
 xdg_wm_base v1     → toplevel / child popup
 layer-shell v1    → passive top bar / child popup
 wl_seat v4…5      → pointer / keyboard
-linux-dmabuf v3   → format/modifier announcements + async create
+linux-dmabuf v3…4 → v3 announcements / v4 atomic device + format/modifier feedback
 idle-inhibit v1   → visible-parent surface inhibition; disconnect releases it
 ```
 
@@ -52,3 +52,22 @@ retires its pending callback; buffer wakeups weakly reference the originating
 `NativeWindow.requestRedraw()` targets the parent;
 `NativeWindow.requestPopupRedraw()` targets the popup. `WaylandPopup` runtime
 invalidation uses the latter, including observation and animation frames.
+
+```text
+v4 default feedback ──┐
+v4 surface feedback ──┴→ WaylandDMABufFeedback (published at done)
+                           ├── mainDevice → libdrm → render node → GBM / EGL
+                           └── tranches   → ARGB / ABGR + modifier candidates
+                                                ↓
+                                       GBM allocation → EGLImage → FBO
+                                                ↓
+                                       async wl_buffer create
+                                       ├── created → present → release
+                                       └── failed  → next candidate
+
+v3 announcements → surfaceless EGL texture → MESA export → async wl_buffer create
+```
+
+Feedback changes replace idle buffers; submitted buffers wait for release. Device
+changes recreate the renderer on the advertised GPU. Parent and popup share a
+`DMABufDevice` when their render nodes match. No `wl_shm` fallback is provided.

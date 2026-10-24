@@ -19,7 +19,8 @@ import NIOPosix
     get async throws {
       guard try await compositor else { return false }
       let globals = try await globals.value
-      return globals["zwp_linux_dmabuf_v1", default: 0] >= 3 && EGLAvailability.canExportDMABuf
+      return globals["zwp_linux_dmabuf_v1", default: 0] >= 4
+        || (globals["zwp_linux_dmabuf_v1", default: 0] >= 3 && EGLAvailability.canExportDMABuf)
     }
   }
 

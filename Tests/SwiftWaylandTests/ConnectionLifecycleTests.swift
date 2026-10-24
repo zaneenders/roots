@@ -33,9 +33,12 @@ private struct ConnectionPeer: Sendable {
 
   func send(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue] = []) throws {
     let packet = try WirePacket(object: object, opcode: opcode, arguments: arguments)
+    let fds = packet.descriptors.map { $0.borrow { $0 } }
     let count = socket.borrow { fd in
-      unsafe packet.bytes.withUnsafeReadableBytes {
-        unsafe cwl_send(fd, $0.baseAddress, $0.count, nil, 0)
+      unsafe packet.bytes.withUnsafeReadableBytes { bytes in
+        fds.withUnsafeBufferPointer {
+          unsafe cwl_send(fd, bytes.baseAddress, bytes.count, $0.baseAddress, $0.count)
+        }
       }
     }
     try #require(count == packet.bytes.readableBytes)
@@ -60,7 +63,7 @@ private struct ConnectionPeer: Sendable {
     }
   }
 
-  mutating func configure() throws {
+  mutating func configure(dmabufVersion: UInt32 = 3) throws {
     var compositor: UInt32 = 0
     while true {
       var request = try next()
@@ -70,9 +73,10 @@ private struct ConnectionPeer: Sendable {
         registry = try #require(first)
         for (name, interface): (UInt32, String) in [
           (1, "wl_compositor"), (2, "xdg_wm_base"), (3, "zwp_linux_dmabuf_v1"), (4, "wl_seat"),
-          (5, "zwp_idle_inhibit_manager_v1")
+          (5, "zwp_idle_inhibit_manager_v1"),
         ] {
-          try send(registry, 0, [.uint(name), .string(interface), .uint(6)])
+          try send(
+            registry, 0, [.uint(name), .string(interface), .uint(name == 3 ? dmabufVersion : 6)])
         }
       case (1, 0):
         let callback = try #require(first)
@@ -90,9 +94,13 @@ private struct ConnectionPeer: Sendable {
           try send(seat, 0, [.uint(1)])
         case 3:
           dmabuf = id
-          try send(dmabuf, 1, [.uint(0x3432_5241), .uint(0), .uint(0)])
+          if dmabufVersion == 3 {
+            try send(dmabuf, 1, [.uint(0x3432_5241), .uint(0), .uint(0)])
+          }
         default: break
         }
+      case (dmabuf, 2), (dmabuf, 3):
+        try sendFeedback(try #require(first), device: 123)
       case (seat, 0): pointer = try #require(first)
       case (compositor, 0): surface = try #require(first)
       case (shell, 2): xdgSurface = try #require(first)
@@ -104,6 +112,16 @@ private struct ConnectionPeer: Sendable {
       default: break
       }
     }
+  }
+
+  func sendFeedback(_ id: UInt32, device: UInt64) throws {
+    let (table, _) = try tableEvent([.init(format: 0x3432_5241, modifier: 0)], id: id)
+    try send(id, table.opcode, table.arguments)
+    try send(id, 2, [deviceBytes(device)])
+    for event in trancheEvents(device: device, indices: [0], id: id) {
+      try send(id, event.opcode, event.arguments)
+    }
+    try send(id, 0)
   }
 
   mutating func throughSync() throws -> (
@@ -131,12 +149,14 @@ private struct ConnectionPeer: Sendable {
   }
 }
 
-@MainActor private func connectedPeer() async throws -> (WaylandConnection, ConnectionPeer, Int32) {
+@MainActor private func connectedPeer(dmabufVersion: UInt32 = 3) async throws -> (
+  WaylandConnection, ConnectionPeer, Int32
+) {
   let (fd, peer) = try ConnectionPeer.pair()
   let server = blockingTestTask {
     var peer = peer
     do {
-      try peer.configure()
+      try peer.configure(dmabufVersion: dmabufVersion)
       return peer
     } catch {
       peer.socket.close()
@@ -447,7 +467,8 @@ private struct ConnectionPeer: Sendable {
   #expect(connection.running)
 }
 
-@Test @MainActor func inputBurstsWaitForFrameCallbackAndPreserveEdgesWithoutAnimating() async throws {
+@Test @MainActor func inputBurstsWaitForFrameCallbackAndPreserveEdgesWithoutAnimating() async throws
+{
   let (connection, initialPeer, _) = try await connectedPeer()
   defer { connection.cleanup() }
   var peer = initialPeer
@@ -779,4 +800,28 @@ private func frameCallback(
   try connection.receive(.init(object: callback, opcode: 0, arguments: [.uint(3)]))
   try connection.receive(.init(object: oldBuffer.id, opcode: 0, arguments: []))
   #expect(!connection.canRender && !connection.canRenderPopup)
+}
+
+@Test @MainActor func connectionNegotiatesV4FeedbackBeforeReturningAndWatchesPopup() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer(dmabufVersion: 4)
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  #expect(connection.dmabufPreferences?.mainDevice == 123)
+  #expect(connection.dmabufPreferences?.supports(format: 0x3432_5241, modifier: 0) == true)
+  try connection.presentPopup(
+    configuration: .init(x: 0, y: 0, anchorWidth: 10, anchorHeight: 10, width: 40, height: 30),
+    grab: false)
+  let requests = try await drain(connection, &peer)
+  let watch = try #require(requests.first { $0.id == peer.dmabuf && $0.opcode == 3 })
+  let feedback: UInt32 = try #require(
+    watch.body.getInteger(at: watch.body.readerIndex, endianness: .host))
+  try peer.sendFeedback(feedback, device: 456)
+  for _ in 0..<100 where connection.popupDMABufPreferences?.mainDevice != 456 {
+    try await Task.sleep(for: .milliseconds(1))
+  }
+  #expect(connection.popupDMABufPreferences?.mainDevice == 456)
+  #expect(connection.dmabufPreferences?.mainDevice == 123)
+  connection.dismissPopup()
+  let destroyed = try await drain(connection, &peer)
+  #expect(destroyed.contains { $0.id == feedback && $0.opcode == 0 })
 }

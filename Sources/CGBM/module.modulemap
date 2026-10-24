@@ -1,0 +1,5 @@
+module CGBM [system] {
+  header "shim.h"
+  link "gbm"
+  export *
+}

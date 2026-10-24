@@ -67,17 +67,52 @@ public struct WaylandDMABufPlane: Sendable {
 
 @MainActor final class WaylandDMABuf {
   var factory: UInt32 = 0
+  var version: UInt32 = 3
+  private var feedback: [UInt32: DMABufFeedback] = [:]
   private var formats: [UInt32: Set<UInt64>] = [:]
   private var buffers: [WaylandDMABufBuffer] = []
   private let objects: WaylandObjects
   init(objects: WaylandObjects) { self.objects = objects }
 
+  func watch(surface: UInt32 = 0) {
+    guard factory != 0, version >= 4, feedback[surface] == nil else { return }
+    let id = objects.create(
+      factory, surface == 0 ? 2 : 3, "zwp_linux_dmabuf_feedback_v1",
+      surface == 0 ? [] : [.uint(surface)])
+    feedback[surface] = DMABufFeedback(id: id)
+  }
+  func unwatch(surface: UInt32) {
+    if let removed = feedback.removeValue(forKey: surface) { objects.request(removed.id, 0) }
+  }
+  func preferences(surface: UInt32 = 0) -> WaylandDMABufFeedback? {
+    guard factory != 0 else { return nil }
+    if version >= 4 { return feedback[surface]?.current ?? feedback[0]?.current }
+    return WaylandDMABufFeedback(
+      mainDevice: nil,
+      tranches: [
+        .init(
+          device: nil, flags: 0,
+          formats: formats.flatMap { format, modifiers in
+            modifiers.sorted().map { .init(format: format, modifier: $0) }
+          }.sorted { $0.format < $1.format })
+      ])
+  }
+  func ready(surface: UInt32) -> Bool {
+    factory == 0 || version < 4 || feedback[surface]?.current != nil
+  }
+  func feedbackEvent(_ message: WireMessage) throws -> Bool {
+    guard let target = feedback.values.first(where: { $0.id == message.object }) else {
+      return false
+    }
+    return try target.event(message)
+  }
   func modifier(format: UInt32, high: UInt32, low: UInt32) {
     _ = formats[format, default: []].insert(UInt64(high) << 32 | UInt64(low))
   }
   func importBuffer(
     width: Int32, height: Int32, format: UInt32, modifier: UInt64,
-    planes: borrowing Span<WaylandDMABufPlane>, changed: @escaping @MainActor () -> Void
+    planes: borrowing Span<WaylandDMABufPlane>, surface: UInt32 = 0,
+    changed: @escaping @MainActor () -> Void
   ) throws -> WaylandDMABufBuffer {
     guard width > 0, height > 0, !planes.isEmpty, planes.count <= 4 else {
       throw WaylandError.invalidConfiguration
@@ -85,7 +120,9 @@ public struct WaylandDMABufPlane: Sendable {
     for plane in planes where plane.descriptor < 0 || plane.stride == 0 {
       throw WaylandError.invalidConfiguration
     }
-    guard factory != 0, formats[format]?.contains(modifier) == true else {
+    guard factory != 0,
+      preferences(surface: surface)?.supports(format: format, modifier: modifier) == true
+    else {
       throw WaylandError.missingGlobals
     }
     var fds: [WireDescriptor] = []
@@ -98,7 +135,7 @@ public struct WaylandDMABufPlane: Sendable {
         [
           .fd(fds[index]), .uint(UInt32(index)), .uint(planes[index].offset),
           .uint(planes[index].stride), .uint(UInt32(truncatingIfNeeded: modifier >> 32)),
-          .uint(UInt32(truncatingIfNeeded: modifier))
+          .uint(UInt32(truncatingIfNeeded: modifier)),
         ])
     }
     objects.request(params, 2, [.int(width), .int(height), .uint(format), .uint(0)])
@@ -127,6 +164,7 @@ public struct WaylandDMABufPlane: Sendable {
   func close() {
     for buffer in buffers { buffer.close() }
     buffers.removeAll()
+    for surface in Array(feedback.keys) { unwatch(surface: surface) }
     formats.removeAll()
     factory = 0
   }
