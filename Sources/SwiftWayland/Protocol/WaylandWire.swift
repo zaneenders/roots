@@ -92,8 +92,6 @@ struct WireDecoder {
   private var bytes = ByteBufferAllocator().buffer(capacity: 4096)
   private var descriptors: [WireDescriptor] = []
   private var descriptorIndex = 0
-  var interfaces: [UInt32: String] = [1: "wl_display"]
-  var pendingBytes: Int { bytes.readableBytes }
 
   mutating func append(_ incoming: inout ByteBuffer, descriptors: [WireDescriptor]) throws {
     guard bytes.readableBytes + incoming.readableBytes <= 1024 * 1024,
@@ -103,7 +101,7 @@ struct WireDecoder {
     self.descriptors.append(contentsOf: descriptors)
   }
 
-  mutating func next() throws -> WireMessage? {
+  mutating func next(interfaces: [UInt32: String] = [1: "wl_display"]) throws -> WireMessage? {
     let start = bytes.readerIndex
     guard let object: UInt32 = bytes.getInteger(at: start, endianness: .host),
       let header: UInt32 = bytes.getInteger(at: start + 4, endianness: .host)

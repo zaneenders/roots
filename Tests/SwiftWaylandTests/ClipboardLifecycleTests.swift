@@ -13,7 +13,7 @@ import Testing
   clipboard.focused = true
   clipboard.serial = 7
   clipboard.attach(seat: seat)
-  let (requests, _) = try objects.takeRequests()
+  let requests = try objects.takeRequests()
   let packet = try #require(requests.first)
   let device: UInt32 = try #require(packet.bytes.getInteger(at: 8, endianness: .host))
   return (clipboard, objects, device)
@@ -33,12 +33,12 @@ import Testing
       object: device, opcode: 1, arguments: [.uint(1), .uint(9), .int(0), .int(0), .uint(drag)]))
   clipboard.event(.init(object: device, opcode: 5, arguments: [.uint(first)]))
   clipboard.event(.init(object: device, opcode: 5, arguments: [.uint(second)]))
-  let (selectionRequests, _) = try objects.takeRequests()
+  let selectionRequests = try objects.takeRequests()
   #expect(selectionRequests.count == 1)
   #expect(selectionRequests[0].bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == first)
   clipboard.close()
   clipboard.close()
-  let (closed, _) = try objects.takeRequests()
+  let closed = try objects.takeRequests()
   #expect(closed.count == 2)
 }
 
@@ -54,7 +54,7 @@ import Testing
   }
   let descriptorValue = reader.descriptor
   let readDescriptor = try #require(descriptorValue)
-  let (requests, _) = try objects.takeRequests()
+  let requests = try objects.takeRequests()
   let descriptor = try #require(requests.first?.descriptors.first)
   #expect(descriptor.borrow { fcntl($0, F_GETFD) & FD_CLOEXEC != 0 })
   #expect(fcntl(readDescriptor.rawValue, F_GETFD) & FD_CLOEXEC != 0)
@@ -74,7 +74,7 @@ import Testing
     Issue.record("Missing clipboard reader")
     return
   }
-  let (requests, _) = try objects.takeRequests()
+  let requests = try objects.takeRequests()
   let descriptor = try #require(requests.first?.descriptors.first)
   let bytes = Array(String(repeating: "hello café 🙂\n", count: 200_000).utf8)
   // Use ordinary blocking writes on a dedicated thread, not ClipboardIO's
@@ -95,7 +95,7 @@ import Testing
   let (clipboard, objects, _) = try clipboardFixture()
   let text = "hello café 🙂"
   #expect(clipboard.write(text))
-  let (requests, _) = try objects.takeRequests()
+  let requests = try objects.takeRequests()
   let source: UInt32 = try #require(requests.first?.bytes.getInteger(at: 8, endianness: .host))
   let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
   clipboard.event(
@@ -116,7 +116,7 @@ import Testing
   let offer: UInt32 = 0xff00_0000
   clipboard.event(.init(object: device, opcode: 0, arguments: [.uint(offer)]))
   #expect(objects.interfaces[offer] == "wl_data_offer" && !objects.isLive(offer))
-  let requests = try objects.takeRequests().0
+  let requests = try objects.takeRequests()
   #expect(requests.count == 1)
   #expect(requests.first?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == offer)
 }

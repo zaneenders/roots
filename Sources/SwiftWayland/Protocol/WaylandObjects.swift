@@ -3,8 +3,9 @@
   private var released: [UInt32] = []
   private var retired: Set<UInt32> = []
   private(set) var interfaces: [UInt32: String] = [1: "wl_display"]
-  private var registrations: [UInt32: String] = [:]
   private var requests: [WirePacket] = []
+  private var queuedBytes = 0
+  private var queuedDescriptors = 0
   private var failure: (any Error)?
   var requestQueued: (@MainActor () -> Void)?
 
@@ -22,7 +23,6 @@
   func register(_ id: UInt32, _ interface: String) {
     retired.remove(id)
     interfaces[id] = interface
-    registrations[id] = interface
   }
   func isLive(_ id: UInt32) -> Bool { interfaces[id] != nil && !retired.contains(id) }
   func retire(_ id: UInt32) {
@@ -34,7 +34,7 @@
     released.append(id)
   }
   func request(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue] = []) {
-    guard object != 0, !retired.contains(object) else { return }
+    guard failure == nil, object != 0, !retired.contains(object) else { return }
     do {
       guard let interface = interfaces[object], let signatures = WireSchema.requests[interface],
         Int(opcode) < signatures.count
@@ -49,7 +49,13 @@
         }
       }.joined()
       guard actual == signatures[Int(opcode)] else { throw WaylandError.invalidConfiguration }
-      requests.append(try WirePacket(object: object, opcode: opcode, arguments: arguments))
+      let packet = try WirePacket(object: object, opcode: opcode, arguments: arguments)
+      guard packet.bytes.readableBytes <= WireBatch.maximumBytes - queuedBytes,
+        packet.descriptors.count <= WireBatch.maximumDescriptors - queuedDescriptors
+      else { throw WaylandError.dispatch }
+      queuedBytes += packet.bytes.readableBytes
+      queuedDescriptors += packet.descriptors.count
+      requests.append(packet)
       if WireSchema.destructors[interface] == opcode { retire(object) }
     } catch { failure = error }
     requestQueued?()
@@ -66,16 +72,18 @@
     request(registry, 0, [.uint(name), .string(interface), .uint(version), .uint(id)])
     return id
   }
-  func takeRequests() throws -> ([WirePacket], [UInt32: String]) {
+  func takeRequests() throws -> [WirePacket] {
     if let failure { throw failure }
-    let result = (requests, registrations)
+    let result = requests
     requests.removeAll(keepingCapacity: true)
-    registrations.removeAll(keepingCapacity: true)
+    queuedBytes = 0
+    queuedDescriptors = 0
     return result
   }
   func discard() {
     requests.removeAll()
-    registrations.removeAll()
+    queuedBytes = 0
+    queuedDescriptors = 0
     requestQueued = nil
   }
 }

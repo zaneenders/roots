@@ -551,3 +551,73 @@ private struct ConnectionPeer: Sendable {
   connection.cleanup()
   #expect(!connection.setIdleInhibited(false))
 }
+
+@Test(.timeLimit(.minutes(1))) @MainActor func awaitableCloseClosesSocketBeforeReturning()
+  async throws
+{
+  let (connection, peer, _) = try await connectedPeer()
+  await connection.close()
+  await connection.close()
+  #expect(!connection.running && !connection.configured)
+  try expectPeerEOF(peer)
+  peer.socket.close()
+}
+
+@Test(.timeLimit(.minutes(1))) @MainActor
+func connectionDecodesServerCreatedBufferAndReleaseInOneChunk() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
+  try #require(fd >= 0)
+  defer { _ = close(fd) }
+  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 400)]
+  let buffer = try connection.importDMABuf(
+    width: 100, height: 80, format: 0x3432_5241, modifier: 0, planes: planes.span)
+  var peer = initialPeer
+  let requests = try await drain(connection, &peer)
+  let create = try #require(requests.first { $0.id == peer.dmabuf && $0.opcode == 1 })
+  let params: UInt32 = try #require(
+    create.body.getInteger(at: create.body.readerIndex, endianness: .host))
+  let id: UInt32 = 0xff00_0000
+  var bytes = try WirePacket(object: params, opcode: 0, arguments: [.uint(id)]).bytes
+  bytes.writeImmutableBuffer(try WirePacket(object: id, opcode: 0, arguments: []).bytes)
+  var chunk = WireChunk(bytes: bytes, descriptors: [])
+  try connection.receive(&chunk)
+  #expect(buffer.state == .available)
+  await connection.close()
+  await connection.close()
+}
+
+@Test(.timeLimit(.minutes(1))) @MainActor func closeUnblocksBackpressuredConnectionWriter()
+  async throws
+{
+  let (connection, peer, fd) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var size: Int32 = 4096
+  try #require(
+    unsafe setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &size, socklen_t(MemoryLayout<Int32>.size)) == 0)
+  for _ in 0..<10_000 {
+    try connection.receive(.init(object: peer.xdgSurface, opcode: 0, arguments: [.uint(2)]))
+  }
+  var writable = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+  for _ in 0..<100 where unsafe poll(&writable, 1, 0) != 0 {
+    try await Task.sleep(for: .milliseconds(1))
+  }
+  try #require(unsafe poll(&writable, 1, 0) == 0)
+  // Queue another batch while the first remains blocked; drain gives the writer a turn.
+  try await connection.drain(timeout: .milliseconds(10))
+  await connection.close()
+  #expect(!connection.running)
+  try expectPeerEOF(peer)
+  peer.socket.close()
+}
+
+private func expectPeerEOF(_ peer: ConnectionPeer) throws {
+  // The numeric client FD may already have been reused by another concurrent test.
+  var bytes = [UInt8](repeating: 0, count: 4096)
+  var count = 1
+  while count > 0 {
+    count = peer.socket.borrow { unsafe recv($0, &bytes, bytes.count, Int32(MSG_DONTWAIT)) }
+  }
+  #expect(count == 0)
+}

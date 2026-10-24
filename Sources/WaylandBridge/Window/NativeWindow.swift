@@ -94,29 +94,35 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     try Task.checkCancellation()
     let host = try await startAsync(configuration: configuration, surfaceless: surfaceless)
     defer { stop(host) }
-    let started = ContinuousClock.now
-    var frameCount: Int32 = 0
-    while host.running {
-      try Task.checkCancellation()
-      if surfaceless || host.canRender {
-        let finished = try renderFrame(
-          host, surfaceless: surfaceless, started: started, frameCount: &frameCount, frame: frame)
-        try host.renderer.releaseCurrent()
-        if finished { break }
-      }
-      if surfaceless {
-        await Task.yield()
-      } else {
-        do {
-          try await host.dispatchAsync()
-        } catch is CancellationError {
-          try Task.checkCancellation()
-          if host.running { throw CancellationError() }
+    do {
+      let started = ContinuousClock.now
+      var frameCount: Int32 = 0
+      while host.running {
+        try Task.checkCancellation()
+        if surfaceless || host.canRender {
+          let finished = try renderFrame(
+            host, surfaceless: surfaceless, started: started, frameCount: &frameCount, frame: frame)
+          try host.renderer.releaseCurrent()
+          if finished { break }
+        }
+        if surfaceless {
+          await Task.yield()
+        } else {
+          do {
+            try await host.dispatchAsync()
+          } catch is CancellationError {
+            try Task.checkCancellation()
+            if host.running { throw CancellationError() }
+          }
         }
       }
+      if !surfaceless { try await host.drain() }
+      logFrames(host, frameCount: frameCount, surfaceless: surfaceless)
+    } catch {
+      await host.close()
+      throw error
     }
-    if !surfaceless { try await host.drain() }
-    logFrames(host, frameCount: frameCount, surfaceless: surfaceless)
+    await host.close()
   }
 
   private static func start(configuration: NativeWindowConfiguration, surfaceless: Bool) throws
@@ -154,6 +160,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
       if host.running { try host.setupRenderer(surfaceless: false) }
       return host
     } catch {
+      await host.close()
       stop(host)
       throw error
     }

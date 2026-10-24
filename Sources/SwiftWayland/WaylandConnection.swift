@@ -6,9 +6,10 @@ import NIOCore
   private enum Lifecycle { case idle, connecting, connected, closed }
   private var lifecycle = Lifecycle.idle
   private let objects = WaylandObjects()
-  private var transport: WaylandTransport?
-  private var reader: Task<Void, Never>?
-  private var sender: Task<Void, Never>?
+  private var io: Task<Void, Never>?
+  private var writes: AsyncStream<Void>.Continuation?
+  private var clipboardShutdown: Task<Void, Never>?
+  private var decoder = WireDecoder()
   public private(set) var protocolError: String?
   private var terminalError: (any Error)?
   private var dispatching = false
@@ -86,7 +87,6 @@ import NIOCore
     do {
       try Task.checkCancellation()
       let transport: WaylandTransport
-      let stream: AsyncThrowingStream<WireMessage, any Error>
       if explicitPath == nil, let inherited = environment["WAYLAND_SOCKET"] {
         guard !inherited.isEmpty, inherited.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }),
           let fd = Int32(inherited)
@@ -97,7 +97,7 @@ import NIOCore
         guard flags >= 0, fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0 else {
           throw WaylandError.connection
         }
-        (transport, stream) = try await WaylandTransport.takingSocket(socket.take())
+        transport = try await WaylandTransport.takingSocket(socket.take())
       } else {
         let name = explicitPath ?? environment["WAYLAND_DISPLAY"] ?? "wayland-0"
         let path: String
@@ -109,15 +109,13 @@ import NIOCore
           }
           path = directory + "/" + name
         }
-        (transport, stream) = try await WaylandTransport.connect(path: path)
+        transport = try await WaylandTransport.connect(path: path)
       }
       guard lifecycle != .closed else {
-        await transport.close()
+        try? await transport.channel.close().get()
         throw CancellationError()
       }
-      self.transport = transport
-      installReader(stream, transport: transport)
-      objects.requestQueued = { [weak self] in self?.scheduleSend() }
+      installIO(transport)
       registry = objects.create(1, 1, "wl_registry")
       try await synchronize()
       try await synchronize()
@@ -145,58 +143,97 @@ import NIOCore
           toplevel, 8, [.int(configuration.minimumWidth), .int(configuration.minimumHeight)])
       }
       objects.request(surface, 6)
-      try await flushRequests()
       while !configured && running { try await waitForEvent() }
       try Task.checkCancellation()
       guard running, lifecycle != .closed else { throw WaylandError.connection }
       lifecycle = .connected
     } catch {
-      cleanup()
+      await close()
       throw error
     }
   }
 
-  private func installReader(
-    _ stream: AsyncThrowingStream<WireMessage, any Error>, transport: WaylandTransport
-  ) {
-    reader = Task { @MainActor [weak self] in
+  private func installIO(_ transport: WaylandTransport) {
+    let (writes, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+    self.writes = signal
+    objects.requestQueued = { signal.yield(()) }
+    let receive: @MainActor @Sendable (inout WireChunk) throws -> Void = { [weak self] chunk in
+      try self?.receive(&chunk)
+    }
+    let requests: @MainActor @Sendable () throws -> [WirePacket] = { [weak self] in
+      try self?.objects.takeRequests() ?? []
+    }
+    io = Task { @MainActor [weak self] in
       do {
-        for try await message in stream {
-          guard let self, self.lifecycle != .closed else { return }
-          try self.receive(message)
-          self.signal()
-          try await self.flushRequests()
-          try await transport.acknowledged(objects: [:])
+        try await transport.executeThenClose { inbound, outbound in
+          try await withTaskCancellationHandler {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+              group.addTask { try await Self.read(inbound, receive: receive) }
+              group.addTask {
+                do {
+                  try await Self.write(writes, outbound: outbound, requests: requests)
+                } catch {
+                  // Let the reader drain buffered events before reporting a write failure.
+                  transport.channel.pipeline.fireErrorCaught(error)
+                  transport.channel.close(promise: nil)
+                }
+              }
+              defer {
+                transport.channel.close(promise: nil)
+                group.cancelAll()
+              }
+              while try await group.next() != nil {}
+            }
+          } onCancel: {
+            // A write waiting for writability must be unblocked before joining the writer.
+            transport.channel.close(promise: nil)
+          }
         }
       } catch {
         guard let self, self.lifecycle != .closed else { return }
         self.terminalError = error
         self.running = false
+        self.decoder = WireDecoder()
+        self.objects.discard()
         self.signal()
       }
     }
   }
-  private func scheduleSend() {
-    guard sender == nil, transport != nil, lifecycle != .closed else { return }
-    sender = Task { @MainActor [weak self] in
-      guard let self else { return }
-      self.sender = nil
-      do { try await self.flushRequests() } catch {
-        self.terminalError = error
-        self.running = false
-        self.signal()
-      }
+
+  private static func read(
+    _ inbound: NIOAsyncChannelInboundStream<WireChunk>,
+    receive: @MainActor @Sendable (inout WireChunk) throws -> Void
+  ) async throws {
+    for try await var chunk in inbound {
+      try Task.checkCancellation()
+      try receive(&chunk)
+    }
+    throw WaylandError.connection
+  }
+
+  private static func write(
+    _ writes: AsyncStream<Void>, outbound: NIOAsyncChannelOutboundWriter<WireBatch>,
+    requests: @MainActor @Sendable () throws -> [WirePacket]
+  ) async throws {
+    for await _ in writes {
+      try Task.checkCancellation()
+      let batch = try requests()
+      if !batch.isEmpty { try await outbound.write(WireBatch(batch)) }
     }
   }
-  private func flushRequests() async throws {
-    guard let transport else { throw WaylandError.connection }
-    let (requests, registrations) = try objects.takeRequests()
-    try await transport.send(requests, objects: registrations)
+
+  func receive(_ chunk: inout WireChunk) throws {
+    guard lifecycle != .closed else { return }
+    try decoder.append(&chunk.bytes, descriptors: chunk.descriptors)
+    while let message = try decoder.next(interfaces: objects.interfaces) {
+      try receive(message)
+    }
+    signal()
   }
+
   private func synchronize() async throws {
     let callback = objects.create(1, 0, "wl_callback")
     callbacks.insert(callback)
-    try await flushRequests()
     while callbacks.contains(callback), running { try await waitForEvent() }
   }
   private func signal() {
@@ -246,7 +283,6 @@ import NIOCore
       deadline.cancel()
       if callbacks.remove(callback) != nil { objects.retire(callback) }
     }
-    try await flushRequests()
     while callbacks.contains(callback), !expired { try await waitForEvent() }
     try Task.checkCancellation()
     if let terminalError { throw terminalError }
@@ -629,30 +665,33 @@ import NIOCore
     return true
   }
 
+  public func close() async {
+    cleanup()
+    await io?.value
+    await clipboardShutdown?.value
+  }
+
   public func cleanup() {
     guard lifecycle != .closed else { return }
     lifecycle = .closed
     running = false
     configured = false
     frameReady = false
-    reader?.cancel()
-    reader = nil
-    sender?.cancel()
-    sender = nil
+    io?.cancel()
+    writes?.finish()
+    writes = nil
+    decoder = WireDecoder()
     dismissPopup()
     dmabuf.close()
     clipboard.close()
     let io = clipboard.io
-    Task { await io.shutdown() }
+    clipboardShutdown = Task { await io.shutdown() }
     typing.leave(input: &input)
     input.leavePointer()
     idleInhibitor = 0
     idleManager = 0
     idleManagerName = nil
     objects.discard()
-    let transport = self.transport
-    self.transport = nil
-    if let transport { Task { await transport.close() } }
     signal()
   }
 }

@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/zaneenders/swift-nio.git",
       "state" : {
-        "branch" : "shape-tree/unix-fd-messages",
-        "revision" : "79e0e576d485abe8aa2fdda45b83ce85dbbbbc8b"
+        "branch" : "zane-add-cmsghdr",
+        "revision" : "b0bdd83052c333e76369cfe02c4c8d8d067e3a54"
       }
     },
     {

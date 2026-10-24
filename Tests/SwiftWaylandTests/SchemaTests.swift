@@ -84,7 +84,8 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
     serial: nil,
     objects: objects, onDismiss: {})
   defer { popup.close() }
-  let (requests, registrations) = try objects.takeRequests()
+  let requests = try objects.takeRequests()
+  let registrations = objects.interfaces
   let positioner = try #require(registrations.first { $0.value == "xdg_positioner" }?.key)
   for (opcode, enumeration, value): (UInt32, String, String) in [
     (3, "anchor", "bottom_right"), (4, "gravity", "bottom_left")
