@@ -1,7 +1,6 @@
 #!/usr/bin/env swift
 import Foundation
 import Glibc
-import Synchronization
 
 let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
 
@@ -21,10 +20,12 @@ struct RunFailure: Error, CustomStringConvertible {
   throw RunFailure(description: "missing required command: \(name)")
 }
 
-func printLog(_ path: URL, to output: FileHandle = .standardOutput) {
-  guard let input = try? FileHandle(forReadingFrom: path) else { return }
-  defer { try? input.close() }
+func forwardLog(_ input: FileHandle, to output: FileHandle = .standardOutput) {
   while let data = try? input.read(upToCount: 16_384), !data.isEmpty { output.write(data) }
+}
+
+func report(_ message: String) {
+  FileHandle.standardError.write(Data((message + "\n").utf8))
 }
 
 @MainActor func send(_ signal: Int32, to process: Process) {
@@ -65,10 +66,16 @@ func printLog(_ path: URL, to output: FileHandle = .standardOutput) {
   return process
 }
 
-@MainActor func wait(_ process: Process, timeout: Duration) async throws {
+@MainActor func wait(_ process: Process, timeout: Duration, log: URL) async throws {
+  let input = try FileHandle(forReadingFrom: log)
+  defer {
+    forwardLog(input)
+    try? input.close()
+  }
   let deadline = ContinuousClock.now.advanced(by: timeout)
   do {
     while process.isRunning {
+      forwardLog(input)
       try Task.checkCancellation()
       guard ContinuousClock.now < deadline else {
         throw RunFailure(description: "command timed out", status: 124)
@@ -88,133 +95,51 @@ func printLog(_ path: URL, to output: FileHandle = .standardOutput) {
   }
 }
 
-@MainActor func run(_ mode: String) async throws {
+@MainActor func run() async throws {
   var environment = ProcessInfo.processInfo.environment
   let swift = try executable("swift", environment: environment)
-  let binary = mode == "current" ? nil : try executable(mode, environment: environment)
-  if mode == "sway" { _ = try executable("swaymsg", environment: environment) }
   guard let seconds = Double(environment["ROOTS_TEST_TIMEOUT"] ?? "180"),
     seconds.isFinite, seconds > 0
   else { throw RunFailure(description: "ROOTS_TEST_TIMEOUT must be a positive number of seconds") }
 
   let artifacts = root.appendingPathComponent(
-    ".build/compositor-tests/\(mode).\(UUID().uuidString)")
+    ".build/compositor-tests/current.\(UUID().uuidString)")
   try FileManager.default.createDirectory(at: artifacts, withIntermediateDirectories: true)
-  var runtime: URL?
-  var compositor: Process?
-  let compositorLog = artifacts.appendingPathComponent("compositor.log")
-  let testsLog = artifacts.appendingPathComponent("tests.log")
-  defer {
-    if let runtime { try? FileManager.default.removeItem(at: runtime) }
-    print("Compositor test artifacts: \(artifacts.path)")
-  }
+  report(
+    "Testing current Wayland session (\(environment["XDG_CURRENT_DESKTOP"] ?? "unknown compositor")); logs: \(artifacts.path)"
+  )
+  defer { report("Compositor test artifacts: \(artifacts.path)") }
 
-  do {
-    // Never inherit an activation socket, including in current-session mode.
-    environment.removeValue(forKey: "WAYLAND_SOCKET")
-    if let binary {
-      let directory = URL(fileURLWithPath: "/tmp/roots-wayland.\(UUID().uuidString)")
-      try FileManager.default.createDirectory(
-        at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-      runtime = directory
-      environment["XDG_RUNTIME_DIR"] = directory.path
-      for key in ["WAYLAND_DISPLAY", "DISPLAY", "SWAYSOCK", "HYPRLAND_INSTANCE_SIGNATURE"] {
-        environment.removeValue(forKey: key)
-      }
-      let renderer = environment["ROOTS_TEST_RENDERER"] ?? "pixman"
-      let arguments: [String]
-      if mode == "sway" {
-        let config = artifacts.appendingPathComponent("sway.conf")
-        try "xwayland disable\noutput * resolution 800x600 scale 1\nseat * hide_cursor 1000\n"
-          .write(to: config, atomically: true, encoding: .utf8)
-        environment["WLR_BACKENDS"] = "headless"
-        environment["WLR_HEADLESS_OUTPUTS"] = "1"
-        environment["WLR_LIBINPUT_NO_DEVICES"] = "1"
-        environment["WLR_RENDERER"] = renderer
-        arguments = ["--unsupported-gpu", "--config", config.path]
-      } else {
-        let versionLog = artifacts.appendingPathComponent("version.log")
-        let version = try launch(
-          binary, arguments: ["--version"], environment: environment, log: versionLog)
-        try await wait(version, timeout: .seconds(5))
-        let text = try String(contentsOf: versionLog, encoding: .utf8)
-        guard let major = text.split(whereSeparator: { !$0.isNumber }).first.flatMap({ Int($0) })
-        else { throw RunFailure(description: "cannot parse Weston version: \(text)") }
-        // Weston renamed the headless renderer options in version 12.
-        let option =
-          major >= 12
-          ? "--renderer=\(renderer)"
-          : (renderer == "pixman" ? "--use-pixman" : "--use-gl")
-        arguments = [
-          "--backend=headless-backend.so", option, "--shell=kiosk-shell.so", "--no-config",
-          "--socket=wayland-roots-test", "--idle-time=0", "--width=800", "--height=600",
-        ]
-      }
-      let process = try launch(
-        binary, arguments: arguments, environment: environment, log: compositorLog)
-      compositor = process
-      let deadline = ContinuousClock.now.advanced(by: .seconds(10))
-      while environment["WAYLAND_DISPLAY"] == nil {
-        try Task.checkCancellation()
-        guard process.isRunning else {
-          throw RunFailure(description: "\(mode) exited before opening a Wayland socket")
-        }
-        guard ContinuousClock.now < deadline else {
-          throw RunFailure(description: "timed out waiting for \(mode)")
-        }
-        for socket in try FileManager.default.contentsOfDirectory(atPath: directory.path)
-        where socket.hasPrefix("wayland-") {
-          let path = directory.appendingPathComponent(socket).path
-          let attributes = try FileManager.default.attributesOfItem(atPath: path)
-          if attributes[.type] as? FileAttributeType == .typeSocket {
-            environment["WAYLAND_DISPLAY"] = socket
-            break
-          }
-        }
-        if environment["WAYLAND_DISPLAY"] == nil { try await Task.sleep(for: .milliseconds(100)) }
-      }
-      if mode == "sway" {
-        environment["SWAYSOCK"] =
-          "\(directory.path)/sway-ipc.\(getuid()).\(process.processIdentifier).sock"
-      }
-    }
-    environment["ROOTS_TEST_COMPOSITOR"] = mode
-    environment["ROOTS_REQUIRE_COMPOSITOR"] = "1"
-    environment["ROOTS_REQUIRE_PRESENTATION"] = environment["ROOTS_REQUIRE_PRESENTATION"] ?? "0"
-    let tests = try launch(
-      swift,
-      arguments: [
-        "test", "--filter", "CompositorIntegrationTests|NativeSessionTests|SwiftWaylandTests",
-      ],
-      environment: environment, log: testsLog)
-    try await wait(tests, timeout: .seconds(seconds))
-    if let compositor, !compositor.isRunning {
-      throw RunFailure(description: "\(mode) exited during the tests")
-    }
-    printLog(testsLog)
-    if let compositor { await stop(compositor) }
-  } catch {
-    printLog(testsLog)
-    printLog(compositorLog, to: .standardError)
-    if let compositor { await stop(compositor) }
-    throw error
-  }
+  // Connect by display path without consuming an inherited activation socket.
+  environment.removeValue(forKey: "WAYLAND_SOCKET")
+  environment["ROOTS_REQUIRE_COMPOSITOR"] = "1"
+  environment["ROOTS_REQUIRE_PRESENTATION"] = environment["ROOTS_REQUIRE_PRESENTATION"] ?? "0"
+  let log = artifacts.appendingPathComponent("tests.log")
+  let tests = try launch(
+    swift,
+    arguments: [
+      "test", "--filter", "CompositorIntegrationTests|NativeSessionTests|SwiftWaylandTests",
+    ],
+    environment: environment, log: log)
+  try await wait(tests, timeout: .seconds(seconds), log: log)
 }
 
-let mode = CommandLine.arguments.dropFirst().first ?? "all"
-guard CommandLine.arguments.count <= 2, ["all", "sway", "weston", "current"].contains(mode) else {
-  FileHandle.standardError.write(
-    Data("usage: swift Scripts/test-compositors.swift [all|sway|weston|current]\n".utf8))
+guard
+  CommandLine.arguments.count == 1
+    || (CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "current")
+else {
+  report("usage: swift Scripts/test-compositors.swift [current]")
   exit(2)
 }
 
-let interrupted = Mutex<Int32?>(nil)
+// Top-level state is MainActor-isolated; signal handlers enqueue updates on that actor.
+var interrupted: Int32?
 let task = Task { @MainActor in
   do {
-    for mode in mode == "all" ? ["sway", "weston"] : [mode] { try await run(mode) }
+    try await run()
     return Int32(0)
   } catch is CancellationError {
-    return interrupted.withLock { $0 ?? 130 }
+    return interrupted ?? 130
   } catch {
     FileHandle.standardError.write(Data("error: \(error)\n".utf8))
     return (error as? RunFailure)?.status ?? 1
@@ -225,8 +150,10 @@ for number in [SIGINT, SIGTERM] {
   _ = signal(number, SIG_IGN)
   let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
   source.setEventHandler {
-    interrupted.withLock { if $0 == nil { $0 = 128 + number } }
-    task.cancel()
+    Task { @MainActor in
+      if interrupted == nil { interrupted = 128 + number }
+      task.cancel()
+    }
   }
   source.resume()
   signals.append(source)

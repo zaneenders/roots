@@ -19,24 +19,7 @@ import Testing
   }
 }
 
-private enum CompositorTestError: Error {
-  case timeout
-  case controlFailed(Int32)
-}
-
-@MainActor private func sway(_ command: String) async throws {
-  let process = Process()
-  process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-  process.arguments = ["swaymsg", "-q", command]
-  process.standardOutput = FileHandle.nullDevice
-  process.standardError = FileHandle.standardError
-  try process.run()
-  defer { if process.isRunning { process.terminate() } }
-  while process.isRunning { try await Task.sleep(for: .milliseconds(10)) }
-  guard process.terminationReason == .exit, process.terminationStatus == 0 else {
-    throw CompositorTestError.controlFailed(process.terminationStatus)
-  }
-}
+private enum CompositorTestError: Error { case timeout }
 
 @Suite(GraphicsTest(), .serialized, .timeLimit(.minutes(1)))
 @MainActor struct CompositorIntegrationTests {
@@ -71,31 +54,6 @@ private enum CompositorTestError: Error {
           await connection.close()
           throw error
         }
-      }
-    }
-  }
-
-  @Test(
-    .enabled("Requires the isolated Sway test compositor") {
-      ProcessInfo.processInfo.environment["ROOTS_TEST_COMPOSITOR"] == "sway"
-    })
-  func outputHotplugAndScaleChanges() async throws {
-    try await withDeadline {
-      let connection = WaylandConnection(configuration: .init(width: 160, height: 120))
-      do {
-        try await connection.connect()
-        try await sway("create_output")
-        try await sway("output HEADLESS-2 scale 2")
-        try await connection.drain()
-        try await sway("output HEADLESS-2 scale 1.5")
-        try await connection.drain()
-        try await sway("output HEADLESS-2 unplug")
-        try await connection.drain()
-        #expect(connection.running && connection.configured && connection.protocolFailure == nil)
-        await connection.close()
-      } catch {
-        await connection.close()
-        throw error
       }
     }
   }
