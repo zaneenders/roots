@@ -6,7 +6,11 @@ import NIOPosix
 
 @MainActor public enum WaylandAvailability {
   private static let globals = Task { try await detectGlobals() }
-  private enum ProbeError: Error { case invalidReply, timeout }
+  private enum ProbeError: Error { case invalidReply, timeout, missingCompositor }
+
+  public static var advertisedGlobals: [String: UInt32] {
+    get async throws { try await globals.value }
+  }
 
   public static var compositor: Bool {
     get async throws {
@@ -38,7 +42,10 @@ import NIOPosix
     if display.hasPrefix("/") {
       path = display
     } else {
-      guard let directory = environment["XDG_RUNTIME_DIR"] else { return [:] }
+      guard let directory = environment["XDG_RUNTIME_DIR"] else {
+        if environment["ROOTS_REQUIRE_COMPOSITOR"] == "1" { throw ProbeError.missingCompositor }
+        return [:]
+      }
       path = directory + "/" + display
     }
     let channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>
@@ -51,6 +58,7 @@ import NIOPosix
           }
         }
     } catch let error as IOError where [ENOENT, ECONNREFUSED, EACCES].contains(error.errnoCode) {
+      if environment["ROOTS_REQUIRE_COMPOSITOR"] == "1" { throw error }
       return [:]
     }
     return try await channel.executeThenClose { inbound, outbound in

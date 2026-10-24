@@ -25,18 +25,35 @@ import Testing
 
 extension NativeSessionTests {
   @Test(
-    .enabled("Wayland compositor is unavailable") { try await WaylandAvailability.compositor },
+    .enabled("Wayland presentation is unavailable") { try await WaylandAvailability.presentation },
     arguments: [false, true])
   func popupDismissalDoesNotWaitForBufferAvailability(alreadyWaiting: Bool) async throws {
     let host = NativeHost(configuration: .init())
     defer { host.cleanup() }
     try await host.connect()
+    // xdg_popup requires a mapped parent, not only an acknowledged initial configure.
+    try host.setupRenderer(surfaceless: false)
+    let watchdog = Task {
+      try await Task.sleep(for: .seconds(5))
+      host.requestClose()
+    }
+    defer { watchdog.cancel() }
+    var parentFrames: Int32 = 0
+    while parentFrames == 0 && host.running {
+      if host.canRender {
+        _ = try NativeWindow.renderFrame(
+          host, surfaceless: false, started: .now, frameCount: &parentFrames, frame: { _, _ in })
+        try host.renderer.releaseCurrent()
+      } else {
+        try await host.dispatchAsync()
+      }
+    }
+    try #require(parentFrames == 1)
     var dismissals = 0
     try host.presentPopup(
       configuration: .init(x: 0, y: 0, anchorWidth: 10, anchorHeight: 10, width: 40, height: 30),
       grab: false, frame: { _, _ in Issue.record("Dismissal must not render") },
       onDismiss: { dismissals += 1 })
-    _ = host.beginFrame()
     host.connection.waitForDMABufBuffer()
     #expect(!host.canRender)
     if !alreadyWaiting { host.requestPopupDismissal() }

@@ -72,6 +72,17 @@ To run only the compiler fixtures:
 swift test --filter compilerFixturesEnforceThePublicAPIAndLifetimes
 ```
 
+### Wayland compositor tests
+
+```sh
+swift Scripts/test-compositors.swift all       # isolated Sway + Weston (Pixman)
+ROOTS_REQUIRE_PRESENTATION=1 swift Scripts/test-compositors.swift current  # existing GPU session
+```
+
+See [the compositor matrix](Tests/COMPOSITOR_TESTS.md) for prerequisites, GPU
+lanes, fault coverage, and retained logs. Missing required compositors fail these
+runs; ordinary `swift test` still skips unavailable compositor tests.
+
 ## License
 
 Roots is licensed under [Apache-2.0](LICENSE). Copyright 2026 Zane Enders.
