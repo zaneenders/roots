@@ -58,9 +58,36 @@ import Testing
   let descriptor = try #require(requests.first?.descriptors.first)
   #expect(descriptor.borrow { fcntl($0, F_GETFD) & FD_CLOEXEC != 0 })
   #expect(fcntl(readDescriptor.rawValue, F_GETFD) & FD_CLOEXEC != 0)
-  #expect(fcntl(readDescriptor.rawValue, F_GETFL) & O_NONBLOCK != 0)
+  #expect(descriptor.borrow { fcntl($0, F_GETFL) & O_NONBLOCK == 0 })
   descriptor.close()
   #expect(fcntl(readDescriptor.rawValue, F_GETFD) >= 0)
+  clipboard.close()
+}
+
+@Test @MainActor func clipboardReceivesLargeTextFromABlockingProducer() async throws {
+  let (clipboard, objects, device) = try clipboardFixture()
+  let offer: UInt32 = 0xff00_0000
+  clipboard.event(.init(object: device, opcode: 0, arguments: [.uint(offer)]))
+  clipboard.event(.init(object: offer, opcode: 0, arguments: [.string("text/plain;charset=utf-8")]))
+  clipboard.event(.init(object: device, opcode: 5, arguments: [.uint(offer)]))
+  guard let reader = clipboard.beginRead() else {
+    Issue.record("Missing clipboard reader")
+    return
+  }
+  let (requests, _) = try objects.takeRequests()
+  let descriptor = try #require(requests.first?.descriptors.first)
+  let bytes = Array(String(repeating: "hello café 🙂\n", count: 200_000).utf8)
+  // Use ordinary blocking writes on a dedicated thread, not ClipboardIO's
+  // nonblocking writer: the peer is a different application.
+  let writer = blockingTestTask {
+    defer { descriptor.close() }
+    _ = try descriptor.borrow { raw in
+      try FileDescriptor(rawValue: raw).writeAll(bytes)
+    }
+  }
+  let received = try await clipboard.io.read(from: reader)
+  try await writer.value
+  #expect(received == bytes)
   clipboard.close()
 }
 
