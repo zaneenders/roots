@@ -4,14 +4,13 @@ public struct PointerEvent: Sendable {
     case cancelled
   }
   public var phase: Phase
-  public var x: Float
-  public var y: Float
+  /// Coordinates relative to the element's origin. Cancellation uses the last available position.
+  public var position: Coordinate
   public var region: Region
 
-  public init(phase: Phase, x: Float, y: Float, region: Region) {
+  public init(phase: Phase, position: Coordinate, region: Region) {
     self.phase = phase
-    self.x = x
-    self.y = y
+    self.position = position
     self.region = region
   }
 }

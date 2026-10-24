@@ -19,10 +19,14 @@ struct TextSelectionTests {
       frame.end()
     }
     ui.frame(
-      input: Input(x: 22 + font.advance, y: 26, pressed: true), build: build, present: { _ in })
-    ui.frame(input: Input(x: 22 + 2 * font.advance, y: 60), build: build, present: { _ in })
+      input: Input(mousePosition: .init(x: 22 + font.advance, y: 26), pressed: true), build: build,
+      present: { _ in })
     ui.frame(
-      input: Input(x: 22 + 2 * font.advance, y: 60, released: true), build: build, present: { _ in }
+      input: Input(mousePosition: .init(x: 22 + 2 * font.advance, y: 60)), build: build,
+      present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 22 + 2 * font.advance, y: 60), released: true),
+      build: build, present: { _ in }
     )
     #expect(ui.selectedText == "afé 👩‍💻\nne")
     ui.frame(
@@ -44,8 +48,10 @@ struct TextSelectionTests {
       frame.label(key: 1, "abcd", extent: 40, font: font)
       frame.end()
     }
-    ui.frame(input: Input(x: 60, y: 20, pressed: true), build: build, present: { _ in })
-    ui.frame(input: Input(x: 24, y: 20, released: true), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 60, y: 20), pressed: true), build: build, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 24, y: 20), released: true), build: build,
+      present: { _ in })
     #expect(ui.selectedText == "bcd")
     ui.frame(
       input: Input(keyEvents: [KeyEvent(.left, modifiers: .shift)]), build: build, present: { _ in }
@@ -69,10 +75,13 @@ struct TextSelectionTests {
       frame.scrollTo(offset, in: scroll)
     }
     ui.frame(
-      input: Input(x: 12, y: 5, pressed: true, released: true), build: build, present: { _ in })
+      input: Input(mousePosition: .init(x: 12, y: 5), pressed: true, released: true), build: build,
+      present: { _ in })
     #expect(ui.state(for: ui.handle(for: 2)!)?.focused == false)
-    ui.frame(input: Input(x: 12, y: 15, pressed: true), build: build, present: { _ in })
-    ui.frame(input: Input(x: 72, y: 15, released: true), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 12, y: 15), pressed: true), build: build, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 72, y: 15), released: true), build: build,
+      present: { _ in })
     #expect(ui.selectedText == "line1")
     offset = 64
     ui.frame(
@@ -98,17 +107,19 @@ struct TextSelectionTests {
         }, extent: 640)
       frame.end()
     }
-    ui.frame(input: Input(x: 12, y: 5, pressed: true), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 12, y: 5), pressed: true), build: build, present: { _ in })
     for _ in 0..<5 {
-      ui.frame(input: Input(x: 72, y: 100), dt: 0.1, build: build, present: { _ in })
+      ui.frame(input: Input(mousePosition: .init(x: 72, y: 100)), dt: 0.1, build: build, present: { _ in })
     }
     #expect(ui.state(for: ui.handle(for: 1)!)!.scrollOffset > 0)
     #expect(ui.needsAnimationFrame == true)
     #expect(ui.selectedText?.contains("row3") == true)
-    ui.frame(input: Input(x: 72, y: 100, released: true), build: build, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 72, y: 100), released: true), build: build,
+      present: { _ in })
     #expect(ui.needsAnimationFrame == false)
     let selection = ui.selectedText
-    ui.frame(input: Input(x: 12, y: 5), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 12, y: 5)), build: build, present: { _ in })
     #expect(ui.selectedText == selection)
   }
 
@@ -129,10 +140,10 @@ struct TextSelectionTests {
     ui.frame(
       input: Input(keyEvents: [KeyEvent(.tab), KeyEvent(.tab)]), build: build, present: { _ in })
     #expect(ui.state(for: ui.handle(for: 3)!)?.focused == true)
-    ui.frame(input: Input(x: 12, y: 20, pressed: true), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 12, y: 20), pressed: true), build: build, present: { _ in })
     ui.frame(
       input: Input(
-        x: 60, y: 20, released: true,
+        mousePosition: .init(x: 60, y: 20), released: true,
         keyEvents: [KeyEvent(.character("a"), modifiers: .control)]), build: build,
       present: { _ in })
     #expect(clicks == 1)
@@ -140,7 +151,7 @@ struct TextSelectionTests {
     for y: Float in [140, 180] {
       ui.frame(
         input: Input(
-          x: 12, y: y, pressed: true, released: true,
+          mousePosition: .init(x: 12, y: y), pressed: true, released: true,
           keyEvents: [KeyEvent(.character("a"), modifiers: .control)]), build: build,
         present: { _ in })
       #expect(ui.selectedText == nil)
@@ -159,7 +170,7 @@ struct TextSelectionTests {
     }
     ui.frame(
       input: Input(
-        x: 12, y: 20, pressed: true, released: true,
+        mousePosition: .init(x: 12, y: 20), pressed: true, released: true,
         keyEvents: [KeyEvent(.character("a"), modifiers: .control)]), build: build,
       present: { _ in })
     #expect(ui.selectedText == "hello")
@@ -234,13 +245,15 @@ struct TextSelectionTests {
       frame.element(key: 1, extent: 40, onPointer: { events.append($0) }, paint: { _ in })
       frame.end()
     }
-    ui.frame(input: Input(x: 30, y: 25, pressed: true), build: build, present: { _ in })
-    ui.frame(input: Input(x: 300, y: 80), build: build, present: { _ in })
-    ui.frame(input: Input(x: 300, y: 80, released: true), build: build, present: { _ in })
-    ui.frame(input: Input(x: 50, y: 40), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 30, y: 25), pressed: true), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 300, y: 80)), build: build, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 300, y: 80), released: true), build: build,
+      present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 50, y: 40)), build: build, present: { _ in })
     #expect(events.map(\.phase) == [.pressed, .dragged, .released])
-    #expect(events.map(\.x) == [20, 290, 290])
-    #expect(events.map(\.y) == [5, 60, 60])
+    #expect(events.map(\.position.x) == [20, 290, 290])
+    #expect(events.map(\.position.y) == [5, 60, 60])
   }
 }
 
@@ -259,8 +272,8 @@ struct TextSelectionTests {
     frame.text(key: 1, lines: [TextLine([TextRun("A🙂B")], y: 0, size: font.size)], extent: 50)
     frame.end()
   }
-  ui.frame(input: Input(x: 24, y: 10, pressed: true), build: build, present: { _ in })
-  ui.frame(input: Input(x: 48, y: 10, released: true), build: build) { draws in
+  ui.frame(input: Input(mousePosition: .init(x: 24, y: 10), pressed: true), build: build, present: { _ in })
+  ui.frame(input: Input(mousePosition: .init(x: 48, y: 10), released: true), build: build) { draws in
     let highlights = (0..<draws.count).map { draws[$0] }.filter {
       $0.color == Color(0.28, 0.24, 0.42)
     }

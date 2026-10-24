@@ -61,7 +61,7 @@
     present: (borrowing UIDrawBatch) -> Void, track: ((() -> Void) -> Void)? = nil
   ) {
     lowerFrame(
-      input: mousePosition.map { Input(x: $0.x, y: $0.y) } ?? Input(), dt: 0, primaryShortcut: .control,
+      input: Input(mousePosition: mousePosition), dt: 0, primaryShortcut: .control,
       onKey: nil, onCopy: nil, dispatchInput: false,
       build: { frame in
         let content = build()

@@ -20,7 +20,7 @@ struct TextTests {
       })
     #expect(host.state(for: 1) == nil)
     host.frame(
-      input: Input(x: 5, y: 5, pressed: true),
+      input: Input(mousePosition: .init(x: 5, y: 5), pressed: true),
       build: {
         Column(in: Region(0, 0, 100, 100)) { Text("AB").size(10) }
       }, present: { _ in })
@@ -43,8 +43,8 @@ struct TextTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 46, y: 48, pressed: true))
-    render(Input(x: 60, y: 48, released: true))
+    render(Input(mousePosition: .init(x: 46, y: 48), pressed: true))
+    render(Input(mousePosition: .init(x: 60, y: 48), released: true))
     #expect(host.selectedText == "C")
     render(Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]))
     render(Input(keyEvents: [KeyEvent(.character("c"), modifiers: .control)]))

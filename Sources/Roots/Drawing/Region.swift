@@ -6,7 +6,7 @@ public struct Region: Equatable, BitwiseCopyable, Sendable {
     self.width = width
     self.height = height
   }
-  public var center: SIMD2<Float> { SIMD2(x + width / 2, y + height / 2) }
+  public var center: Coordinate { Coordinate(x: x + width / 2, y: y + height / 2) }
 
   public func offsetBy(dx: Float, dy: Float) -> Region {
     Region(x + dx, y + dy, width, height)

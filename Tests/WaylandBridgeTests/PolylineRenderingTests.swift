@@ -13,8 +13,9 @@ extension NativeSessionTests {
     input.bufferScale = scale
     try renderer.setup(input: input)
     defer { renderer.cleanup() }
-    let points: [SIMD2<Float>] = [
-      .init(8, 8), .init(32, 28), .init(8, 28), .init(32, 8), .init(32, 8)
+    let points: [Coordinate] = [
+      Coordinate(x: 8, y: 8), Coordinate(x: 32, y: 28), Coordinate(x: 8, y: 28),
+      Coordinate(x: 32, y: 8), Coordinate(x: 32, y: 8)
     ]
     let stroke = try #require(PolylineStroke(points: points, width: 4))
     let draws = [
@@ -55,10 +56,10 @@ extension NativeSessionTests {
     try renderer.setup(input: .init(width: 32, height: 32))
     defer { renderer.cleanup() }
     let points = (0..<PolylineStroke.maximumPointCount).map { index in
-      SIMD2<Float>(Float(index % 16) + 4, Float(index / 16) + 4)
+      Coordinate(x: Float(index % 16) + 4, y: Float(index / 16) + 4)
     }
     let stroke = try #require(PolylineStroke(points: points, width: 2))
-    let dot = try #require(PolylineStroke(points: [.init(24, 24)], width: 4))
+    let dot = try #require(PolylineStroke(points: [Coordinate(x: 24, y: 24)], width: 4))
     try renderer.beginFrame(width: 32, height: 32)
     renderer.withFrame { frame in
       frame.render(

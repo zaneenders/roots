@@ -10,9 +10,12 @@ extension UIStorage {
   }
 
   mutating func pointer(_ phase: PointerEvent.Phase, input: Input, to i: Int) {
+    guard let position = input.mousePosition ?? lastMousePosition else { return }
     let region = nodes[i].region
     nodes[i].interaction.handlePointer(
-      PointerEvent(phase: phase, x: input.x - region.x, y: input.y - region.y, region: region))
+      PointerEvent(
+        phase: phase, position: Coordinate(x: position.x - region.x, y: position.y - region.y),
+        region: region))
   }
 
   mutating func handleTextKey(

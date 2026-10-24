@@ -41,7 +41,7 @@ struct WaylandPopupTests {
       }, offscreen: true)
     defer { runtime.stop() }
     runtime.frame(
-      input: Input(keyEvents: [KeyEvent(.enter)]), viewport: Viewport(size: .init(320, 320)),
+      input: Input(keyEvents: [KeyEvent(.enter)]), viewport: Viewport(size: .init(width: 320, height: 320)),
       time: 0,
       present: { _ in })
     #expect(keys == 1 && frames == 1)

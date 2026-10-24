@@ -85,7 +85,10 @@ struct ContainerLayoutTests {
     var host = UIHost()
     var bottomClicks = 0
     var topClicks = 0
-    for input in [Input(), Input(x: 50, y: 50, pressed: true), Input(x: 50, y: 50, released: true)] {
+    for input in [
+      Input(), Input(mousePosition: .init(x: 50, y: 50), pressed: true),
+      Input(mousePosition: .init(x: 50, y: 50), released: true)
+    ] {
       host.frame(
         input: input, dt: 0,
         build: {
@@ -179,7 +182,10 @@ struct ContainerLayoutTests {
     var host = UIHost()
     for blocked in [false, true] {
       var clicks = 0
-      for input in [Input(x: 10, y: 10, pressed: true), Input(x: 10, y: 10, released: true)] {
+      for input in [
+        Input(mousePosition: .init(x: 10, y: 10), pressed: true),
+        Input(mousePosition: .init(x: 10, y: 10), released: true)
+      ] {
         host.frame(
           input: input,
           build: {

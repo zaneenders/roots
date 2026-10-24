@@ -52,7 +52,7 @@ final class DesktopRuntime<Content: Block> {
   private let onCopy: (String) -> Void
   private let invalidation: FrameInvalidation
   private var lastTime: Double?
-  private var pointer = SIMD2<Float>(-1, -1)
+  private var mousePosition: Coordinate?
 
   init(
     content: @escaping @MainActor (Viewport) -> Content, primaryShortcut: KeyModifiers,
@@ -112,10 +112,9 @@ final class DesktopRuntime<Content: Block> {
       host.withState { frameCallbacks.finish?($0) }
       if needsAnimationFrame { invalidation.request() }
     }
-    let nextPointer = SIMD2<Float>(input.x, input.y)
-    let pointerMoved = nextPointer != pointer
-    pointer = nextPointer
-    if pointerMoved || input.pressed || input.released || input.focusLost
+    let mouseMoved = input.mousePosition != mousePosition
+    mousePosition = input.mousePosition
+    if mouseMoved || input.pressed || input.released || input.focusLost
       || !input.keyEvents.isEmpty
       || input.scrollX != 0 || input.scrollY != 0 || input.scrollVelocityY != nil
     {

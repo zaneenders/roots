@@ -19,7 +19,8 @@ private func motionOffset(_ ui: borrowing UIStore, key: UInt64 = 1) throws -> Fl
   var ui = UIStore(scrollAcceleration: 1)
   func scroll(_ delta: Float, dt: Float = 0.05, x: Float = 20) {
     ui.frame(
-      input: Input(x: x, y: 20, scrollY: delta), dt: dt, build: motionColumn, present: { _ in })
+      input: Input(mousePosition: .init(x: x, y: 20), scrollY: delta), dt: dt, build: motionColumn,
+      present: { _ in })
   }
   scroll(30)
   #expect(try motionOffset(ui) == 30)
@@ -39,23 +40,32 @@ private func motionOffset(_ ui: borrowing UIStore, key: UInt64 = 1) throws -> Fl
 @Test func accelerationCapsFastInputAndStillClampsAtContentBounds() throws {
   var ui = UIStore(scrollAcceleration: 1)
   for _ in 0..<2 {
-    ui.frame(input: Input(x: 20, y: 20, scrollY: 100), build: motionColumn, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 20, y: 20), scrollY: 100), build: motionColumn,
+      present: { _ in })
   }
   #expect(try motionOffset(ui) == 400)
-  ui.frame(input: Input(x: 20, y: 20, scrollY: 1000), build: motionColumn, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 20), scrollY: 1000), build: motionColumn,
+    present: { _ in })
   #expect(try motionOffset(ui) == 1900)
-  ui.frame(input: Input(x: 20, y: 20, scrollY: -1000), build: motionColumn, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 20), scrollY: -1000), build: motionColumn,
+    present: { _ in })
   #expect(try motionOffset(ui) == 900)
-  ui.frame(input: Input(x: 20, y: 20, scrollY: -1000), build: motionColumn, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 20), scrollY: -1000), build: motionColumn,
+    present: { _ in })
   #expect(try motionOffset(ui) == 0)
 }
 
 @Test(arguments: [
-  Input(keyEvents: [KeyEvent(.escape)]), Input(pressed: true), Input(x: 300, y: 20, scrollY: 30)
+  Input(keyEvents: [KeyEvent(.escape)]), Input(pressed: true),
+  Input(mousePosition: .init(x: 300, y: 20), scrollY: 30)
 ])
 func interactionsResetAcceleration(input: Input) throws {
   var ui = UIStore(scrollAcceleration: 1)
-  let scroll = Input(x: 20, y: 20, scrollY: 30)
+  let scroll = Input(mousePosition: .init(x: 20, y: 20), scrollY: 30)
   ui.frame(input: scroll, dt: 0.05, build: motionColumn, present: { _ in })
   ui.frame(input: input, dt: 0.05, build: motionColumn, present: { _ in })
   ui.frame(input: scroll, dt: 0.05, build: motionColumn, present: { _ in })
@@ -71,7 +81,9 @@ func interactionsResetAcceleration(input: Input) throws {
     frame.end()
   }
   for _ in 0..<2 {
-    ui.frame(input: Input(x: 20, y: 20, scrollY: 30), dt: 0.05, build: build, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 20, y: 20), scrollY: 30), dt: 0.05, build: build,
+      present: { _ in })
   }
   #expect(distances == [30, 60])
   #expect(try motionOffset(ui) == 0)
@@ -81,7 +93,7 @@ func interactionsResetAcceleration(input: Input) throws {
   var standard = UIStore()
   var slow = UIStore(scrollDeceleration: 4)
   var fast = UIStore(scrollDeceleration: 4)
-  let input = Input(x: 20, y: 20, scrollY: 10, scrollVelocityY: 160)
+  let input = Input(mousePosition: .init(x: 20, y: 20), scrollY: 10, scrollVelocityY: 160)
   standard.frame(input: input, build: motionColumn, present: { _ in })
   slow.frame(input: input, build: motionColumn, present: { _ in })
   fast.frame(input: input, build: motionColumn, present: { _ in })
@@ -101,10 +113,12 @@ func interactionsResetAcceleration(input: Input) throws {
   var ui = UIStore(scrollAcceleration: 1, scrollDeceleration: 4)
   for _ in 0..<2 {
     ui.frame(
-      input: Input(x: 20, y: 20, scrollY: 30), dt: 0.05, build: motionColumn, present: { _ in })
+      input: Input(mousePosition: .init(x: 20, y: 20), scrollY: 30), dt: 0.05, build: motionColumn,
+      present: { _ in })
   }
   ui.frame(
-    input: Input(x: 140, y: 20, scrollVelocityY: 160), build: motionColumn, present: { _ in })
+    input: Input(mousePosition: .init(x: 140, y: 20), scrollVelocityY: 160), build: motionColumn,
+    present: { _ in })
   #expect(try motionOffset(ui) == 90)
   ui.frame(dt: 2, build: motionColumn, present: { _ in })
   #expect(abs(try motionOffset(ui) - 168.75) < 0.0001)
@@ -113,7 +127,7 @@ func interactionsResetAcceleration(input: Input) throws {
 
 @Test func accelerationResetsAfterGestureReleaseAndDoesNotScaleProgrammaticScrolling() throws {
   var ui = UIStore(scrollAcceleration: 1)
-  let scroll = Input(x: 20, y: 20, scrollY: 30)
+  let scroll = Input(mousePosition: .init(x: 20, y: 20), scrollY: 30)
   ui.frame(input: scroll, dt: 0.05, build: motionColumn, present: { _ in })
   ui.frame(input: Input(scrollVelocityY: 0), dt: 0.05, build: motionColumn, present: { _ in })
   ui.frame(input: scroll, dt: 0.05, build: motionColumn, present: { _ in })
@@ -131,7 +145,7 @@ func interactionsResetAcceleration(input: Input) throws {
 @Test func accelerationUsesElapsedTimeAcrossIdleFrames() throws {
   var slow = UIStore(scrollAcceleration: 1)
   var fast = UIStore(scrollAcceleration: 1)
-  let scroll = Input(x: 20, y: 20, scrollY: 30)
+  let scroll = Input(mousePosition: .init(x: 20, y: 20), scrollY: 30)
   slow.frame(input: scroll, dt: 0.05, build: motionColumn, present: { _ in })
   fast.frame(input: scroll, dt: 0.01, build: motionColumn, present: { _ in })
   slow.frame(input: scroll, dt: 0.05, build: motionColumn, present: { _ in })

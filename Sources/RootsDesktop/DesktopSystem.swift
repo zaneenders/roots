@@ -53,14 +53,16 @@ public enum DesktopSystem {
   ) async throws {
     #if os(macOS)
     let configuration = WindowConfiguration(
-      logicalSize: window.size, title: window.title, maxFrames: window.maxFrames,
+        logicalSize: SIMD2(window.size.width, window.size.height), title: window.title,
+        maxFrames: window.maxFrames,
       screenshotPath: window.screenshotPath)
     let frame: @MainActor (WindowFrameInput, inout MetalRenderFrame) -> Void = {
       snapshot, renderer in
       let scale =
         snapshot.logicalSize.x > 0 ? Float(snapshot.drawableSize.x) / snapshot.logicalSize.x : 1
       runtime.frame(
-        input: snapshot.input, viewport: Viewport(size: snapshot.logicalSize, scale: scale),
+        input: snapshot.input, viewport: Viewport(
+          size: .init(width: snapshot.logicalSize.x, height: snapshot.logicalSize.y), scale: scale),
         time: snapshot.timeSeconds,
         present: { renderer.render($0) })
     }
@@ -72,10 +74,10 @@ public enum DesktopSystem {
     #else
     try await run(
       configuration: .init(
-        width: Int32(window.size.x.rounded(.up)), height: Int32(window.size.y.rounded(.up)),
+        width: Int32(window.size.width.rounded(.up)), height: Int32(window.size.height.rounded(.up)),
         maxFrames: window.maxFrames, title: window.title, screenshotPath: window.screenshotPath,
-        minimumWidth: min(760, Int32(window.size.x.rounded(.up))),
-        minimumHeight: min(640, Int32(window.size.y.rounded(.up)))),
+        minimumWidth: min(760, Int32(window.size.width.rounded(.up))),
+        minimumHeight: min(640, Int32(window.size.height.rounded(.up)))),
       runtime: runtime, offscreen: window.offscreen)
     #endif
   }
@@ -96,7 +98,7 @@ public enum DesktopSystem {
       snapshot.pointerInside || snapshot.primaryDown || snapshot.primaryPressed
       || snapshot.primaryReleased
     return Input(
-      x: hasPointer ? snapshot.pointerX : -1, y: hasPointer ? snapshot.pointerY : -1,
+      mousePosition: hasPointer ? Coordinate(x: snapshot.pointerX, y: snapshot.pointerY) : nil,
       pressed: snapshot.primaryPressed, released: snapshot.primaryReleased,
       scrollX: snapshot.scrollX, scrollY: snapshot.scrollY,
       scrollVelocityY: snapshot.scrollVelocityY,
@@ -110,7 +112,7 @@ public enum DesktopSystem {
     runtime.frame(
       input: input(snapshot),
       viewport: Viewport(
-        size: .init(Float(snapshot.width), Float(snapshot.height)),
+        size: .init(width: Float(snapshot.width), height: Float(snapshot.height)),
         scale: Float(snapshot.bufferScale)),
       time: snapshot.timeSeconds, present: { renderer.render($0) })
   }

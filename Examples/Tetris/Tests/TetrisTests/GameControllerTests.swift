@@ -71,7 +71,7 @@ struct GameControllerTests {
 
   @Test func dispatchedCommandsRebuildLabelsInTheSameFrame() {
     let controller = GameController(seed: 42)
-    var input = Input(x: 30, y: 40)
+    var input = Input(mousePosition: .init(x: 30, y: 40))
     controller.prepareFrame(input: &input, dt: 0)
     guard case .present = controller.frameUpdate(after: input) else {
       Issue.record("No input change should need a second build")

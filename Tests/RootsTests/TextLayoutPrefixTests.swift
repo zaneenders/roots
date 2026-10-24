@@ -162,10 +162,10 @@ struct TextLayoutPrefixTests {
         ], extent: 100)
       frame.end()
     }
-    ui.frame(input: Input(x: 12, y: 33, pressed: true), build: build, present: { _ in })
+    ui.frame(input: Input(mousePosition: .init(x: 12, y: 33), pressed: true), build: build, present: { _ in })
     ui.frame(
       input: Input(
-        x: 12 + font.advance, y: 33, released: true,
+        mousePosition: .init(x: 12 + font.advance, y: 33), released: true,
         keyEvents: [KeyEvent(.character("c"), modifiers: .control)]),
       onCopy: { copies.append($0) }, build: build,
       present: { draws in

@@ -20,7 +20,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func scrollingUsesFreshGeometryBeforePointerDispatch() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, pressed: true, released: true, scrollY: 40),
+    input: Input(mousePosition: .init(x: 20, y: 25), pressed: true, released: true, scrollY: 40),
     build: { column(&$0) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 40)
   #expect(try state(ui, key: 1).region == Region(10, -20, 100, 30))
@@ -35,13 +35,17 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 
 @Test func scrollingClampsOnInputContentShrinkAndResize() throws {
   var ui = UIStore()
-  ui.frame(input: Input(x: 20, y: 25, scrollY: 1000), build: { column(&$0) }, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 1000), build: { column(&$0) },
+    present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 50)
   ui.frame(build: { column(&$0, height: 80) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 30)
   ui.frame(build: { column(&$0, keys: [1, 2]) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 10)
-  ui.frame(input: Input(x: 20, y: 25, scrollY: -1000), build: { column(&$0) }, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: -1000), build: { column(&$0) },
+    present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 0)
   ui.frame(build: { column(&$0, keys: []) }, present: { #expect($0.count == 0) })
   #expect(try state(ui, key: 100).scrollOffset == 0)
@@ -50,12 +54,15 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func scrollingPreservesFractionalDistanceAndIgnoresInvalidOrOutsideInput() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 0.5), dt: 0, build: { column(&$0) }, present: { _ in })
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 0.5), dt: 0, build: { column(&$0) },
+    present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 0.5)
   for input in [
-    Input(x: 9, y: 25, scrollY: 40), Input(x: 20, y: 80, scrollY: 40),
-    Input(x: 20, y: 25, scrollY: .nan), Input(x: 20, y: 25, scrollY: .infinity),
-    Input(x: 20, y: 25, scrollX: 40)
+    Input(mousePosition: .init(x: 9, y: 25), scrollY: 40),
+    Input(mousePosition: .init(x: 20, y: 80), scrollY: 40),
+    Input(mousePosition: .init(x: 20, y: 25), scrollY: .nan),
+    Input(mousePosition: .init(x: 20, y: 25), scrollY: .infinity),
+    Input(mousePosition: .init(x: 20, y: 25), scrollX: 40)
   ] {
     ui.frame(input: input, build: { column(&$0) }, present: { _ in })
     #expect(try state(ui, key: 100).scrollOffset == 0.5)
@@ -65,7 +72,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func clippedRowsCannotReceiveClicksOrHoverOutsideViewport() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 90, pressed: true, released: true), build: { column(&$0) },
+    input: Input(mousePosition: .init(x: 20, y: 90), pressed: true, released: true), build: { column(&$0) },
     present: { draws in
       #expect(draws.count == 2)
       for draw in draws { #expect(draw.clip == viewport) }
@@ -75,16 +82,18 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
   #expect(try state(ui, key: 2).clicks == 0)
   #expect(try state(ui, key: 2).hovered == false)
   ui.frame(
-    input: Input(x: 20, y: 70, pressed: true, released: true), build: { column(&$0) },
+    input: Input(mousePosition: .init(x: 20, y: 70), pressed: true, released: true), build: { column(&$0) },
     present: { _ in })
   #expect(try state(ui, key: 2).clicks == 1)
 }
 
 @Test func scrollingBetweenPressAndReleaseDoesNotActivateAnotherRow() throws {
   var ui = UIStore()
-  ui.frame(input: Input(x: 20, y: 25, pressed: true), build: { column(&$0) }, present: { _ in })
   ui.frame(
-    input: Input(x: 20, y: 25, released: true, scrollY: 40), build: { column(&$0) },
+    input: Input(mousePosition: .init(x: 20, y: 25), pressed: true), build: { column(&$0) },
+    present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 25), released: true, scrollY: 40), build: { column(&$0) },
     present: { _ in })
   #expect(try state(ui, key: 1).clicks == 0)
   #expect(try state(ui, key: 2).clicks == 0)
@@ -98,7 +107,9 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
   #expect(try state(ui, key: 3).focused)
   #expect(try state(ui, key: 3).region == Region(10, 50, 100, 30))
   #expect(try state(ui, key: 100).scrollOffset == 50)
-  ui.frame(input: Input(x: 20, y: 25, scrollY: -50), build: { column(&$0) }, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: -50), build: { column(&$0) },
+    present: { _ in })
   #expect(try state(ui, key: 3).focused)
   ui.frame(
     input: Input(keyEvents: [KeyEvent(.enter)]), build: { column(&$0) },
@@ -115,7 +126,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func offscreenTextDoesNotConsumeDrawBudgetAndStateSurvivesReorder() throws {
   var ui = UIStore(drawCapacity: 4)
   ui.frame(
-    input: Input(x: 20, y: 25, pressed: true, released: true), build: { column(&$0) },
+    input: Input(mousePosition: .init(x: 20, y: 25), pressed: true, released: true), build: { column(&$0) },
     present: { _ in })
   let handle = ui.handle(for: 1)
   ui.frame(build: { column(&$0, keys: [3, 2, 1]) }, present: { _ in })
@@ -134,7 +145,9 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 
 @Test func removedScrollContainerResetsOffsetWhenSlotIsReused() throws {
   var ui = UIStore()
-  ui.frame(input: Input(x: 20, y: 25, scrollY: 40), build: { column(&$0) }, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 40), build: { column(&$0) },
+    present: { _ in })
   let old = ui.handle(for: 100)
   ui.frame(build: { _ in }, present: { _ in })
   ui.frame(build: { column(&$0) }, present: { _ in })
@@ -151,10 +164,10 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
     frame.end()
     frame.end()
   }
-  ui.frame(input: Input(x: 20, y: 90, scrollY: 10), build: build, present: { _ in })
+  ui.frame(input: Input(mousePosition: .init(x: 20, y: 90), scrollY: 10), build: build, present: { _ in })
   #expect(try state(ui, key: 200).scrollOffset == 0)
   ui.frame(
-    input: Input(x: 20, y: 65, scrollY: 10), build: build,
+    input: Input(mousePosition: .init(x: 20, y: 65), scrollY: 10), build: build,
     present: { draws in
       #expect(draws.count == 2)
       #expect(draws[1].region.y == 80)
@@ -204,7 +217,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func ordinaryRowsInsideViewportContributeToFreshContentBounds() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 1000),
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 1000),
     build: { frame in
       frame.beginScrollColumn(key: 100, in: viewport)
       frame.beginRow(in: Region(10, 100, 100, 30), gap: 0)
@@ -225,7 +238,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func releaseMomentumDecaysOnItsOriginalViewportAndEventuallyStops() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 10, scrollVelocityY: 160),
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 10, scrollVelocityY: 160),
     build: { column(&$0) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 10)
   ui.frame(dt: 1 / 60, build: { column(&$0) }, present: { _ in })
@@ -245,7 +258,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func momentumTravelIsIndependentOfFrameRate() throws {
   var slow = UIStore()
   var fast = UIStore()
-  let input = Input(x: 20, y: 25, scrollY: 10, scrollVelocityY: 160)
+  let input = Input(mousePosition: .init(x: 20, y: 25), scrollY: 10, scrollVelocityY: 160)
   slow.frame(input: input, build: { column(&$0) }, present: { _ in })
   fast.frame(input: input, build: { column(&$0) }, present: { _ in })
   for _ in 0..<6 { slow.frame(dt: 1 / 30, build: { column(&$0) }, present: { _ in }) }
@@ -259,10 +272,10 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 @Test func momentumUsesFreshGeometryForHitsAndDrawing() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 10, scrollVelocityY: 400),
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 10, scrollVelocityY: 400),
     build: { column(&$0) }, present: { _ in })
   ui.frame(
-    input: Input(x: 20, y: 25), dt: 0.1, build: { column(&$0) },
+    input: Input(mousePosition: .init(x: 20, y: 25)), dt: 0.1, build: { column(&$0) },
     present: { draws in
       for draw in draws { #expect(draw.clip == viewport) }
       #expect(draws[0].region.y < 30)
@@ -272,13 +285,14 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 }
 
 @Test(arguments: [
-  Input(x: 20, y: 25, pressed: true), Input(keyEvents: [KeyEvent(.tab)]),
+  Input(mousePosition: .init(x: 20, y: 25), pressed: true), Input(keyEvents: [KeyEvent(.tab)]),
   Input(keyEvents: [KeyEvent(.enter)]),
-  Input(x: 20, y: 25, scrollY: -2), Input(x: 200, y: 200, scrollY: 2), Input(scrollVelocityY: 0)
+  Input(mousePosition: .init(x: 20, y: 25), scrollY: -2),
+  Input(mousePosition: .init(x: 200, y: 200), scrollY: 2), Input(scrollVelocityY: 0)
 ]) func explicitInteractionStopsMomentum(input: Input) throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 10, scrollVelocityY: 160),
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 10, scrollVelocityY: 160),
     build: { column(&$0) }, present: { _ in })
   ui.frame(input: input, build: { column(&$0) }, present: { _ in })
   let offset = try state(ui, key: 100).scrollOffset
@@ -293,7 +307,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
 {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 10, scrollVelocityY: 160), dt: dt,
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 10, scrollVelocityY: 160), dt: dt,
     build: { column(&$0) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 10)
   ui.frame(dt: dt, build: { column(&$0) }, present: { _ in })
@@ -307,7 +321,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
   ui.frame(input: Input(scrollVelocityY: 160), build: { column(&$0) }, present: { _ in })
   for velocity: Float in [.nan, .infinity, -.infinity] {
     ui.frame(
-      input: Input(x: 20, y: 25, scrollY: 0.5, scrollVelocityY: velocity),
+      input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 0.5, scrollVelocityY: velocity),
       build: { column(&$0) }, present: { _ in })
     let offset = try state(ui, key: 100).scrollOffset
     ui.frame(build: { column(&$0) }, present: { _ in })
@@ -321,7 +335,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
 ) throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 40, scrollVelocityY: velocity),
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 40, scrollVelocityY: velocity),
     build: { column(&$0) }, present: { _ in })
   ui.frame(dt: 1, build: { column(&$0) }, present: { _ in })
   let offset = try state(ui, key: 100).scrollOffset
@@ -332,7 +346,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
 
 @Test func contentShrinkAndSlotReuseDiscardMomentum() throws {
   var ui = UIStore()
-  let input = Input(x: 20, y: 25, scrollY: 40, scrollVelocityY: 160)
+  let input = Input(mousePosition: .init(x: 20, y: 25), scrollY: 40, scrollVelocityY: 160)
   ui.frame(input: input, build: { column(&$0) }, present: { _ in })
   ui.frame(build: { column(&$0, height: 80) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 30)
@@ -354,15 +368,18 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
     frame.end()
   }
   ui.frame(
-    input: Input(x: 20, y: 65, scrollY: 10, scrollVelocityY: 80), build: build, present: { _ in })
-  ui.frame(input: Input(x: 20, y: 25), build: build, present: { _ in })
+    input: Input(mousePosition: .init(x: 20, y: 65), scrollY: 10, scrollVelocityY: 80),
+    build: build, present: { _ in })
+  ui.frame(input: Input(mousePosition: .init(x: 20, y: 25)), build: build, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 0)
   #expect(try state(ui, key: 200).scrollOffset > 10)
 }
 
 @Test func releaseOnALaterFrameStartsMomentumWithoutRepeatingTheDistance() throws {
   var ui = UIStore()
-  ui.frame(input: Input(x: 20, y: 25, scrollY: 40), build: { column(&$0) }, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 40), build: { column(&$0) },
+    present: { _ in })
   ui.frame(input: Input(scrollVelocityY: -160), build: { column(&$0) }, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == 40)
   ui.frame(build: { column(&$0) }, present: { _ in })
@@ -374,8 +391,8 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
 @Test func outwardReleaseAtEitherBoundaryCannotSurviveContentGrowth() throws {
   var ui = UIStore()
   for input in [
-    Input(x: 20, y: 25, scrollY: 1000, scrollVelocityY: 160),
-    Input(x: 20, y: 25, scrollY: -1000, scrollVelocityY: -160)
+    Input(mousePosition: .init(x: 20, y: 25), scrollY: 1000, scrollVelocityY: 160),
+    Input(mousePosition: .init(x: 20, y: 25), scrollY: -1000, scrollVelocityY: -160)
   ] {
     ui.frame(input: input, build: { column(&$0) }, present: { _ in })
     let offset = try state(ui, key: 100).scrollOffset
@@ -387,7 +404,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
 @Test func changingViewportToOrdinaryNodeDiscardsMomentum() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 20, y: 25, scrollY: 10, scrollVelocityY: 160),
+    input: Input(mousePosition: .init(x: 20, y: 25), scrollY: 10, scrollVelocityY: 160),
     build: { column(&$0) }, present: { _ in })
   ui.frame(
     build: { frame in
@@ -420,7 +437,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
   let offset = try state(ui, key: 100).scrollOffset
   #expect(offset > 0)
   requestsReveal = false
-  ui.frame(input: Input(x: 20, y: 20, scrollY: -20), build: build, present: { _ in })
+  ui.frame(input: Input(mousePosition: .init(x: 20, y: 20), scrollY: -20), build: build, present: { _ in })
   #expect(try state(ui, key: 100).scrollOffset == offset - 20)
 }
 
@@ -445,7 +462,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
   ui.frame(build: build, present: present)
   let top = try #require(thumb)
   #expect(top.y == viewport.y + 4)
-  ui.frame(input: Input(x: 20, y: 30, scrollY: 1000), build: build, present: present)
+  ui.frame(input: Input(mousePosition: .init(x: 20, y: 30), scrollY: 1000), build: build, present: present)
   let bottom = try #require(thumb)
   #expect(bottom.height == top.height)
   #expect(bottom.y + bottom.height == viewport.y + viewport.height - 4)
@@ -465,7 +482,7 @@ func unrelatedInteractiveOverlayBlocksScroll(withHandler: Bool) {
   var host = UIHost()
   var received: [Float] = []
   host.frame(
-    input: Input(x: 10, y: 10, scrollY: 40),
+    input: Input(mousePosition: .init(x: 10, y: 10), scrollY: 40),
     build: {
       ScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0) {
         Canvas(key: 2, extent: 400) { _ in }
@@ -485,7 +502,7 @@ func unrelatedInteractiveOverlayBlocksScroll(withHandler: Bool) {
 @Test func scrollBubblesThroughTheHitElementsOwnAncestors() {
   var host = UIHost()
   host.frame(
-    input: Input(x: 10, y: 10, scrollY: 40),
+    input: Input(mousePosition: .init(x: 10, y: 10), scrollY: 40),
     build: {
       ScrollColumn(key: 1, in: Region(0, 0, 100, 100), gap: 0) {
         Element(key: 2, extent: 400) { _ in }

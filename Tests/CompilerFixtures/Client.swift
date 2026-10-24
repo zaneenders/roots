@@ -13,8 +13,8 @@ func render(into frame: inout UIFrame) {
       context.fillRect(region, color: .accent)
       context.strokeRect(region, color: .text)
       let draw = DrawRect(region, .accent)
-      let pointer = PointerEvent(phase: .pressed, x: 0, y: 0, region: draw.region)
-      let scroll = ScrollEvent(deltaY: 1, x: 0, y: 0, region: pointer.region)
+      let pointer = PointerEvent(phase: .pressed, position: .init(x: 0, y: 0), region: draw.region)
+      let scroll = ScrollEvent(deltaY: 1, position: .init(x: 0, y: 0), region: pointer.region)
       _ = scroll.region
     }
     rectangle.color(.accent).frame(width: .fixed(24), height: .fixed(24))
@@ -27,3 +27,15 @@ func render(into frame: inout UIFrame) {
 
 @MainActor
 func inspect(_ state: borrowing UIState) -> NodeState? { state.state(for: 1) }
+
+func publicGeometry() {
+  let position = Coordinate(x: 10, y: 20)
+  let size = Size(width: 100, height: 80)
+  let input = Input(mousePosition: position)
+  let region = Region(0, 0, size.width, size.height)
+  let draw = DrawRect(region, .accent)
+  _ = region.center
+  _ = input.mousePosition
+  _ = draw.localPosition(at: draw.position(at: position))
+  _ = PolylineStroke(points: [position, region.center], width: 2)
+}

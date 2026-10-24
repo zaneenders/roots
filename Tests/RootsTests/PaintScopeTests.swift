@@ -4,7 +4,7 @@ import Testing
 
 @Test func regionHelpersInsetOffsetAndCollapseAtCenter() {
   let region = Region(10, 20, 30, 40)
-  #expect(region.center == .init(25, 40))
+  #expect(region.center == Coordinate(x: 25, y: 40))
   #expect(region.offsetBy(dx: -5, dy: 3) == Region(5, 23, 30, 40))
   #expect(region.insetBy(dx: 2, dy: 4) == Region(12, 24, 26, 32))
   #expect(region.insetBy(dx: 100, dy: 100) == Region(25, 40, 0, 0))
@@ -15,27 +15,27 @@ import Testing
   var store = UIStore()
   var output: [DrawRect] = []
   store.frame(
-    input: Input(x: 30, y: 40),
+    input: Input(mousePosition: .init(x: 30, y: 40)),
     build: { frame in
       frame.beginRow(in: Region(10, 20, 100, 80))
       frame.canvas(key: 1, extent: 100) { context in
         context.withOrigin(x: 10, y: 20, scale: 2) { local in
-          #expect(local.pointerPosition == .init(10, 10))
+          #expect(local.mousePosition == Coordinate(x: 10, y: 10))
           local.withClip(Region(5, 5, 10, 10)) { clipped in
             #expect(clipped.clip == Region(5, 5, 10, 10))
             clipped.fillRect(Region(0, 0, 40, 30), color: .accent)
             clipped.drawText("A", x: 5, y: 5, size: 5)
             clipped.withClip(Region(30, 30, 2, 2)) { empty in
-              #expect(empty.pointerPosition == nil)
-              empty.fillCircle(center: .init(10, 10), radius: 3, color: .text)
+              #expect(empty.mousePosition == nil)
+              empty.fillCircle(center: .init(x: 10, y: 10), radius: 3, color: .text)
             }
-            #expect(clipped.pointerPosition == .init(10, 10))
+            #expect(clipped.mousePosition == Coordinate(x: 10, y: 10))
           }
           #expect(local.clip == Region(0, 0, 50, 40))
         }
-        #expect(context.pointerPosition == .init(30, 40))
+        #expect(context.mousePosition == Coordinate(x: 30, y: 40))
         #expect(context.clip == Region(10, 20, 100, 80))
-        context.strokeCircle(center: .init(80, 70), radius: 6, color: .text, width: 2)
+        context.strokeCircle(center: .init(x: 80, y: 70), radius: 6, color: .text, width: 2)
       }
       frame.end()
     }, present: { span in for draw in span { output.append(draw) } })
@@ -57,9 +57,9 @@ import Testing
           clipped.fillRect(Region(0, 0, 100, 100), color: .accent)
         }
         context.strokePolyline([], color: .accent)
-        context.strokePolyline([.init(.nan, 0)], color: .accent)
-        context.strokePolyline(Array(repeating: .zero, count: 129), color: .accent)
-        context.fillCircle(center: .zero, radius: -1, color: .accent)
+        context.strokePolyline([.init(x: .nan, y: 0)], color: .accent)
+        context.strokePolyline(Array(repeating: Coordinate(x: 0, y: 0), count: 129), color: .accent)
+        context.fillCircle(center: .init(x: 0, y: 0), radius: -1, color: .accent)
       }
       frame.end()
     },
@@ -71,7 +71,8 @@ import Testing
 @Test func polylinesTransformExactlyOnceAndKeepTheScopedClip() throws {
   var store = UIStore()
   var strokes: [DrawRect] = []
-  let stroke = try #require(PolylineStroke(points: [.init(1, 2), .init(3, 4)], width: 2))
+  let stroke = try #require(
+    PolylineStroke(points: [Coordinate(x: 1, y: 2), Coordinate(x: 3, y: 4)], width: 2))
   store.frame(
     build: { frame in
       frame.beginRow(in: Region(10, 20, 80, 60))
@@ -90,7 +91,7 @@ import Testing
     })
   #expect(strokes.count == 2)
   for draw in strokes {
-    #expect(draw.polyline?.points == [.init(12, 24), .init(16, 28)])
+    #expect(draw.polyline?.points == [Coordinate(x: 12, y: 24), Coordinate(x: 16, y: 28)])
     #expect(draw.polyline?.width == 4)
     #expect(draw.clip == Region(10, 20, 20, 20))
     #expect(draw.isValid)
@@ -98,7 +99,8 @@ import Testing
 }
 
 @Test func paintContextRejectsInvalidPolylineDrawMutations() throws {
-  let stroke = try #require(PolylineStroke(points: [.init(5, 5), .init(15, 15)], width: 2))
+  let stroke = try #require(
+    PolylineStroke(points: [Coordinate(x: 5, y: 5), Coordinate(x: 15, y: 15)], width: 2))
   let mutations: [(inout DrawRect) -> Void] = [
     { $0.region.x = .nan },
     { $0.region.x += 1 },
@@ -131,18 +133,21 @@ import Testing
 }
 
 @Test func invalidPolylineDrawMutationsAreRejectedAndFocusLossClearsPointer() throws {
-  let stroke = try #require(PolylineStroke(points: [.init(1, 1)], width: 2))
+  let stroke = try #require(PolylineStroke(points: [Coordinate(x: 1, y: 1)], width: 2))
   var draw = DrawRect(polyline: stroke, color: .accent)
   draw.region.x = .nan
   #expect(!draw.isValid)
-  #expect(PolylineStroke(points: [.init(.greatestFiniteMagnitude, 0), .zero], width: 2) == nil)
+  #expect(
+    PolylineStroke(
+      points: [Coordinate(x: .greatestFiniteMagnitude, y: 0), Coordinate(x: 0, y: 0)], width: 2)
+      == nil)
   var store = UIStore()
   store.frame(
-    input: Input(x: 10, y: 10, focusLost: true),
+    input: Input(mousePosition: .init(x: 10, y: 10), focusLost: true),
     build: { frame in
       frame.beginRow(in: Region(0, 0, 20, 20))
       frame.canvas(key: 1, extent: 20) { context in
-        #expect(context.pointerPosition == nil)
+        #expect(context.mousePosition == nil)
       }
       frame.end()
     }, present: { _ in })

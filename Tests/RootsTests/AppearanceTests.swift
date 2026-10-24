@@ -99,7 +99,10 @@ struct AppearanceTests {
   @Test func backgroundPreservesScrollClippingAndDoesNotInterceptInput() {
     var host = UIHost()
     var clicks = 0
-    for input in [Input(x: 10, y: 10, pressed: true), Input(x: 10, y: 10, released: true)] {
+    for input in [
+      Input(mousePosition: .init(x: 10, y: 10), pressed: true),
+      Input(mousePosition: .init(x: 10, y: 10), released: true)
+    ] {
       host.frame(
         input: input, dt: 0,
         build: {

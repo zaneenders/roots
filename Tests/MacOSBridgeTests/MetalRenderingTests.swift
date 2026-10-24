@@ -126,9 +126,9 @@ import Testing
             context.fillRect(context.region, color: Color(0, 0, 0))
             context.strokeRect(Region(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
             context.strokeLine(
-              from: .init(32, 6), to: .init(56, 24), color: Color(1, 1, 1, 0.6), width: 3)
+              from: .init(x: 32, y: 6), to: .init(x: 56, y: 24), color: Color(1, 1, 1, 0.6), width: 3)
             context.strokeLine(
-              from: .init(56, 30), to: .init(32, 42), color: Color(1, 0, 0), width: 2, cap: .butt)
+              from: .init(x: 56, y: 30), to: .init(x: 32, y: 42), color: Color(1, 0, 0), width: 2, cap: .butt)
           }
         }
       },
@@ -149,7 +149,11 @@ import Testing
   {
     let renderer = try MetalRenderer(logicalSize: .init(48, 40), drawableSize: .init(48, 40))
     let stroke = try #require(
-      PolylineStroke(points: [.init(8, 8), .init(32, 28), .init(8, 28), .init(32, 8)], width: 4))
+      PolylineStroke(
+        points: [
+          Coordinate(x: 8, y: 8), Coordinate(x: 32, y: 28), Coordinate(x: 8, y: 28),
+          Coordinate(x: 32, y: 8)
+        ], width: 4))
     let draws = [
       DrawRect(Region(0, 0, 48, 40), Color(0, 0, 0)),
       DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Region(4, 4, 32, 28)),

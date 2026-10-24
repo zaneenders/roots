@@ -20,7 +20,8 @@ struct DesktopSessionTests {
           #expect(events == ["start"])
           events.append("present")
           runtime.frame(
-            input: Input(), viewport: Viewport(size: .init(100, 26)), time: 0, present: { _ in })
+            input: Input(), viewport: Viewport(size: .init(width: 100, height: 26)), time: 0,
+            present: { _ in })
           await Task.yield()
           if fails { throw SessionFailure.backend }
         })
@@ -52,7 +53,8 @@ struct DesktopSessionTests {
       content: { _ in EmptyBlock() }, offscreen: true,
       present: { runtime in
         runtime.frame(
-          input: Input(keyEvents: [KeyEvent(.enter)]), viewport: Viewport(size: .init(100, 26)),
+          input: Input(keyEvents: [KeyEvent(.enter)]),
+          viewport: Viewport(size: .init(width: 100, height: 26)),
           time: 0,
           present: { _ in })
         #expect(runtime.needsAnimationFrame)

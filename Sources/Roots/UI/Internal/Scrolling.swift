@@ -89,11 +89,12 @@ extension UIStorage {
     if input.pressed { scrollbarDrag = nil }
     if let i = resolve(focusToReveal), nodes[i].isFocusable { reveal(i, padding: 2) }
     focusToReveal = nil
-    let scrolling = scrollbarDrag == nil && input.scrollY.isFinite && input.scrollY != 0
-    if scrolling {
+    let scrolling =
+      scrollbarDrag == nil && input.mousePosition != nil && input.scrollY.isFinite && input.scrollY != 0
+    if scrolling, let position = input.mousePosition {
       scrollVelocity = 0
       scrollTarget = nil
-      let hit = hitTest(x: input.x, y: input.y, scrollable: true)
+      let hit = hitTest(at: position, scrollable: true)
       var target = hit.scrollbar ?? hit.node
       while let i = target, !nodes[i].scrollable && nodes[i].interaction.onScroll == nil {
         target = nodes[i].scrollParent
@@ -116,7 +117,9 @@ extension UIStorage {
         if let onScroll = nodes[i].interaction.onScroll {
           let region = nodes[i].region
           onScroll(
-            ScrollEvent(deltaY: distance, x: input.x - region.x, y: input.y - region.y, region: region))
+            ScrollEvent(
+              deltaY: distance, position: Coordinate(x: position.x - region.x, y: position.y - region.y),
+              region: region))
         } else {
           scrollTarget = handle(i)
           setScrollOffset(nodes[i].scrollOffset + distance, for: i)
@@ -147,15 +150,15 @@ extension UIStorage {
       layoutScrolls()
     }
     if input.scrollVelocityY != nil { scrollInputTarget = nil }
-    if let i = resolve(pressed), !input.pressed, !input.released,
+    if let position = input.mousePosition, let i = resolve(pressed), !input.pressed, !input.released,
       let parent = nodes[i].scrollParent,
       dt.isFinite, dt > 0, nodes[i].textLayout != nil
     {
       let viewport = nodes[i].clip ?? nodes[parent].region
       let distance =
-        input.y < viewport.y
-        ? input.y - viewport.y
-        : max(0, input.y - viewport.y - viewport.height)
+        position.y < viewport.y
+        ? position.y - viewport.y
+        : max(0, position.y - viewport.y - viewport.height)
       if distance.isFinite, distance != 0 {
         let previous = nodes[parent].scrollOffset
         setScrollOffset(previous + max(-600, min(600, distance * 10)) * min(dt, 0.1), for: parent)

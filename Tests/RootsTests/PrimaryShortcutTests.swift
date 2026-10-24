@@ -11,7 +11,8 @@ import Testing
     frame.end()
   }
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true, released: true), build: build, present: { _ in })
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true, released: true), build: build,
+    present: { _ in })
   ui.frame(
     input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
     primaryShortcut: .super,

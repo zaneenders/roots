@@ -3,11 +3,11 @@ import RootsCPU
 import Testing
 
 @Test func joinedAndSelfCrossingTranslucentStrokesBlendOnlyOnce() throws {
-  for points: [SIMD2<Float>] in [
-    [.init(8, 8), .init(24, 8), .init(24, 24)],
-    [.init(8, 8), .init(24, 24), .init(8, 24), .init(24, 8)],
-    [.init(8, 8), .init(8, 8), .init(24, 24)],
-    [.init(8, 8)]
+  for points: [Coordinate] in [
+    [Coordinate(x: 8, y: 8), Coordinate(x: 24, y: 8), Coordinate(x: 24, y: 24)],
+    [Coordinate(x: 8, y: 8), Coordinate(x: 24, y: 24), Coordinate(x: 8, y: 24), Coordinate(x: 24, y: 8)],
+    [Coordinate(x: 8, y: 8), Coordinate(x: 8, y: 8), Coordinate(x: 24, y: 24)],
+    [Coordinate(x: 8, y: 8)]
   ] {
     let stroke = try #require(PolylineStroke(points: points, width: 6))
     let cpu = CPURenderer(width: 32, height: 32)
@@ -23,7 +23,7 @@ import Testing
 }
 
 @Test func singlePointPolylineMatchesACircle() throws {
-  let stroke = try #require(PolylineStroke(points: [.init(16, 16)], width: 8))
+  let stroke = try #require(PolylineStroke(points: [Coordinate(x: 16, y: 16)], width: 8))
   let strokeCPU = CPURenderer(width: 32, height: 32)
   let circleCPU = CPURenderer(width: 32, height: 32)
   strokeCPU.render([DrawRect(polyline: stroke, color: .accent)].span)

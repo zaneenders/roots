@@ -32,7 +32,10 @@ struct BlockTests {
     var host = UIHost()
     var legacyClicks = 0
     var clicks = 0
-    for input in [Input(), Input(x: 5, y: 40, pressed: true), Input(x: 5, y: 40, released: true)] {
+    for input in [
+      Input(), Input(mousePosition: .init(x: 5, y: 40), pressed: true),
+      Input(mousePosition: .init(x: 5, y: 40), released: true)
+    ] {
       var expected: [DrawRect] = []
       legacy.frame(
         input: input, dt: 0,

@@ -23,7 +23,7 @@ struct WaylandInputTests {
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {})
     defer { runtime.stop() }
-    let viewport = Viewport(size: .init(100, 100))
+    let viewport = Viewport(size: .init(width: 100, height: 100))
     runtime.frame(
       input: DesktopSystem.input(NativeWindowInput(source)), viewport: viewport, dt: 0,
       present: { _ in })
@@ -37,10 +37,10 @@ struct WaylandInputTests {
       input: DesktopSystem.input(NativeWindowInput(source)), viewport: viewport, dt: 0,
       present: { _ in })
     #expect(events.map(\.phase) == [.pressed, focusLost ? .cancelled : .released])
-    #expect(events.last?.x == 150 && events.last?.y == 50)
+    #expect(events.last?.position.x == 150 && events.last?.position.y == 50)
     source.resetEdges()
     let idle = DesktopSystem.input(NativeWindowInput(source))
-    #expect(idle.x == -1 && idle.y == -1)
+    #expect(idle.mousePosition == nil)
   }
 
   @Test func outsideButtonEdgesKeepCoordinates() {
@@ -52,7 +52,7 @@ struct WaylandInputTests {
       source.primaryPressed = phase == 1
       source.primaryReleased = phase == 2
       let input = DesktopSystem.input(NativeWindowInput(source))
-      #expect(input.x == 150 && input.y == 50)
+      #expect(input.mousePosition == Coordinate(x: 150, y: 50))
     }
   }
 }

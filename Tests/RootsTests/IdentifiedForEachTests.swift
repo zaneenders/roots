@@ -25,8 +25,8 @@ struct IdentifiedForEachTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 19, pressed: true))
-    render(Input(x: 24, y: 19, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 19), pressed: true))
+    render(Input(mousePosition: .init(x: 24, y: 19), released: true))
     #expect(host.selectedText == "Beta")
     items = [items[1], Item(id: "c", title: "Gamma"), items[0]]
     render()
@@ -58,8 +58,8 @@ struct IdentifiedForEachTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 5, pressed: true))
-    render(Input(x: 24, y: 5, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 5), pressed: true))
+    render(Input(mousePosition: .init(x: 24, y: 5), released: true))
     #expect(host.selectedText == "item")
     showDetail = true
     render()
@@ -87,8 +87,8 @@ struct IdentifiedForEachTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 33, pressed: true))
-    render(Input(x: 36, y: 33, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 33), pressed: true))
+    render(Input(mousePosition: .init(x: 36, y: 33), released: true))
     #expect(host.selectedText == "second")
     parents.reverse()
     render()
@@ -125,7 +125,7 @@ struct IdentifiedForEachTests {
           }.selectionGroup(key: 100)
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 5, pressed: true, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 5), pressed: true, released: true))
     render(Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]))
     #expect(host.selectedText == "first\nsecond")
   }
@@ -155,8 +155,8 @@ struct IdentifiedForEachTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 5, pressed: true))
-    render(Input(x: 30, y: 5, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 5), pressed: true))
+    render(Input(mousePosition: .init(x: 30, y: 5), released: true))
     #expect(host.selectedText == "first")
     render()
     #expect(host.selectedText == "first")
@@ -195,8 +195,8 @@ struct IdentifiedForEachTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 5, pressed: true))
-    render(Input(x: 30, y: 5, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 5), pressed: true))
+    render(Input(mousePosition: .init(x: 30, y: 5), released: true))
     #expect(host.selectedText == "value")
     items = []
     render()

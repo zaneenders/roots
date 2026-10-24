@@ -57,8 +57,11 @@ struct MarkdownPageTests {
     render()
     let heading = try #require(host.state(for: 30)?.region)
     let footer = try #require(host.state(for: 21)?.region)
-    render(Input(x: heading.x, y: heading.y + 2, pressed: true))
-    render(Input(x: footer.x + footer.width, y: footer.y + footer.height - 2, released: true))
+    render(Input(mousePosition: .init(x: heading.x, y: heading.y + 2), pressed: true))
+    render(
+      Input(
+        mousePosition: .init(x: footer.x + footer.width, y: footer.y + footer.height - 2),
+        released: true))
     #expect(host.selectedText?.hasPrefix("ROOTS / TEXT PLAYGROUND\n") == true)
     #expect(host.selectedText?.contains(MarkdownPage.code) == true)
     #expect(host.selectedText?.hasSuffix("not implemented here.") == true)
@@ -75,8 +78,8 @@ struct MarkdownPageTests {
     }
     render()
     let code = try #require(host.state(for: 20)?.region)
-    render(Input(x: code.x, y: code.y + 2, pressed: true))
-    render(Input(x: code.x + code.width, y: code.y + code.height - 2, released: true))
+    render(Input(mousePosition: .init(x: code.x, y: code.y + 2), pressed: true))
+    render(Input(mousePosition: .init(x: code.x + code.width, y: code.y + code.height - 2), released: true))
     #expect(host.selectedText == MarkdownPage.code)
   }
 
@@ -118,8 +121,8 @@ struct MarkdownPageTests {
       #expect(caption.x + caption.width <= button.x)
       #expect(button.x + button.width <= width - 32)
       #expect(host.selectedText == nil)
-      render(Input(x: button.center.x, y: button.center.y, pressed: true))
-      render(Input(x: button.center.x, y: button.center.y, released: true))
+      render(Input(mousePosition: .init(x: button.center.x, y: button.center.y), pressed: true))
+      render(Input(mousePosition: .init(x: button.center.x, y: button.center.y), released: true))
       render(Input(keyEvents: [KeyEvent(.enter)]))
       #expect(copied.count == 2)
       #expect(copied.allSatisfy { $0.utf8.elementsEqual(MarkdownPage.code.utf8) })

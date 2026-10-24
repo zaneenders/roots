@@ -38,7 +38,31 @@ private struct ObservedContent: Block {
 
 @MainActor
 struct DesktopRuntimeTests {
-  let viewport = Viewport(size: .init(100, 100))
+  let viewport = Viewport(size: .init(width: 100, height: 100))
+
+  @Test func windowUsesNamedDimensions() {
+    let window = DesktopWindow("Dimensions", width: 320, height: 180) { _ in EmptyBlock() }
+    #expect(window.size == Size(width: 320, height: 180))
+    let defaults = DesktopWindow("Defaults") { _ in EmptyBlock() }
+    #expect(defaults.size == Size(width: 900, height: 660))
+  }
+
+  @Test func missingAndPresentMousePositionsInvalidateIndependently() {
+    var requests = 0
+    let runtime = DesktopRuntime(
+      content: { _ in EmptyBlock() }, primaryShortcut: .control, onCopy: { _ in },
+      requestRedraw: { requests += 1 })
+    defer { runtime.stop() }
+    runtime.frame(input: Input(), viewport: viewport, dt: 0, present: { _ in })
+    #expect(requests == 0)
+    let position = Coordinate(x: -1, y: -1)
+    runtime.frame(input: Input(mousePosition: position), viewport: viewport, dt: 0, present: { _ in })
+    #expect(requests == 1)
+    runtime.frame(input: Input(mousePosition: position), viewport: viewport, dt: 0, present: { _ in })
+    #expect(requests == 1)
+    runtime.frame(input: Input(), viewport: viewport, dt: 0, present: { _ in })
+    #expect(requests == 2)
+  }
 
   @Test func contentIsLazyAndReevaluatesWithViewportWhileStatePersists() {
     let model = Model()
@@ -57,13 +81,15 @@ struct DesktopRuntimeTests {
     defer { runtime.stop() }
     runtime.frame(input: Input(), viewport: viewport, time: 0, present: { _ in })
     runtime.frame(
-      input: Input(x: 5, y: 5, pressed: true), viewport: viewport, time: 0.01, present: { _ in })
+      input: Input(mousePosition: .init(x: 5, y: 5), pressed: true), viewport: viewport, time: 0.01,
+      present: { _ in })
     runtime.frame(
-      input: Input(x: 5, y: 5, released: true), viewport: viewport, time: 0.02, present: { _ in })
+      input: Input(mousePosition: .init(x: 5, y: 5), released: true), viewport: viewport,
+      time: 0.02, present: { _ in })
     #expect(model.clicks == 1)
     #expect(runtime.state(for: 1)?.clicks == 1)
     runtime.frame(
-      input: Input(), viewport: Viewport(size: .init(200, 100), scale: 2), time: 0.03,
+      input: Input(), viewport: Viewport(size: .init(width: 200, height: 100), scale: 2), time: 0.03,
       present: { _ in })
     #expect(builds == 4)
     #expect(runtime.state(for: 1)?.region.width == 200)
@@ -100,14 +126,17 @@ struct DesktopRuntimeTests {
     let x = button.x + button.width / 2
     let y = button.y + button.height / 2
     runtime.frame(
-      input: Input(x: x, y: y, pressed: true), viewport: viewport, dt: 0, present: { _ in })
+      input: Input(mousePosition: .init(x: x, y: y), pressed: true), viewport: viewport, dt: 0,
+      present: { _ in })
     let beforeRelease = requests
     runtime.frame(
-      input: Input(x: x, y: y, released: true), viewport: viewport, dt: 0, present: { _ in })
+      input: Input(mousePosition: .init(x: x, y: y), released: true), viewport: viewport, dt: 0,
+      present: { _ in })
     #expect(model.count == 1)
     #expect(titles.last == "Count: 0")
     #expect(requests == beforeRelease + 1)
-    runtime.frame(input: Input(x: x, y: y), viewport: viewport, dt: 0, present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: x, y: y)), viewport: viewport, dt: 0, present: { _ in })
     #expect(titles.last == "Count: 1")
     #expect(model.count == 1)
   }
@@ -203,11 +232,17 @@ struct DesktopRuntimeTests {
       content: { _ in EmptyBlock() }, primaryShortcut: .control, onCopy: { _ in },
       requestRedraw: { requests += 1 })
     defer { runtime.stop() }
-    runtime.frame(input: Input(x: 5, y: 5), viewport: viewport, time: 0, present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 5, y: 5)), viewport: viewport, time: 0, present: { _ in }
+    )
     #expect(requests == 1)
-    runtime.frame(input: Input(x: 5, y: 5), viewport: viewport, time: 1, present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 5, y: 5)), viewport: viewport, time: 1, present: { _ in }
+    )
     #expect(requests == 1)
-    runtime.frame(input: Input(x: 10, y: 5), viewport: viewport, time: 2, present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 10, y: 5)), viewport: viewport, time: 2,
+      present: { _ in })
     #expect(requests == 2)
   }
 
@@ -218,7 +253,9 @@ struct DesktopRuntimeTests {
         Column(in: viewport.bounds) { Button(key: 1, "Hover") }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: { requests += 1 })
     defer { runtime.stop() }
-    runtime.frame(input: Input(x: 5, y: 5), viewport: viewport, time: 0, present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 5, y: 5)), viewport: viewport, time: 0, present: { _ in }
+    )
     #expect(requests == 1)
   }
 
@@ -334,12 +371,15 @@ extension DesktopRuntimeTests {
     defer { runtime.stop() }
     func scroll(at time: Double) {
       runtime.frame(
-        input: Input(x: 20, y: 20, scrollY: 60), viewport: viewport, time: time, present: { _ in })
+        input: Input(mousePosition: .init(x: 20, y: 20), scrollY: 60), viewport: viewport,
+        time: time, present: { _ in })
     }
     scroll(at: 0)
     scroll(at: 0.05)
     #expect((runtime.state(for: 1)?.scrollOffset ?? 0) > 120)
-    runtime.frame(input: Input(x: 20, y: 20), viewport: viewport, time: 0.066, present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 20, y: 20)), viewport: viewport, time: 0.066,
+      present: { _ in })
     let before = runtime.state(for: 1)?.scrollOffset ?? 0
     scroll(at: 10)
     #expect(runtime.state(for: 1)?.scrollOffset == before + 60)
@@ -436,6 +476,26 @@ extension DesktopRuntimeTests {
 }
 
 extension DesktopRuntimeTests {
+  @Test func rebuildMousePositionDoesNotReplaceLastInputPosition() {
+    let policy = FramePolicy()
+    policy.rebuild = true
+    policy.rebuildMousePosition = Coordinate(x: 80, y: 80)
+    var events: [PointerEvent] = []
+    let runtime = DesktopRuntime(
+      content: { viewport in
+        Column(in: viewport.bounds) {
+          Element(key: 1, extent: 100, onPointer: { events.append($0) }) { _ in }
+        }
+      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
+    defer { runtime.stop() }
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 10, y: 20), pressed: true),
+      viewport: viewport, dt: 0, present: { _ in })
+    runtime.frame(input: Input(focusLost: true), viewport: viewport, dt: 0, present: { _ in })
+    #expect(events.map(\.phase) == [.pressed, .cancelled])
+    #expect(events.last?.position == Coordinate(x: 10, y: 20))
+  }
+
   @Test(arguments: [false, true])
   func rebuildUsesMousePositionForHover(keepsMousePosition: Bool) {
     let policy = FramePolicy()
@@ -465,16 +525,21 @@ extension DesktopRuntimeTests {
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     runtime.frame(
-      input: Input(x: 10, y: 10, pressed: true), viewport: viewport, dt: 0.01, present: { _ in })
+      input: Input(mousePosition: .init(x: 10, y: 10), pressed: true), viewport: viewport, dt: 0.01,
+      present: { _ in })
     #expect(events.map(\.phase) == [.pressed])
-    runtime.frame(input: Input(x: 20, y: 20), viewport: viewport, dt: 0.01, present: { _ in })
-    #expect(events.map(\.phase) == [.pressed, .dragged])
-    #expect(events.last?.x == 20)
     runtime.frame(
-      input: Input(x: 20, y: 20, released: true), viewport: viewport, dt: 0.01, present: { _ in })
+      input: Input(mousePosition: .init(x: 20, y: 20)), viewport: viewport, dt: 0.01,
+      present: { _ in })
+    #expect(events.map(\.phase) == [.pressed, .dragged])
+    #expect(events.last?.position.x == 20)
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 20, y: 20), released: true), viewport: viewport,
+      dt: 0.01, present: { _ in })
     #expect(events.map(\.phase) == [.pressed, .dragged, .released])
     runtime.frame(
-      input: Input(x: 10, y: 10, pressed: true), viewport: viewport, dt: 0.01, present: { _ in })
+      input: Input(mousePosition: .init(x: 10, y: 10), pressed: true), viewport: viewport, dt: 0.01,
+      present: { _ in })
     runtime.frame(input: Input(focusLost: true), viewport: viewport, dt: 0.01, present: { _ in })
     #expect(events.map(\.phase) == [.pressed, .dragged, .released, .pressed, .cancelled])
   }
@@ -490,11 +555,15 @@ extension DesktopRuntimeTests {
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     runtime.frame(
-      input: Input(x: 0, y: 10, pressed: true), viewport: viewport, dt: 0, present: { _ in })
-    runtime.frame(input: Input(x: 24, y: 10), viewport: viewport, dt: 0, present: { _ in })
+      input: Input(mousePosition: .init(x: 0, y: 10), pressed: true), viewport: viewport, dt: 0,
+      present: { _ in })
+    runtime.frame(
+      input: Input(mousePosition: .init(x: 24, y: 10)), viewport: viewport, dt: 0, present: { _ in }
+    )
     #expect(policy.selectedText == "AB")
     runtime.frame(
-      input: Input(x: 36, y: 10, released: true), viewport: viewport, dt: 0, present: { _ in })
+      input: Input(mousePosition: .init(x: 36, y: 10), released: true), viewport: viewport, dt: 0,
+      present: { _ in })
     #expect(policy.selectedText == "ABC")
   }
 }
