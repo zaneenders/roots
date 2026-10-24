@@ -355,3 +355,13 @@ func invalidKeymapSizeClearsTheOldLayout(size: UInt32) throws {
   moved.key(16, pressed: true, input: &input)
   #expect(input.keyEvents == [event(.character("a"), code: 16)])
 }
+
+@MainActor func loadTestKeymap(_ connection: WaylandConnection, keyboard: UInt32) throws {
+  let bytes = Data((keymap + "\0").utf8)
+  try withKeymapFile(bytes) { fd in
+    try connection.receive(
+      .init(
+        object: keyboard, opcode: 0,
+        arguments: [.uint(1), .fd(try WireDescriptor.duplicate(fd)), .uint(UInt32(bytes.count))]))
+  }
+}

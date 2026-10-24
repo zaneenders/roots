@@ -12,6 +12,7 @@ import Glibc
   private var held: Repeat?
 
   var isRepeating: Bool { held != nil }
+  var repeatDeadline: ContinuousClock.Instant? { held?.next }
 
   init() { unsafe context = xkb_context_new(XKB_CONTEXT_NO_FLAGS) }
 

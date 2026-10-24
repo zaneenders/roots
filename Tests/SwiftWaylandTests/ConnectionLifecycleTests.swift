@@ -1058,3 +1058,120 @@ private let fractionalScaleGlobals = ["wp_fractional_scale_manager_v1", "wp_view
   let duplicate = try await drain(connection, &peer)
   #expect(!duplicate.contains { $0.id == manager && $0.opcode == 1 })
 }
+
+@MainActor private func configureKeyboard(
+  _ connection: WaylandConnection, _ peer: inout ConnectionPeer, surface: UInt32
+) async throws -> UInt32 {
+  try connection.receive(.init(object: peer.seat, opcode: 0, arguments: [.uint(3)]))
+  let requests = try await drain(connection, &peer)
+  let request = try #require(requests.first { $0.id == peer.seat && $0.opcode == 1 })
+  let keyboard: UInt32 = try #require(
+    request.body.getInteger(at: request.body.readerIndex, endianness: .host))
+  try loadTestKeymap(connection, keyboard: keyboard)
+  try connection.receive(
+    .init(object: keyboard, opcode: 1, arguments: [.uint(1), .uint(surface), .array(ByteBuffer())]))
+  return keyboard
+}
+
+@Test(arguments: [false, true]) @MainActor
+func keyboardRepeatSleepsUntilDeadlineAndWakesOnlyFocusedSurface(popup: Bool) async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let surface = popup ? try await configurePopup(connection, &peer).surface : peer.surface
+  let keyboard = try await configureKeyboard(connection, &peer, surface: surface)
+  _ = connection.beginFrame()
+  _ = connection.takePopupInput()
+  try connection.receive(.init(object: keyboard, opcode: 5, arguments: [.int(2), .int(200)]))
+  try connection.receive(
+    .init(object: keyboard, opcode: 3, arguments: [.uint(2), .uint(0), .uint(16), .uint(1)]))
+  let first = popup ? connection.takePopupInput()! : connection.beginFrame()
+  #expect(first.keyEvents.count == 1 && first.keyEvents[0].phase == .pressed)
+  if popup { try connection.endPopupFrame() } else { try connection.endFrame() }
+  let callback = try frameCallback(in: await drain(connection, &peer), on: surface)
+  #expect(!connection.redrawRequested)
+  #expect(!connection.canRender && !connection.canRenderPopup)
+  try connection.receive(.init(object: callback, opcode: 0, arguments: [.uint(1)]))
+  #expect(!connection.canRender && !connection.canRenderPopup)
+
+  // No socket input is needed to wake dispatch at the repeat deadline.
+  let timeout = Task {
+    try await Task.sleep(for: .seconds(3))
+    connection.requestClose()
+  }
+  defer { timeout.cancel() }
+  while connection.running && !(popup ? connection.canRenderPopup : connection.canRender) {
+    try await connection.dispatchAsync()
+  }
+  try #require(connection.running)
+  #expect(popup ? !connection.redrawRequested : !connection.canRenderPopup)
+  let repeated = popup ? connection.takePopupInput()! : connection.beginFrame()
+  #expect(!repeated.keyEvents.isEmpty)
+  #expect(repeated.keyEvents.allSatisfy { $0.phase == .repeated })
+  if popup { try connection.endPopupFrame() } else { try connection.endFrame() }
+  #expect(!connection.redrawRequested)
+  #expect(!connection.canRenderPopup)
+}
+
+@Test(arguments: [false, true]) @MainActor
+func keyboardRepeatWaitsForDelayedSurfaceCallback(popup: Bool) async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let surface = popup ? try await configurePopup(connection, &peer).surface : peer.surface
+  let keyboard = try await configureKeyboard(connection, &peer, surface: surface)
+  _ = connection.beginFrame()
+  _ = connection.takePopupInput()
+  try connection.receive(.init(object: keyboard, opcode: 5, arguments: [.int(100), .int(0)]))
+  try connection.receive(
+    .init(object: keyboard, opcode: 3, arguments: [.uint(2), .uint(0), .uint(16), .uint(1)]))
+  if popup {
+    _ = connection.takePopupInput()
+    try connection.endPopupFrame()
+  } else {
+    _ = connection.beginFrame()
+    try connection.endFrame()
+  }
+  let callback = try frameCallback(in: await drain(connection, &peer), on: surface)
+  try await Task.sleep(for: .milliseconds(400))
+  #expect(!connection.canRender && !connection.canRenderPopup)
+  if popup { #expect(!connection.redrawRequested) } else { #expect(connection.redrawRequested) }
+  try connection.receive(.init(object: callback, opcode: 0, arguments: [.uint(1)]))
+  #expect(popup ? connection.canRenderPopup : connection.canRender)
+  let repeated = popup ? connection.takePopupInput()! : connection.beginFrame()
+  #expect(!repeated.keyEvents.isEmpty && repeated.keyEvents.count <= 32)
+  #expect(repeated.keyEvents.allSatisfy { $0.phase == .repeated })
+}
+
+@Test(arguments: ["release", "focus", "keymap", "disabled", "seat", "close", "popup"])
+@MainActor func keyboardRepeatDeadlineIsCancelled(reason: String) async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let surface =
+    reason == "popup" ? try await configurePopup(connection, &peer).surface : peer.surface
+  let keyboard = try await configureKeyboard(connection, &peer, surface: surface)
+  try connection.receive(.init(object: keyboard, opcode: 5, arguments: [.int(20), .int(100)]))
+  try connection.receive(
+    .init(object: keyboard, opcode: 3, arguments: [.uint(2), .uint(0), .uint(16), .uint(1)]))
+  switch reason {
+  case "release":
+    try connection.receive(
+      .init(object: keyboard, opcode: 3, arguments: [.uint(3), .uint(0), .uint(16), .uint(0)]))
+  case "focus":
+    try connection.receive(
+      .init(object: keyboard, opcode: 2, arguments: [.uint(3), .uint(surface)]))
+  case "keymap": try loadTestKeymap(connection, keyboard: keyboard)
+  case "disabled":
+    try connection.receive(.init(object: keyboard, opcode: 5, arguments: [.int(0), .int(100)]))
+  case "seat":
+    try connection.receive(.init(object: peer.seat, opcode: 0, arguments: [.uint(1)]))
+  case "close": connection.requestClose()
+  default: connection.dismissPopup()
+  }
+  _ = connection.beginFrame()
+  _ = connection.takePopupInput()
+  try await Task.sleep(for: .milliseconds(200))
+  #expect(!connection.redrawRequested && !connection.canRenderPopup)
+  #expect(connection.beginFrame().keyEvents.isEmpty)
+}

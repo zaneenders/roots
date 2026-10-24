@@ -53,6 +53,8 @@ import NIOCore
   private var viewporter: UInt32 = 0
   private var viewporterName: UInt32?
   private var typing = Keyboard()
+  private var repeatTask: Task<Void, Never>?
+  private var repeatDeadline: ContinuousClock.Instant?
   private var popup: WaylandPopup?
   private var pointerInPopup = false
   private var keyboardInPopup = false
@@ -201,6 +203,7 @@ import NIOCore
         guard let self, self.lifecycle != .closed else { return }
         self.terminalError = error
         self.running = false
+        self.scheduleKeyRepeat()
         self.decoder = WireDecoder()
         self.objects.discard()
         self.signal()
@@ -317,6 +320,7 @@ import NIOCore
   }
   public func requestClose() {
     running = false
+    scheduleKeyRepeat()
     signal()
   }
 
@@ -505,6 +509,7 @@ import NIOCore
     }
   }
   private func updateCapabilities(_ capabilities: UInt32) {
+    defer { scheduleKeyRepeat() }
     if capabilities & 1 != 0 {
       if pointer == 0 { pointer = objects.create(seat, 0, "wl_pointer") }
     } else if pointer != 0 {
@@ -555,6 +560,7 @@ import NIOCore
     if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
   }
   private func keyboardEvent(_ opcode: UInt16, _ a: [WireValue]) {
+    defer { scheduleKeyRepeat() }
     switch opcode {
     case 0:
       guard case .fd(let fd) = a[1] else { return }
@@ -623,9 +629,31 @@ import NIOCore
     }
   }
 
+  private func scheduleKeyRepeat() {
+    let deadline =
+      running && (!keyboardInPopup || popup?.dismissed == false)
+      ? typing.repeatDeadline : nil
+    guard deadline != repeatDeadline else { return }
+    repeatTask?.cancel()
+    repeatTask = nil
+    repeatDeadline = deadline
+    guard let deadline else { return }
+    repeatTask = Task { @MainActor [weak self] in
+      do { try await ContinuousClock().sleep(until: deadline) } catch { return }
+      guard let self, self.running, self.repeatDeadline == deadline else { return }
+      self.repeatTask = nil
+      // Leave the deadline armed until a frame consumes the bounded repeat batch.
+      // A delayed frame callback or buffer release must not cause a timer spin.
+      if self.keyboardInPopup { self.requestPopupRedraw() } else { self.requestRedraw() }
+    }
+  }
+
   public func beginFrame() -> WaylandInput {
     frame.redrawRequested = false
-    if lifecycle != .closed && !keyboardInPopup { typing.repeatKeys(input: &input) }
+    if running && !keyboardInPopup {
+      typing.repeatKeys(input: &input)
+      scheduleKeyRepeat()
+    }
     let snapshot = input
     input.resetEdges()
     return snapshot
@@ -636,7 +664,7 @@ import NIOCore
     scale.prepare(width: input.width, height: input.height, objects: objects)
     try frame.endFrame(
       on: surface, objects: objects,
-      continuously: continuously || (!keyboardInPopup && typing.isRepeating))
+      continuously: continuously)
   }
   public func presentPopup(
     configuration: WaylandPopupConfiguration, grab: Bool = true,
@@ -658,6 +686,7 @@ import NIOCore
   }
   public func requestPopupDismissal() {
     popup?.dismissed = true
+    scheduleKeyRepeat()
     signal()
   }
   public func dismissPopup() {
@@ -666,6 +695,7 @@ import NIOCore
     pointerInPopup = false
     if keyboardInPopup { typing.leave(input: &child.input) }
     keyboardInPopup = false
+    scheduleKeyRepeat()
     dmabuf.unwatch(surface: child.surface)
     child.close()
     signal()
@@ -676,7 +706,10 @@ import NIOCore
   public func takePopupInput() -> WaylandInput? {
     guard let popup, popup.frame.configured, !popup.dismissed else { return nil }
     popup.frame.redrawRequested = false
-    if keyboardInPopup { typing.repeatKeys(input: &popup.input) }
+    if running && keyboardInPopup {
+      typing.repeatKeys(input: &popup.input)
+      scheduleKeyRepeat()
+    }
     let snapshot = popup.input
     popup.input.resetEdges()
     return snapshot
@@ -687,7 +720,7 @@ import NIOCore
     popup.scale.prepare(width: popup.input.width, height: popup.input.height, objects: objects)
     try popup.frame.endFrame(
       on: popup.surface, objects: objects,
-      continuously: continuously || (keyboardInPopup && typing.isRepeating))
+      continuously: continuously)
   }
   public var dmabufPreferences: WaylandDMABufFeedback? { dmabuf.preferences(surface: surface) }
   public var popupDMABufPreferences: WaylandDMABufFeedback? {
@@ -752,6 +785,7 @@ import NIOCore
     guard lifecycle != .closed else { return }
     lifecycle = .closed
     running = false
+    scheduleKeyRepeat()
     frame.close(objects: objects)
     io?.cancel()
     writes?.finish()

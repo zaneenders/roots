@@ -9,6 +9,7 @@ import SwiftWayland
   private let popup: Bool
   private var targets = InlineArray<3, DMABufTarget?> { _ in nil }
   private var selected: Int?
+  private var synchronization: DMABufSynchronization?
   private var preferences: WaylandDMABufFeedback?
   private var rejected: Set<WaylandDMABufFormat> = []
 
@@ -23,6 +24,7 @@ import SwiftWayland
     throws -> Bool
   {
     selected = nil
+    if synchronization == nil { synchronization = unsafe DMABufSynchronization(display: display) }
     let feedback = popup ? connection.popupDMABufPreferences : connection.dmabufPreferences
     if feedback != preferences {
       preferences = feedback
@@ -68,10 +70,10 @@ import SwiftWayland
   }
 
   mutating func present() throws {
-    guard let selected, let buffer = targets[selected]?.buffer else {
+    guard let selected, let buffer = targets[selected]?.buffer, synchronization != nil else {
       throw NativeWindowError.dmabuf("No target selected for presentation.")
     }
-    glFinish()
+    targets[selected]?.finishRendering(using: &synchronization!)
     guard glGetError() == GL_NO_ERROR else { throw NativeWindowError.rendering }
     try connection.presentDMABuf(buffer, popup: popup)
     self.selected = nil
@@ -90,6 +92,7 @@ import SwiftWayland
   private(set) var format: WaylandDMABufFormat?
   private(set) var preferences: WaylandDMABufFeedback?
   private var imported: WaylandDMABufBuffer?
+  private var synchronizationDescriptors: [Int32] = []
   private let destroyImage: PFNEGLDESTROYIMAGEKHRPROC
 
   var buffer: WaylandDMABufBuffer { imported! }
@@ -201,6 +204,8 @@ import SwiftWayland
       imported = try connection.importDMABuf(
         width: width, height: height, format: UInt32(bitPattern: format), modifier: modifier,
         planes: planes.span, popup: popup)
+      synchronizationDescriptors = fds.filter { $0 >= 0 }
+      fds = []
     } catch {
       throw NativeWindowError.dmabuf(
         "Cannot import format 0x\(String(UInt32(bitPattern: format), radix: 16)), "
@@ -303,6 +308,13 @@ import SwiftWayland
     imported = try connection.importDMABuf(
       width: width, height: height, format: format.format, modifier: format.modifier,
       planes: planes.span, popup: popup)
+    synchronizationDescriptors = planes.map(\.descriptor)
+    planes = []
+  }
+
+  @discardableResult
+  func finishRendering(using synchronization: inout DMABufSynchronization) -> Bool {
+    synchronization.finishRendering(descriptors: synchronizationDescriptors.span)
   }
 
   mutating func close() {
@@ -311,6 +323,7 @@ import SwiftWayland
   }
 
   deinit {
+    for fd in synchronizationDescriptors { _ = Glibc.close(fd) }
     if let image = unsafe image { _ = unsafe destroyImage(display, image) }
     if let allocation = unsafe allocation { unsafe gbm_bo_destroy(allocation) }
     guard unsafe eglGetCurrentContext() == context else { return }
