@@ -23,8 +23,6 @@ public struct Rectangle: Block {
   }
 }
 
-public typealias Rect = Rectangle
-
 struct RectangleStyle {
   var cornerRadius: Float = 0
   var strokeWidth: Float?

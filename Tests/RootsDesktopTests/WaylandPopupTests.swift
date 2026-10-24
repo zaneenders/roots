@@ -1,5 +1,5 @@
 #if os(Linux)
-import Roots
+@_spi(Hosting) import Roots
 import Testing
 import WaylandBridge
 
@@ -14,7 +14,7 @@ struct WaylandPopupTests {
       configuration: .init(x: 0, y: 0, anchorWidth: 20, anchorHeight: 26, width: 320, height: 320)
     ) { _ in
       builds += 1
-      return EmptyBlock()
+      return BlockBuilder.buildBlock()
     }.onClose { closes += 1 }
     #expect(!popup.present())
     #expect(builds == 0 && closes == 0)
@@ -36,7 +36,7 @@ struct WaylandPopupTests {
       content: { viewport in
         Column(in: viewport.bounds) {
           Button(key: 1, "Action", onClick: {})
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }
       }, offscreen: true)
     defer { runtime.stop() }

@@ -66,7 +66,7 @@ extension UIStorage {
         size[1 - axis] = max(size[1 - axis], layouts[child].measured[1 - axis])
       }
       size[axis] += Float(max(0, children.count - 1)) * element.style.gap
-    case .stack, .frame:
+    case .stack, .frame, .scroll:
       for child in children {
         size = SIMD2(max(size.x, layouts[child].measured.x), max(size.y, layouts[child].measured.y))
       }
@@ -166,6 +166,15 @@ extension UIStorage {
               layouts[child].region.y = inner.y
               layouts[child].region.height = inner.height
             }
+          }
+        }
+      case .scroll:
+        for child in children {
+          // Constrain width for text reflow, but preserve the content's full height.
+          let slot = Region(inner.x, inner.y, inner.width, max(inner.height, layouts[child].measured.y))
+          placeLayout(child, in: slot, alignment: .topLeading)
+          if !layouts[child].style.kind.isLeaf, layouts[child].style.width == .fit {
+            layouts[child].region.width = inner.width
           }
         }
       case .grid(let columns):

@@ -13,7 +13,7 @@ extension NativeSessionTests {
     var draws: [DrawRect] = []
     ui.frame(
       build: {
-        RowBlock(in: Region(0, 0, 8, 8)) {
+        Row(in: Region(0, 0, 8, 8)) {
           Canvas(key: 1, extent: 8) { context in
             context.withClip(Region(1.75, 0, 1.5, 8)) { clipped in
               clipped.fillRect(Region(-4, -4, 16, 16), color: Color(1, 0, 0))

@@ -66,7 +66,7 @@ struct DesktopWindowTests {
   @Test func defaultMainPropagatesInitializationErrors() async {
     struct FailingApp: RootsApp {
       init() throws { throw DesktopWindowError.invalidConfiguration }
-      var window: some Window { DesktopWindow("Unused") { _ in EmptyBlock() } }
+      var window: some Window { DesktopWindow("Unused") { _ in BlockBuilder.buildBlock() } }
     }
     await #expect(throws: DesktopWindowError.invalidConfiguration) { try await FailingApp.main() }
   }
@@ -74,7 +74,7 @@ struct DesktopWindowTests {
   @Test func invalidWindowDoesNotStartApplicationLifecycle() async {
     var events: [String] = []
     await #expect(throws: DesktopWindowError.invalidConfiguration) {
-      try await DesktopWindow("Invalid", nodeCapacity: -1) { _ in EmptyBlock() }
+      try await DesktopWindow("Invalid", nodeCapacity: -1) { _ in BlockBuilder.buildBlock() }
         .onStart { events.append("start") }
         .onClose { events.append("close") }
         .run()
@@ -87,7 +87,7 @@ struct DesktopWindowTests {
         try await DesktopWindow(
           "Invalid", scrollAcceleration: acceleration, scrollDeceleration: deceleration
         ) {
-          _ in EmptyBlock()
+          _ in BlockBuilder.buildBlock()
         }.run()
       }
     }
@@ -107,18 +107,18 @@ struct DesktopWindowTests {
     ] {
       let window = DesktopWindow("Invalid", width: size.width, height: size.height) { _ in
         builds += 1
-        return EmptyBlock()
+        return BlockBuilder.buildBlock()
       }
       await #expect(throws: DesktopWindowError.invalidConfiguration) { try await window.run() }
     }
     await #expect(throws: DesktopWindowError.invalidConfiguration) {
-      try await DesktopWindow("Invalid", offscreen: true) { _ in EmptyBlock() }.run()
+      try await DesktopWindow("Invalid", offscreen: true) { _ in BlockBuilder.buildBlock() }.run()
     }
     await #expect(throws: DesktopWindowError.invalidConfiguration) {
-      try await DesktopWindow("Invalid", maxFrames: -1) { _ in EmptyBlock() }.run()
+      try await DesktopWindow("Invalid", maxFrames: -1) { _ in BlockBuilder.buildBlock() }.run()
     }
     await #expect(throws: DesktopWindowError.invalidConfiguration) {
-      try await DesktopWindow("Invalid", screenshotPath: "/tmp/unused.ppm") { _ in EmptyBlock() }
+      try await DesktopWindow("Invalid", screenshotPath: "/tmp/unused.ppm") { _ in BlockBuilder.buildBlock() }
         .run()
     }
     #expect(builds == 0)
@@ -126,7 +126,7 @@ struct DesktopWindowTests {
 
   @Test func cancellationIsCheckedBeforeOpeningAWindow() async {
     let task = Task { @MainActor in
-      try await DesktopWindow("Cancelled") { _ in EmptyBlock() }.run()
+      try await DesktopWindow("Cancelled") { _ in BlockBuilder.buildBlock() }.run()
     }
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
@@ -149,7 +149,7 @@ struct DesktopWindowRenderingTests {
       try await DesktopWindow(
         "Failed screenshot", width: 32, height: 32, maxFrames: 1,
         screenshotPath: directory.path, offscreen: true
-      ) { _ in EmptyBlock() }
+      ) { _ in BlockBuilder.buildBlock() }
       .onStart { events.append("start") }
       .onClose { events.append("close") }
       .run()

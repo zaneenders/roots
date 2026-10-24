@@ -5,11 +5,11 @@ import Testing
 @MainActor
 struct RectangleTests {
   @Test func aliasFillsAvailableSpaceWithSquareCorners() {
-    let rectangle: Rectangle = Rect()
+    let rectangle: Rectangle = Rectangle()
     let bounds = Region(10, 20, 100, 80)
     var host = UIHost()
     host.frame(
-      build: { ZStack(in: bounds) { rectangle } },
+      build: { Stack(in: bounds) { rectangle } },
       present: { batch in
         #expect(batch.count == 1)
         #expect(batch[0].region == bounds)
@@ -26,7 +26,7 @@ struct RectangleTests {
     host.frame(
       build: {
         Column(in: Region(10, 20, 100, 80)) {
-          Rect()
+          Rectangle()
             .color(.accent)
             .frame(width: .fixed(24), height: .fixed(16))
             .padding(2)
@@ -69,9 +69,9 @@ struct RectangleTests {
     var host = UIHost()
     host.frame(
       build: {
-        RowBlock(in: Region(0, 0, 100, 30), gap: 4) {
+        Row(in: Region(0, 0, 100, 30), gap: 4) {
           Rectangle().frame(width: .fixed(20), height: .fill)
-          Rect()
+          Rectangle()
         }
       },
       present: { batch in
@@ -101,10 +101,12 @@ struct RectangleTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumn(key: 1, in: Region(0, 0, 20, 20), gap: 0) {
-          Rectangle().frame(width: .fixed(20), height: .fixed(40))
+        Scroll(key: 1, in: Region(0, 0, 20, 20)) {
+          Column(gap: 0) {
+            Rectangle().frame(width: .fixed(20), height: .fixed(40))
+          }
         }
-        ScrollToBlock(10, in: 1)
+        ScrollTo(10, in: 1)
       },
       present: { batch in
         #expect(batch.count == 1)
@@ -123,9 +125,9 @@ struct RectangleTests {
         mousePosition: .init(x: 20, y: 20), pressed: true, released: true, keyEvents: [KeyEvent(.tab)]),
       dt: 0,
       build: {
-        ZStack(in: Region(0, 0, 100, 40)) {
+        Stack(in: Region(0, 0, 100, 40)) {
           Button(key: 1, "") { clicks += 1 }
-          if outline { Rect().radius(3).stroke() } else { Rect() }
+          if outline { Rectangle().radius(3).stroke() } else { Rectangle() }
         }
       }, present: { _ in })
     #expect(clicks == 1)
@@ -138,9 +140,9 @@ struct RectangleTests {
     var host = UIHost()
     host.frame(
       build: {
-        ZStack(in: bounds) {
-          Rect().radius(3)
-          Rect().radius(7).stroke(width: 1.5)
+        Stack(in: bounds) {
+          Rectangle().radius(3)
+          Rectangle().radius(7).stroke(width: 1.5)
         }.color(.accent)
       },
       present: { batch in
@@ -161,11 +163,11 @@ struct RectangleTests {
     var host = UIHost()
     host.frame(
       build: {
-        ZStack(in: Region(0, 0, 20, 20)) {
+        Stack(in: Region(0, 0, 20, 20)) {
           original
           original.radius(7).stroke(width: 2)
           original.radius(7).radius(0)
-          Rect().stroke(width: 2).radius(5)
+          Rectangle().stroke(width: 2).radius(5)
         }
       },
       present: { batch in
@@ -180,7 +182,7 @@ struct RectangleTests {
   @Test func zeroWidthStrokeDoesNotBecomeAFill() {
     var host = UIHost()
     host.frame(
-      build: { ZStack(in: Region(0, 0, 20, 20)) { Rect().radius(3).stroke(width: 0) } },
+      build: { Stack(in: Region(0, 0, 20, 20)) { Rectangle().radius(3).stroke(width: 0) } },
       present: { batch in
         #expect(batch.count == 0)
       })
@@ -190,11 +192,13 @@ struct RectangleTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumn(key: 1, in: Region(0, 0, 20, 20), gap: 0) {
-          Rect().radius(3).stroke().color(.accent)
-            .frame(width: .fixed(20), height: .fixed(40))
+        Scroll(key: 1, in: Region(0, 0, 20, 20)) {
+          Column(gap: 0) {
+            Rectangle().radius(3).stroke().color(.accent)
+              .frame(width: .fixed(20), height: .fixed(40))
+          }
         }
-        ScrollToBlock(10, in: 1)
+        ScrollTo(10, in: 1)
       },
       present: { batch in
         #expect(batch.count == 1)
@@ -207,11 +211,11 @@ struct RectangleTests {
   }
 
   @Test func strokeModifierHasValueSemanticsAndDoesNotLeakAcrossFrames() {
-    let fill = Rect().radius(3)
+    let fill = Rectangle().radius(3)
     let stroke = fill.stroke(width: 2)
     var host = UIHost(nodeCapacity: 2)
     host.frame(
-      build: { ZStack(in: Region(0, 0, 20, 20)) { stroke; fill } },
+      build: { Stack(in: Region(0, 0, 20, 20)) { stroke; fill } },
       present: { batch in
         #expect(batch.count == 2)
         #expect(batch[0].strokeWidth == 2)
@@ -219,7 +223,7 @@ struct RectangleTests {
       })
     host.frame(build: {}, present: { _ in })
     host.frame(
-      build: { ZStack(in: Region(0, 0, 20, 20)) { Rect() } },
+      build: { Stack(in: Region(0, 0, 20, 20)) { Rectangle() } },
       present: { batch in
         #expect(batch.count == 1)
         #expect(batch[0].radius == 0)
@@ -230,11 +234,11 @@ struct RectangleTests {
   @Test func removedRectangleDoesNotChangeReusedCanvasPainting() {
     var host = UIHost(nodeCapacity: 1)
     host.frame(
-      build: { ZStack(in: Region(0, 0, 20, 20)) { Rect() } }, present: { _ in })
+      build: { Stack(in: Region(0, 0, 20, 20)) { Rectangle() } }, present: { _ in })
     host.frame(build: {}, present: { _ in })
     host.frame(
       build: {
-        ZStack(in: Region(0, 0, 20, 20)) {
+        Stack(in: Region(0, 0, 20, 20)) {
           Canvas(key: 1) { context in
             context.fillRect(context.region, color: .accent)
           }

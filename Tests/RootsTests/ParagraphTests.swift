@@ -63,7 +63,7 @@ struct ParagraphTests {
               Text("world").color(.accent)
             }.size(10).selectable(key: 1)
           }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }, present: { _ in })
     }
     render(width: 34, input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]))
@@ -79,7 +79,7 @@ struct ParagraphTests {
         Column(in: Region(0, 0, 34, 100)) {
           Paragraph { Text("hello world") }.size(10).selectable(key: 1)
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(copied == "hello world")
   }
@@ -118,7 +118,7 @@ struct ParagraphTests {
             Text("\nA\n\n")
           }.size(10).selectable(key: 1)
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(host.selectedText == "e\u{301}👩‍💻\r\nA\n\n")
     #expect(host.state(for: 1)?.region.height == 78)
@@ -128,15 +128,17 @@ struct ParagraphTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumn(key: 10, in: Region(0, 0, 44, 20), gap: 0) {
-          Paragraph { Text("hello world") }
-            .size(10)
-            .selectable(key: 1)
-            .padding(5)
-            .frame(width: .fill)
-            .background(.panel)
+        Scroll(key: 10, in: Region(0, 0, 44, 20)) {
+          Column(gap: 0) {
+            Paragraph { Text("hello world") }
+              .size(10)
+              .selectable(key: 1)
+              .padding(5)
+              .frame(width: .fill)
+              .background(.panel)
+          }
         }
-        ScrollToBlock(20, in: 10)
+        ScrollTo(20, in: 10)
       },
       present: { batch in
         #expect(batch[0].region == Region(0, -20, 44, 40))
@@ -156,7 +158,7 @@ struct ParagraphTests {
       host.frame(
         input: input,
         build: {
-          ZStack(in: Region(0, 0, 100, 40), alignment: .topLeading) {
+          Stack(in: Region(0, 0, 100, 40), alignment: .topLeading) {
             Button(key: 1, "", extent: 40) { clicks += 1 }
             Paragraph { Text("hello") }.size(10)
           }
@@ -178,7 +180,7 @@ struct ParagraphTests {
           }.size(10).selectable(key: 1)
           Paragraph {}.selectable(key: 2)
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(host.selectedText == "ABCD")
     #expect(host.state(for: 2)?.region.height == 0)
@@ -226,7 +228,7 @@ struct ParagraphTests {
       host.frame(
         build: {
           Column(in: Region(0, 0, width, 120), gap: 4) {
-            RowBlock(gap: 0) {
+            Row(gap: 0) {
               Paragraph { Text("hello world") }.size(10).selectable(key: 1)
             }.frame(width: .fill)
             Canvas(key: 2, extent: 10) { _ in }
@@ -256,7 +258,7 @@ struct ParagraphTests {
               Text("new").size(10).selectable(key: 1)
             }
           }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }, present: { _ in })
       #expect(host.selectedText == (paragraph ? "hello world" : "new"))
     }
@@ -292,7 +294,7 @@ struct ParagraphTests {
             Text("")
           }.size(10).selectable(key: 1)
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(host.selectedText == "a   ")
     #expect(host.state(for: 1)?.region.height == 14)
@@ -329,7 +331,7 @@ struct ParagraphTests {
           Column(in: Region(0, 0, 34, 100)) {
             Paragraph { Text(value) }.size(10).selectable(key: 1)
           }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }, present: { _ in })
     }
     render("hello", input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]))

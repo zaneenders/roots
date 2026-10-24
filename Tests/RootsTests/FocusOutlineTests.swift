@@ -6,12 +6,14 @@ import Testing
   let viewport = Region(10, 20, 100, 80)
   let target = Region(10, 20, 100, 40)
   host.frame {
-    ScrollColumn(key: 1, in: viewport, gap: 0) {
-      Element(key: 2, extent: 40, color: .panel) { painter in
-        painter.fillRect(painter.region, color: .panel, radius: 7)
+    Scroll(key: 1, in: viewport) {
+      Column(gap: 0) {
+        Element(key: 2, extent: 40, color: .panel) { painter in
+          painter.fillRect(painter.region, color: .panel, radius: 7)
+        }
       }
     }
-    FocusBlock(key: 2)
+    Focus(key: 2)
   } present: { draws in
     var outlines = 0
     var backgroundIndex = -1

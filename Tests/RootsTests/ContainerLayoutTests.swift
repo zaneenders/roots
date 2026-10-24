@@ -9,7 +9,7 @@ struct ContainerLayoutTests {
     host.frame(
       build: {
         Column(in: Region(10, 20, 200, 100), gap: 5) {
-          RowBlock(gap: 4) {
+          Row(gap: 4) {
             Text("A").selectable(key: 1).size(10)
             Text("BB").selectable(key: 2).size(10)
           }
@@ -25,7 +25,7 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        RowBlock(in: Region(0, 0, 110, 30), gap: 5) {
+        Row(in: Region(0, 0, 110, 30), gap: 5) {
           Text("A").selectable(key: 1).size(10).frame(width: .fixed(30))
           Canvas(key: 2) { _ in }
           Canvas(key: 3) { _ in }
@@ -35,7 +35,7 @@ struct ContainerLayoutTests {
     #expect(host.state(for: 3)?.region == Region(75, 0, 35, 30))
     host.frame(
       build: {
-        RowBlock(in: Region(0, 0, 25, 30), gap: 5) {
+        Row(in: Region(0, 0, 25, 30), gap: 5) {
           Canvas(key: 2, extent: 30) { _ in }
           Text("AAAA").selectable(key: 3).size(10)
         }
@@ -48,7 +48,7 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        RowBlock(in: Region(0, 0, 100, 20), gap: 0) {
+        Row(in: Region(0, 0, 100, 20), gap: 0) {
           Text("A").size(10).frame(width: .fill)
           Text("AAAAAAAAAA").size(10).frame(width: .fill)
         }
@@ -92,7 +92,7 @@ struct ContainerLayoutTests {
       host.frame(
         input: input, dt: 0,
         build: {
-          ZStack(in: Region(0, 0, 100, 100)) {
+          Stack(in: Region(0, 0, 100, 100)) {
             Button(key: 1, "", extent: 100, color: .accent) { bottomClicks += 1 }
             Button(key: 2, "", extent: 40, color: .panel) { topClicks += 1 }
               .frame(width: .fixed(40), height: .fixed(40))
@@ -115,7 +115,7 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        ZStack(in: Region(10, 20, 100, 80)) {
+        Stack(in: Region(10, 20, 100, 80)) {
           Text("AB\nC").selectable(key: 1).size(10).color(.accent).alignment(.center)
             .frame(width: .fill, height: .fill)
         }
@@ -136,7 +136,7 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        ZStack(in: Region(10, 20, 100, 80), alignment: .bottomTrailing) {
+        Stack(in: Region(10, 20, 100, 80), alignment: .bottomTrailing) {
           Text("A").selectable(key: 1).size(10).padding(5)
         }
       }, present: { _ in })
@@ -147,13 +147,15 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumn(key: 10, in: Region(0, 0, 100, 20), gap: 0) {
-          Column(gap: 2) {
-            Text("A").selectable(key: 1).size(10)
-            Text("B").selectable(key: 2).size(10)
+        Scroll(key: 10, in: Region(0, 0, 100, 20)) {
+          Column(gap: 0) {
+            Column(gap: 2) {
+              Text("A").selectable(key: 1).size(10)
+              Text("B").selectable(key: 2).size(10)
+            }
           }
         }
-        ScrollToBlock(10, in: 10)
+        ScrollTo(10, in: 10)
       },
       present: { batch in
         var lastClip: Region?
@@ -168,11 +170,13 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        ScrollColumn(key: 10, in: Region(0, 0, 100, 20), gap: 5) {
-          Column { Text("A").selectable(key: 1).size(10) }.padding(3)
-          Column { Text("B").selectable(key: 2).size(10) }.padding(3)
+        Scroll(key: 10, in: Region(0, 0, 100, 20)) {
+          Column(gap: 5) {
+            Column { Text("A").selectable(key: 1).size(10) }.padding(3)
+            Column { Text("B").selectable(key: 2).size(10) }.padding(3)
+          }
         }
-        ScrollToBlock(100, in: 10)
+        ScrollTo(100, in: 10)
       }, present: { _ in })
     #expect(host.state(for: 10)?.scrollOffset == 25)
     #expect(host.state(for: 2)?.region == Region(3, 3, 10, 14))
@@ -189,7 +193,7 @@ struct ContainerLayoutTests {
         host.frame(
           input: input,
           build: {
-            ZStack(in: Region(0, 0, 100, 100)) {
+            Stack(in: Region(0, 0, 100, 100)) {
               Button(key: 1, "", extent: 100) { clicks += 1 }
               Canvas(key: 2, blocksPointer: blocked) { _ in }
             }
@@ -204,7 +208,7 @@ struct ContainerLayoutTests {
     var host = UIHost()
     host.frame(
       build: {
-        ZStack(in: Region(0, 0, 100, 80)) {
+        Stack(in: Region(0, 0, 100, 80)) {
           Text("A").size(10).selectable(key: 1).alignment(.leading)
             .frame(width: .fixed(50), height: .fixed(40))
         }
@@ -223,18 +227,18 @@ struct ContainerLayoutTests {
       host.frame(
         input: input,
         build: {
-          ZStack(in: Region(0, 0, 100, 80)) {
+          Stack(in: Region(0, 0, 100, 80)) {
             Text("ABCDE").size(10).selectable(key: 1).overflow(.truncateTail).alignment(.leading)
               .frame(width: .fixed(60), height: .fixed(40))
           }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }, present: { _ in })
       #expect(host.state(for: 1)?.focused == true)
     }
     #expect(host.selectedText == "ABCDE")
     host.frame(
       build: {
-        ZStack(in: Region(0, 0, 100, 80)) {
+        Stack(in: Region(0, 0, 100, 80)) {
           Text("ABCDE").size(10).selectable(key: 1).overflow(.truncateTail).alignment(.leading)
             .frame(width: .fixed(60), height: .fixed(40))
         }

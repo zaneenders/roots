@@ -1,5 +1,5 @@
 import Observation
-import Roots
+@_spi(Hosting) import Roots
 import RootsCPU
 import Testing
 
@@ -41,16 +41,16 @@ struct DesktopRuntimeTests {
   let viewport = Viewport(size: .init(width: 100, height: 100))
 
   @Test func windowUsesNamedDimensions() {
-    let window = DesktopWindow("Dimensions", width: 320, height: 180) { _ in EmptyBlock() }
+    let window = DesktopWindow("Dimensions", width: 320, height: 180) { _ in BlockBuilder.buildBlock() }
     #expect(window.size == Size(width: 320, height: 180))
-    let defaults = DesktopWindow("Defaults") { _ in EmptyBlock() }
+    let defaults = DesktopWindow("Defaults") { _ in BlockBuilder.buildBlock() }
     #expect(defaults.size == Size(width: 900, height: 660))
   }
 
   @Test func missingAndPresentMousePositionsInvalidateIndependently() {
     var requests = 0
     let runtime = DesktopRuntime(
-      content: { _ in EmptyBlock() }, primaryShortcut: .control, onCopy: { _ in },
+      content: { _ in BlockBuilder.buildBlock() }, primaryShortcut: .control, onCopy: { _ in },
       requestRedraw: { requests += 1 })
     defer { runtime.stop() }
     runtime.frame(input: Input(), viewport: viewport, dt: 0, present: { _ in })
@@ -208,7 +208,7 @@ struct DesktopRuntimeTests {
       content: { viewport in
         Column(in: viewport.bounds) {
           Button(key: 1, model.title) { model.clicks += 1 }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }
       }, primaryShortcut: .control,
       onKey: { _ in
@@ -229,7 +229,7 @@ struct DesktopRuntimeTests {
   @Test func pointerMotionRequestsOneFollowupButIdleFramesDoNotPoll() {
     var requests = 0
     let runtime = DesktopRuntime(
-      content: { _ in EmptyBlock() }, primaryShortcut: .control, onCopy: { _ in },
+      content: { _ in BlockBuilder.buildBlock() }, primaryShortcut: .control, onCopy: { _ in },
       requestRedraw: { requests += 1 })
     defer { runtime.stop() }
     runtime.frame(
@@ -357,14 +357,16 @@ extension DesktopRuntimeTests {
     let policy = FramePolicy()
     let runtime = DesktopRuntime(
       content: { viewport in
-        ScrollColumn(key: 1, in: viewport.bounds) {
-          Text("")
-            .size(20)
-            .selectable(key: 2)
-            .alignment(.leading)
-            .padding(horizontal: 12)
-            .frame(width: .fill, height: .fixed(2000))
-            .background(.panel)
+        Scroll(key: 1, in: viewport.bounds) {
+          Column(gap: 8) {
+            Text("")
+              .size(20)
+              .selectable(key: 2)
+              .alignment(.leading)
+              .padding(horizontal: 12)
+              .frame(width: .fill, height: .fixed(2000))
+              .background(.panel)
+          }
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks,
       scrollAcceleration: 1)
@@ -404,7 +406,7 @@ extension DesktopRuntimeTests {
               width: .fill, height: .fixed(32)
             ).background(.panel)
           }
-          FocusBlock(key: 1)
+          Focus(key: 1)
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
@@ -425,7 +427,7 @@ extension DesktopRuntimeTests {
     let model = Model()
     var redraws = 0
     let runtime = DesktopRuntime(
-      content: { _ in EmptyBlock() }, primaryShortcut: .control, onCopy: { _ in },
+      content: { _ in BlockBuilder.buildBlock() }, primaryShortcut: .control, onCopy: { _ in },
       requestRedraw: { redraws += 1 },
       frameCallbacks: .init(needsAnimationFrame: { model.clicks > 0 }))
     defer { runtime.stop() }
@@ -454,7 +456,7 @@ extension DesktopRuntimeTests {
     var keys = 0
     var redraws = 0
     let runtime = DesktopRuntime(
-      content: { _ in EmptyBlock() }, primaryShortcut: .control,
+      content: { _ in BlockBuilder.buildBlock() }, primaryShortcut: .control,
       onKey: { _ in
         keys += 1
         return true

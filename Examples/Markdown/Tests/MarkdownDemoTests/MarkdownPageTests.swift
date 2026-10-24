@@ -36,7 +36,7 @@ struct MarkdownPageTests {
       onCopy: { copied = $0 },
       build: {
         MarkdownPage(bounds: Region(0, 0, 480, 800))
-        FocusBlock(key: 3)
+        Focus(key: 3)
       }, present: { _ in })
     #expect(copied?.hasPrefix("ROOTS / TEXT PLAYGROUND\nA small document, made of text.\n") == true)
     #expect(copied?.contains("This page is composed with Paragraph and ordinary Text children.") == true)
@@ -96,7 +96,7 @@ struct MarkdownPageTests {
       input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
       build: {
         MarkdownPage(bounds: Region(0, 0, 940, 1080))
-        FocusBlock(key: key, reveal: true)
+        Focus(key: key, reveal: true)
       }, present: { _ in })
     #expect(host.selectedText?.hasPrefix("ROOTS / TEXT PLAYGROUND\n") == true)
     #expect(host.selectedText?.contains(expected) == true)
@@ -111,7 +111,7 @@ struct MarkdownPageTests {
           input: input, dt: 0,
           build: {
             MarkdownPage(bounds: Region(0, 0, width, 1080), copyCode: { copied.append($0) })
-            FocusBlock(key: 35, reveal: true)
+            Focus(key: 35, reveal: true)
           }, present: { _ in })
       }
       render()

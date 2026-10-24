@@ -26,7 +26,7 @@ public struct Column<Content: Block>: Block {
   }
 }
 
-public struct RowBlock<Content: Block>: Block {
+public struct Row<Content: Block>: Block {
   public typealias Body = Never
   let region: Region?
   let gap: Float
@@ -54,7 +54,7 @@ public struct RowBlock<Content: Block>: Block {
   }
 }
 
-public struct ZStack<Content: Block>: Block {
+public struct Stack<Content: Block>: Block {
   public typealias Body = Never
   let region: Region?
   let alignment: Alignment
@@ -102,49 +102,26 @@ public struct Grid<Content: Block>: Block {
   }
 }
 
-public struct ScrollColumn<Content: Block>: Block {
+/// A vertical viewport; its content chooses the layout rather than implying a column.
+public struct Scroll<Content: Block>: Block {
   public typealias Body = Never
   let key: UInt64
   let region: Region
-  let gap: Float
   let showsScrollIndicator: Bool
   let content: Content
   public init(
-    key: UInt64, in region: Region, gap: Float = 8, showsScrollIndicator: Bool = false,
+    key: UInt64, in region: Region, showsScrollIndicator: Bool = false,
     @BlockBuilder content: () -> Content
   ) {
     self.key = key
     self.region = region
-    self.gap = gap
     self.showsScrollIndicator = showsScrollIndicator
     self.content = content()
   }
   public borrowing func _build(into frame: inout UIFrame) {
-    frame.beginScrollColumn(
-      key: key, in: region, gap: gap, showsScrollIndicator: showsScrollIndicator)
+    frame.beginScroll(
+      key: key, in: region, showsScrollIndicator: showsScrollIndicator)
     defer { frame.end() }
     content._build(into: &frame)
   }
-}
-
-public struct FocusBlock: Block {
-  public typealias Body = Never
-  let key: UInt64
-  let reveal: Bool
-  public init(key: UInt64, reveal: Bool = false) {
-    self.key = key
-    self.reveal = reveal
-  }
-  public borrowing func _build(into frame: inout UIFrame) { frame.focus(key: key, reveal: reveal) }
-}
-
-public struct ScrollToBlock: Block {
-  public typealias Body = Never
-  let key: UInt64
-  let offset: Float
-  public init(_ offset: Float, in key: UInt64) {
-    self.key = key
-    self.offset = offset
-  }
-  public borrowing func _build(into frame: inout UIFrame) { frame.scrollTo(offset, in: key) }
 }

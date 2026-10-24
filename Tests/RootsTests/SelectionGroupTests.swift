@@ -20,7 +20,7 @@ struct SelectionGroupTests {
         .size(10)
         .selectable(key: 3)
     }
-    .selectionGroup(key: 100)
+    .textSelectionGroup(key: 100)
   }
 
   @Test func draggingAcrossTextAndParagraphPaintsAndCopiesTheWholeRange() {
@@ -65,7 +65,7 @@ struct SelectionGroupTests {
           Column(in: Region(200, 0, 100, 100)) {
             Text("outside").selectable(key: 4)
           }
-          FocusBlock(key: key)
+          Focus(key: key)
         }, present: { _ in })
       #expect(host.selectedText == "first\nsecond line\nthird")
     }
@@ -99,8 +99,8 @@ struct SelectionGroupTests {
             Text("first").size(10).selectable(key: 1)
             Paragraph { Text(value) }.size(10).selectable(key: 2)
           }
-          .selectionGroup(key: 100)
-          FocusBlock(key: 1)
+          .textSelectionGroup(key: 100)
+          Focus(key: 1)
         }, present: { _ in })
       #expect(host.selectedText == "first\nsecond line")
     }
@@ -112,13 +112,13 @@ struct SelectionGroupTests {
       input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
       build: {
         content()
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     host.frame(
       build: {
         Column(in: Region(0, 0, 100, 100)) {
           Text("changed").selectable(key: 1)
-        }.selectionGroup(key: 100)
+        }.textSelectionGroup(key: 100)
       }, present: { _ in })
     #expect(host.selectedText == nil)
     host.frame(build: {}, present: { _ in })
@@ -134,13 +134,13 @@ struct SelectionGroupTests {
         Button(key: 9, "Copy", extent: 40) { clicks += 1 }
         Text("not selectable").size(10)
         Text("last").size(10).selectable(key: 2)
-      }.selectionGroup(key: 100)
+      }.textSelectionGroup(key: 100)
     }
     host.frame(
       input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
       build: {
         build()
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(host.selectedText == "first\nlast")
     host.frame(
@@ -156,12 +156,14 @@ struct SelectionGroupTests {
   @Test func draggingBeyondTheViewportAutoscrollsAcrossMembers() {
     var host = UIHost()
     func build() -> some Block {
-      ScrollColumn(key: 50, in: Region(0, 0, 100, 40), gap: 0) {
-        Column(gap: 10) {
-          ForEach(0..<10) { index in
-            Text("row\(index)").size(10).selectable(key: UInt64(index + 1))
-          }
-        }.selectionGroup(key: 100)
+      Scroll(key: 50, in: Region(0, 0, 100, 40)) {
+        Column(gap: 0) {
+          Column(gap: 10) {
+            ForEach(0..<10) { index in
+              Text("row\(index)").size(10).selectable(key: UInt64(index + 1))
+            }
+          }.textSelectionGroup(key: 100)
+        }
       }
     }
     host.frame(
@@ -183,12 +185,12 @@ struct SelectionGroupTests {
       build: {
         Column(in: Region(0, 0, 100, 200)) {
           Text("outer").selectable(key: 1)
-          SelectionGroup(key: 200) {
+          TextSelectionGroup(key: 200) {
             Text("inner").selectable(key: 2)
           }
           Text("end").selectable(key: 3)
-        }.selectionGroup(key: 100)
-        FocusBlock(key: 2)
+        }.textSelectionGroup(key: 100)
+        Focus(key: 2)
       }, present: { _ in })
     #expect(host.selectedText == "inner")
   }
@@ -198,7 +200,7 @@ struct SelectionGroupTests {
       input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
       build: {
         content()
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(host.selectedText != nil)
     host.frame(
@@ -219,13 +221,13 @@ struct SelectionGroupTests {
         KeyEvent(.character("c"), modifiers: .super)
       ]), primaryShortcut: .super, onCopy: { copied = $0 },
       build: {
-        SelectionGroup(key: 100) {
+        TextSelectionGroup(key: 100) {
           Column(in: Region(0, 0, 100, 200)) {
             Text("café e\u{301}").size(10).selectable(key: 1)
             Paragraph { Text("👩‍💻\nlast") }.size(10).selectable(key: 2)
           }
         }
-        FocusBlock(key: 1)
+        Focus(key: 1)
       }, present: { _ in })
     #expect(copied?.utf8.elementsEqual("café e\u{301}\n👩‍💻\nlast".utf8) == true)
   }

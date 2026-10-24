@@ -106,12 +106,14 @@ struct AppearanceTests {
       host.frame(
         input: input, dt: 0,
         build: {
-          ScrollColumn(key: 1, in: Region(0, 0, 100, 20), gap: 0) {
+          Scroll(key: 1, in: Region(0, 0, 100, 20)) {
             Column(gap: 0) {
-              Button(key: 2, "", extent: 40) { clicks += 1 }
-            }.padding(3).frame(width: .fill).background(.accent)
+              Column(gap: 0) {
+                Button(key: 2, "", extent: 40) { clicks += 1 }
+              }.padding(3).frame(width: .fill).background(.accent)
+            }
           }
-          ScrollToBlock(10, in: 1)
+          ScrollTo(10, in: 1)
         },
         present: { batch in
           #expect(batch[0].region == Region(0, -10, 100, 46))

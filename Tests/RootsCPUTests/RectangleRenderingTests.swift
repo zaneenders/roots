@@ -7,8 +7,8 @@ import Testing
   var host = UIHost()
   host.frame(
     build: {
-      ZStack(in: Region(0, 0, 20, 20)) {
-        Rect()
+      Stack(in: Region(0, 0, 20, 20)) {
+        Rectangle()
           .color(Color(1, 0, 0))
           .frame(width: .fixed(8), height: .fixed(8))
           .padding(4)
@@ -37,29 +37,33 @@ import Testing
   var reference = UIHost()
   host.frame(
     build: {
-      ScrollColumn(key: 1, in: Region(5, 5, 30, 20), gap: 0) {
-        if let width {
-          Rect().radius(radius).stroke(width: width).color(color)
-            .frame(width: .fixed(30), height: .fixed(30))
-        } else {
-          Rect().radius(radius).color(color)
-            .frame(width: .fixed(30), height: .fixed(30))
-        }
-      }
-      ScrollToBlock(5, in: 1)
-    }, present: { actual.render($0) })
-  reference.frame(
-    build: {
-      ScrollColumn(key: 1, in: Region(5, 5, 30, 20), gap: 0) {
-        Canvas(key: 2, extent: 30, color: Color(0, 0, 0, 0)) { context in
+      Scroll(key: 1, in: Region(5, 5, 30, 20)) {
+        Column(gap: 0) {
           if let width {
-            context.strokeRect(context.region, color: color, radius: radius, width: width)
+            Rectangle().radius(radius).stroke(width: width).color(color)
+              .frame(width: .fixed(30), height: .fixed(30))
           } else {
-            context.fillRect(context.region, color: color, radius: radius)
+            Rectangle().radius(radius).color(color)
+              .frame(width: .fixed(30), height: .fixed(30))
           }
         }
       }
-      ScrollToBlock(5, in: 1)
+      ScrollTo(5, in: 1)
+    }, present: { actual.render($0) })
+  reference.frame(
+    build: {
+      Scroll(key: 1, in: Region(5, 5, 30, 20)) {
+        Column(gap: 0) {
+          Canvas(key: 2, extent: 30, color: Color(0, 0, 0, 0)) { context in
+            if let width {
+              context.strokeRect(context.region, color: color, radius: radius, width: width)
+            } else {
+              context.fillRect(context.region, color: color, radius: radius)
+            }
+          }
+        }
+      }
+      ScrollTo(5, in: 1)
     }, present: { expected.render($0) })
   #expect(actual.pixels == expected.pixels)
 }
