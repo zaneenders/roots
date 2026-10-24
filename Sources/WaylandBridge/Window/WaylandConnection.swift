@@ -169,6 +169,11 @@ import SwiftWayland
     }
   }
 
+  func close() async {
+    cleanup()
+    await connection.close()
+  }
+
   func cleanup() {
     guard !closed else { return }
     closed = true

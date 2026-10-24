@@ -11,26 +11,27 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
 }
 
 @Test func wireRoundTripsNativeEndianStringsArraysAndSignedFixed() throws {
+  var interfaces: [UInt32: String] = [1: "wl_display"]
   var decoder = WireDecoder()
-  decoder.interfaces[2] = "wl_registry"
+  interfaces[2] = "wl_registry"
   var packet = try event(2, 0, [.uint(42), .string("wl_compositor"), .uint(6)])
   try decoder.append(&packet.bytes, descriptors: [])
-  let result = try #require(try decoder.next())
+  let result = try #require(try decoder.next(interfaces: interfaces))
   #expect(result.object == 2 && result.opcode == 0)
   #expect(
     result.arguments[0].word == 42 && result.arguments[1].text == "wl_compositor"
       && result.arguments[2].word == 6)
-  decoder.interfaces[3] = "wl_pointer"
+  interfaces[3] = "wl_pointer"
   var motion = try event(3, 2, [.uint(10), .int(-512), .int(768)])
   try decoder.append(&motion.bytes, descriptors: [])
-  let pointer = try #require(try decoder.next())
+  let pointer = try #require(try decoder.next(interfaces: interfaces))
   #expect(pointer.arguments[1].signed == -512 && pointer.arguments[2].signed == 768)
-  decoder.interfaces[4] = "wl_keyboard"
+  interfaces[4] = "wl_keyboard"
   var array = ByteBufferAllocator().buffer(capacity: 8)
   array.writeInteger(UInt32(30), endianness: .host)
   var enter = try event(4, 1, [.uint(7), .uint(8), .array(array)])
   try decoder.append(&enter.bytes, descriptors: [])
-  let key = try #require(try decoder.next())
+  let key = try #require(try decoder.next(interfaces: interfaces))
   guard case .array(let keys) = key.arguments[2] else {
     Issue.record("Missing array")
     return
@@ -59,6 +60,7 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
 }
 
 @Test func wireRejectsInvalidLengthOpcodeObjectAndMissingStringTerminator() throws {
+  var interfaces: [UInt32: String] = [1: "wl_display"]
   for (object, header): (UInt32, UInt32) in [
     (1, 4 << 16), (1, 9 << 16), (999, 8 << 16), (1, 8 << 16 | 99)
   ] {
@@ -67,17 +69,18 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
     bytes.writeInteger(object, endianness: .host)
     bytes.writeInteger(header, endianness: .host)
     try decoder.append(&bytes, descriptors: [])
-    #expect(throws: WaylandError.dispatch) { try decoder.next() }
+    #expect(throws: WaylandError.dispatch) { try decoder.next(interfaces: interfaces) }
   }
   var decoder = WireDecoder()
-  decoder.interfaces[2] = "wl_data_offer"
+  interfaces[2] = "wl_data_offer"
   var packet = try event(2, 0, [.string("abc")])
   packet.bytes.setInteger(UInt8(1), at: packet.bytes.writerIndex - 1)
   try decoder.append(&packet.bytes, descriptors: [])
-  #expect(throws: WaylandError.dispatch) { try decoder.next() }
+  #expect(throws: WaylandError.dispatch) { try decoder.next(interfaces: interfaces) }
 }
 
 @Test func wireFDQueueIsIndependentOfByteBoundariesAndClosesUnusedFDs() throws {
+  var interfaces: [UInt32: String] = [1: "wl_display"]
   var fds: [Int32] = [-1, -1]
   try #require(unsafe pipe(&fds) == 0)
   defer { for fd in fds { _ = close(fd) } }
@@ -85,13 +88,13 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
   let raw = duplicate.borrow { $0 }
   #expect(fcntl(raw, F_GETFD) & FD_CLOEXEC != 0)
   var decoder = WireDecoder()
-  decoder.interfaces[2] = "wl_keyboard"
+  interfaces[2] = "wl_keyboard"
   var keymap = try event(2, 0, [.uint(1), .fd(duplicate), .uint(8)])
   try decoder.append(&keymap.bytes, descriptors: [])
-  #expect(try decoder.next() == nil)
+  #expect(try decoder.next(interfaces: interfaces) == nil)
   var empty = ByteBufferAllocator().buffer(capacity: 0)
   try decoder.append(&empty, descriptors: [duplicate])
-  let message = try #require(try decoder.next())
+  let message = try #require(try decoder.next(interfaces: interfaces))
   guard case .fd(let received) = message.arguments[1] else {
     Issue.record("Missing descriptor")
     return
@@ -137,12 +140,12 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
   #expect(!objects.isLive(surface) && objects.interfaces[surface] == "xdg_surface")
   objects.request(surface, 4, [.uint(1)])
   objects.request(surface, 0)
-  #expect(try objects.takeRequests().0.count == 1)
+  #expect(try objects.takeRequests().count == 1)
   objects.deleted(surface)
   #expect(objects.allocate("wl_surface") == surface)
   #expect(objects.isLive(surface))
   objects.request(surface, 6)
-  #expect(try objects.takeRequests().0.count == 1)
+  #expect(try objects.takeRequests().count == 1)
 }
 
 @Test @MainActor func retiredDMABufParamsStillDestroyLateServerBuffers() throws {
@@ -154,7 +157,7 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
   let buffer: UInt32 = 0xff00_0000
   dmabuf.event(.init(object: params, opcode: 0, arguments: [.uint(buffer)]))
   #expect(objects.interfaces[buffer] == "wl_buffer" && !objects.isLive(buffer))
-  let requests = try objects.takeRequests().0
+  let requests = try objects.takeRequests()
   #expect(requests.count == 1)
   #expect(requests.first?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == buffer)
 }

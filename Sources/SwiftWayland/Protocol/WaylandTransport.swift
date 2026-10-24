@@ -1,57 +1,69 @@
 import NIOCore
 import NIOPosix
 
-actor WaylandTransport {
-  private let channel: any Channel
-  private let handler: NIOLoopBound<WireChannelHandler>
+struct WireChunk: Sendable {
+  var bytes: ByteBuffer
+  var descriptors: [WireDescriptor]
+}
 
-  private init(channel: any Channel, handler: NIOLoopBound<WireChannelHandler>) {
-    self.channel = channel
-    self.handler = handler
+struct WireBatch: Sendable {
+  static let maximumBytes = 4 * 1024 * 1024
+  static let maximumDescriptors = 256
+  let packets: [WirePacket]
+
+  init(_ packets: [WirePacket]) throws {
+    guard packets.reduce(0, { $0 + $1.bytes.readableBytes }) <= Self.maximumBytes,
+      packets.reduce(0, { $0 + $1.descriptors.count }) <= Self.maximumDescriptors
+    else { throw WaylandError.dispatch }
+    // Own the descriptors before crossing the async writer. write() does not wait for sendmsg().
+    self.packets = try packets.map { packet in
+      guard packet.descriptors.count <= 1 else { throw WaylandError.invalidConfiguration }
+      var packet = packet
+      packet.descriptors = try packet.descriptors.map { try $0.borrow(WireDescriptor.duplicate) }
+      return packet
+    }
+  }
+}
+
+typealias WaylandTransport = NIOAsyncChannel<WireChunk, WireBatch>
+
+extension NIOAsyncChannel where Inbound == WireChunk, Outbound == WireBatch {
+  static func connect(path: String) async throws -> Self {
+    try await make { $0.connect(unixDomainSocketPath: path) }
   }
 
-  static func connect(path: String) async throws -> (
-    WaylandTransport, AsyncThrowingStream<WireMessage, any Error>
-  ) {
-    try await make { bootstrap in bootstrap.connect(unixDomainSocketPath: path) }
-  }
-
-  static func takingSocket(_ fd: Int32) async throws -> (
-    WaylandTransport, AsyncThrowingStream<WireMessage, any Error>
-  ) {
-    try await make { bootstrap in bootstrap.withConnectedSocket(fd) }
+  static func takingSocket(_ fd: Int32) async throws -> Self {
+    try await make { $0.withConnectedSocket(fd) }
   }
 
   private static func make(
     _ connect: (ClientBootstrap) -> EventLoopFuture<any Channel>
-  ) async throws -> (WaylandTransport, AsyncThrowingStream<WireMessage, any Error>) {
+  ) async throws -> Self {
     let loop = MultiThreadedEventLoopGroup.singleton.next()
-    let (stream, continuation) = AsyncThrowingStream<WireMessage, any Error>.makeStream(
-      bufferingPolicy: .bufferingOldest(1))
-    let installed = loop.makePromise(of: NIOLoopBound<WireChannelHandler>.self)
+    let installed = NIOLoopBoundBox<Self?>.makeEmptyBox(eventLoop: loop)
     let bootstrap = ClientBootstrap(group: loop)
       .channelOption(ChannelOptions.receiveFileDescriptors, value: true)
-      .channelOption(ChannelOptions.autoRead, value: false)
+      .channelOption(
+        ChannelOptions.recvAllocator, value: FixedSizeRecvByteBufferAllocator(capacity: 65_536)
+      )
       .channelOption(ChannelOptions.maxMessagesPerRead, value: 1)
       .connectTimeout(.seconds(5))
       .channelInitializer { channel in
-        let handler = WireChannelHandler(continuation: continuation)
-        do {
-          try channel.pipeline.syncOperations.addHandler(handler)
-          installed.succeed(NIOLoopBound(handler, eventLoop: channel.eventLoop))
-          return channel.eventLoop.makeSucceededVoidFuture()
-        } catch {
-          installed.fail(error)
-          return channel.eventLoop.makeFailedFuture(error)
+        channel.eventLoop.makeCompletedFuture {
+          try channel.pipeline.syncOperations.addHandler(WireChannelHandler())
+          installed.value = try Self(
+            wrappingChannelSynchronously: channel,
+            configuration: .init(backPressureStrategy: .init(lowWatermark: 1, highWatermark: 2)))
         }
       }
-    let future = connect(bootstrap)
-    let (connected, completion) = AsyncThrowingStream<any Channel, any Error>.makeStream(
+    let future = connect(bootstrap).map { _ in installed.value! }
+    // EventLoopFuture.get() is not cancellation-aware. Close even a late successful connection.
+    let (connected, completion) = AsyncThrowingStream<Self, any Error>.makeStream(
       bufferingPolicy: .bufferingOldest(1))
     future.whenComplete { result in
       switch result {
       case .success(let channel):
-        if case .terminated = completion.yield(channel) { channel.close(promise: nil) }
+        if case .terminated = completion.yield(channel) { channel.channel.close(promise: nil) }
         completion.finish()
       case .failure(let error): completion.finish(throwing: error)
       }
@@ -62,153 +74,88 @@ actor WaylandTransport {
       return channel
     } onCancel: {
       completion.finish(throwing: CancellationError())
-      future.whenSuccess { $0.close(promise: nil) }
+      future.whenSuccess { $0.channel.close(promise: nil) }
     }
-    let handler = try await installed.futureResult.get()
     if Task.isCancelled {
-      try? await channel.close().get()
+      try? await channel.channel.close().get()
       throw CancellationError()
     }
-    channel.read()
-    return (WaylandTransport(channel: channel, handler: handler), stream)
-  }
-
-  func register(_ objects: [UInt32: String]) async throws {
-    let handler = self.handler
-    try await channel.eventLoop.submit { handler.value.register(objects) }.get()
-  }
-
-  func send(_ packets: [WirePacket], objects: [UInt32: String]) async throws {
-    let handler = self.handler
-    try await channel.eventLoop.submit { try handler.value.send(packets, objects: objects) }.get()
-  }
-
-  func acknowledged(objects: [UInt32: String]) async throws {
-    let handler = self.handler
-    try await channel.eventLoop.submit { try handler.value.acknowledged(objects: objects) }.get()
-  }
-
-  func close() async {
-    let handler = self.handler
-    try? await channel.eventLoop.submit { handler.value.finish(WaylandError.connection) }.get()
-    try? await channel.close().get()
+    return channel
   }
 }
 
-private final class WireChannelHandler: ChannelInboundHandler {
+private final class WireChannelHandler: ChannelDuplexHandler {
   typealias InboundIn = AddressedEnvelope<ByteBuffer>
-  private var decoder = WireDecoder()
-  private var context: ChannelHandlerContext?
-  private var awaitingDelivery = false
-  private var terminalError: (any Error)?
+  typealias InboundOut = WireChunk
+  typealias OutboundIn = WireBatch
+  typealias OutboundOut = AddressedEnvelope<ByteBuffer>
   private var queuedBytes = 0
-  private let continuation: AsyncThrowingStream<WireMessage, any Error>.Continuation
-
-  init(continuation: AsyncThrowingStream<WireMessage, any Error>.Continuation) {
-    self.continuation = continuation
-  }
-  func handlerAdded(context: ChannelHandlerContext) { self.context = context }
-  func handlerRemoved(context: ChannelHandlerContext) { self.context = nil }
-  func register(_ objects: [UInt32: String]) {
-    for (id, interface) in objects { decoder.interfaces[id] = interface }
-  }
+  private var queuedDescriptors = 0
 
   func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-    var message = unwrapInboundIn(data)
-    do {
-      let fds = (message.metadata?.receivedFileDescriptors ?? []).map {
-        WireDescriptor(taking: $0)
-      }
-      try decoder.append(&message.data, descriptors: fds)
-      try deliverOne()
-    } catch {
-      finish(error)
-      context.close(promise: nil)
-    }
+    let envelope = unwrapInboundIn(data)
+    // NIO envelopes carry raw FDs, not ownership. Adopt before any async buffering or cancellation.
+    let chunk = WireChunk(
+      bytes: envelope.data,
+      descriptors: (envelope.metadata?.receivedFileDescriptors ?? []).map(
+        WireDescriptor.init(taking:)))
+    context.fireChannelRead(wrapInboundOut(chunk))
   }
 
-  func channelReadComplete(context: ChannelHandlerContext) {
-    if !awaitingDelivery, terminalError == nil { context.read() }
-  }
-
-  func acknowledged(objects: [UInt32: String]) throws {
-    register(objects)
-    awaitingDelivery = false
-    do { try deliverOne() } catch {
-      finish(error)
-      throw error
-    }
-    if !awaitingDelivery, terminalError == nil { context?.read() }
-  }
-
-  private func deliverOne() throws {
-    guard !awaitingDelivery else { return }
-    guard let message = try decoder.next() else {
-      if let terminalError { finish(terminalError) }
+  func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+    let batch = unwrapOutboundIn(data)
+    let bytes = batch.packets.reduce(0) { $0 + $1.bytes.readableBytes }
+    let descriptors = batch.packets.reduce(0) { $0 + $1.descriptors.count }
+    guard bytes <= WireBatch.maximumBytes - queuedBytes,
+      descriptors <= WireBatch.maximumDescriptors - queuedDescriptors
+    else {
+      promise?.fail(WaylandError.dispatch)
+      errorCaught(context: context, error: WaylandError.dispatch)
       return
     }
-    awaitingDelivery = true
-    guard case .enqueued = continuation.yield(message) else { throw WaylandError.dispatch }
-  }
-
-  func send(_ packets: [WirePacket], objects: [UInt32: String]) throws {
-    register(objects)
-    guard terminalError == nil else { return }
-    guard let context, context.channel.isActive, let address = context.channel.remoteAddress else {
-      throw WaylandError.connection
+    guard let address = context.channel.remoteAddress, context.channel.isActive else {
+      promise?.fail(WaylandError.connection)
+      errorCaught(context: context, error: WaylandError.connection)
+      return
     }
-    let total = packets.reduce(0) { $0 + $1.bytes.readableBytes }
-    guard total + queuedBytes <= 4 * 1024 * 1024 else { throw WaylandError.dispatch }
-    let prepared = try packets.map { packet in
-      guard packet.descriptors.count <= 1 else { throw WaylandError.invalidConfiguration }
-      let descriptor = try packet.descriptors.first.map { fd in
-        try fd.borrow { try WireDescriptor.duplicate($0) }
-      }
-      return (packet, descriptor)
-    }
-    queuedBytes += total
-    for (packet, descriptor) in prepared {
-      let promise = context.eventLoop.makePromise(of: Void.self)
-      let bound = NIOLoopBound(self, eventLoop: context.eventLoop)
-      let count = packet.bytes.readableBytes
-      promise.futureResult.whenComplete { result in
-        // NIO borrows metadata.fd until the write promise completes.
-        descriptor?.close()
-        bound.value.queuedBytes -= count
-        if case .failure(let error) = result, let context = bound.value.context,
-          context.channel.isActive
-        {
-          bound.value.errorCaught(context: context, error: error)
-        }
-      }
-      if let descriptor {
-        let metadata = AddressedEnvelope<ByteBuffer>.Metadata(
-          ecnState: .transportNotCapable, fd: descriptor.borrow { Int($0) })
-        context.write(
-          NIOAny(AddressedEnvelope(remoteAddress: address, data: packet.bytes, metadata: metadata)),
-          promise: promise)
-      } else {
-        context.write(NIOAny(packet.bytes), promise: promise)
+    queuedBytes += bytes
+    queuedDescriptors += descriptors
+    let bound = NIOLoopBound((self, context), eventLoop: context.eventLoop)
+    let completion = context.eventLoop.makePromise(of: Void.self)
+    completion.futureResult.whenComplete { result in
+      // Keep the batch's owned FDs alive until NIO finishes borrowing them. A batch can be reused.
+      defer { withExtendedLifetime(batch) {} }
+      bound.value.0.queuedBytes -= bytes
+      bound.value.0.queuedDescriptors -= descriptors
+      if case .failure(let error) = result, bound.value.1.channel.isActive {
+        bound.value.0.errorCaught(context: bound.value.1, error: error)
       }
     }
-    if awaitingDelivery, !packets.isEmpty { context.read() }
-    context.flush()
-  }
-
-  func finish(_ error: any Error) {
-    terminalError = error
-    decoder = WireDecoder()
-    continuation.finish(throwing: error)
+    if let promise { completion.futureResult.cascade(to: promise) }
+    guard !batch.packets.isEmpty else {
+      completion.succeed(())
+      return
+    }
+    for (index, packet) in batch.packets.enumerated() {
+      let metadata = packet.descriptors.first.map {
+        AddressedEnvelope<ByteBuffer>.Metadata(
+          ecnState: .transportNotCapable, fd: $0.borrow { Int($0) })
+      }
+      context.write(
+        wrapOutboundOut(
+          AddressedEnvelope(remoteAddress: address, data: packet.bytes, metadata: metadata)),
+        promise: index == batch.packets.count - 1 ? completion : nil)
+    }
   }
 
   func errorCaught(context: ChannelHandlerContext, error: any Error) {
-    terminalError = error
-    do { try deliverOne() } catch { finish(error) }
+    context.fireErrorCaught(error)
     context.close(promise: nil)
   }
+
   func channelInactive(context: ChannelHandlerContext) {
-    if terminalError == nil { terminalError = WaylandError.connection }
-    do { try deliverOne() } catch { finish(error) }
+    // The async stream drains buffered chunks before reporting EOF as a connection failure.
+    context.fireErrorCaught(WaylandError.connection)
     context.fireChannelInactive()
   }
 }
