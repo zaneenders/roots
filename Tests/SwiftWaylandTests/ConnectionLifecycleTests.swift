@@ -68,7 +68,8 @@ private struct ConnectionPeer: Sendable {
   }
 
   mutating func configure(
-    dmabufVersion: UInt32 = 3, scaleGlobals: [String] = [], preferredScale: UInt32 = 150
+    dmabufVersion: UInt32 = 3, scaleGlobals: [String] = [], preferredScale: UInt32 = 150,
+    seatVersion: UInt32 = 6
   ) throws {
     var compositor: UInt32 = 0
     while true {
@@ -82,7 +83,11 @@ private struct ConnectionPeer: Sendable {
           (5, "zwp_idle_inhibit_manager_v1"),
         ] {
           try send(
-            registry, 0, [.uint(name), .string(interface), .uint(name == 3 ? dmabufVersion : 6)])
+            registry, 0,
+            [
+              .uint(name), .string(interface),
+              .uint(name == 3 ? dmabufVersion : (name == 4 ? seatVersion : 6)),
+            ])
         }
         for (index, interface) in scaleGlobals.enumerated() {
           try send(registry, 0, [.uint(UInt32(index + 6)), .string(interface), .uint(1)])
@@ -168,7 +173,8 @@ private struct ConnectionPeer: Sendable {
 }
 
 @MainActor private func connectedPeer(
-  dmabufVersion: UInt32 = 3, scaleGlobals: [String] = [], preferredScale: UInt32 = 150
+  dmabufVersion: UInt32 = 3, scaleGlobals: [String] = [], preferredScale: UInt32 = 150,
+  seatVersion: UInt32 = 6
 ) async throws -> (
   WaylandConnection, ConnectionPeer, Int32
 ) {
@@ -177,7 +183,8 @@ private struct ConnectionPeer: Sendable {
     var peer = peer
     do {
       try peer.configure(
-        dmabufVersion: dmabufVersion, scaleGlobals: scaleGlobals, preferredScale: preferredScale)
+        dmabufVersion: dmabufVersion, scaleGlobals: scaleGlobals, preferredScale: preferredScale,
+        seatVersion: seatVersion)
       return peer
     } catch {
       peer.socket.close()
@@ -852,10 +859,13 @@ private let fractionalScaleGlobals = ["wp_fractional_scale_manager_v1", "wp_view
 @Test(
   arguments: [fractionalScaleGlobals, fractionalScaleGlobals.reversed().map { $0 }],
   [UInt32(120), 150, 180, 210, 240])
-@MainActor func fractionalScaleNegotiatesInEitherGlobalOrder(globals: [String], preferredScale: UInt32)
+@MainActor func fractionalScaleNegotiatesInEitherGlobalOrder(
+  globals: [String], preferredScale: UInt32
+)
   async throws
 {
-  let (connection, initialPeer, _) = try await connectedPeer(scaleGlobals: globals, preferredScale: preferredScale)
+  let (connection, initialPeer, _) = try await connectedPeer(
+    scaleGlobals: globals, preferredScale: preferredScale)
   defer { connection.cleanup() }
   var peer = initialPeer
   #expect(peer.fractional != 0 && peer.viewport != 0)
@@ -1174,4 +1184,171 @@ func keyboardRepeatWaitsForDelayedSurfaceCallback(popup: Bool) async throws {
   try await Task.sleep(for: .milliseconds(200))
   #expect(!connection.redrawRequested && !connection.canRenderPopup)
   #expect(connection.beginFrame().keyEvents.isEmpty)
+}
+
+@Test @MainActor func desktopInputGlobalsAreOptionalAndCursorUsesEnterSerial() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  #expect(!connection.setCursor(.text))
+  #expect(
+    !connection.setTextInput(
+      .init(
+        surroundingText: "", cursor: 0, anchor: 0, cursorRectangle: .zero)))
+  try connection.receive(
+    .init(
+      object: peer.registry, opcode: 0,
+      arguments: [
+        .uint(40), .string("wp_cursor_shape_manager_v1"), .uint(2),
+      ]))
+  let requests = try await drain(connection, &peer)
+  let bind = try #require(requests.first { $0.id == peer.registry })
+  let manager: UInt32 = try #require(
+    bind.body.getInteger(at: bind.body.writerIndex - 4, endianness: .host))
+  let create = try #require(requests.first { $0.id == manager && $0.opcode == 1 })
+  let device: UInt32 = try #require(create.body.getInteger(at: 0, endianness: .host))
+  #expect(connection.setCursor(.text))
+  #expect(try await drain(connection, &peer).isEmpty)
+  try connection.receive(
+    .init(
+      object: peer.pointer, opcode: 0,
+      arguments: [
+        .uint(17), .uint(peer.surface), .int(0), .int(0),
+      ]))
+  let shapes = try await drain(connection, &peer)
+  let shape = try #require(shapes.first { $0.id == device && $0.opcode == 1 })
+  #expect(shape.body.getInteger(at: 0, endianness: .host, as: UInt32.self) == 17)
+  #expect(shape.body.getInteger(at: 4, endianness: .host, as: UInt32.self) == 9)
+  try connection.receive(
+    .init(
+      object: peer.pointer, opcode: 1,
+      arguments: [
+        .uint(18), .uint(peer.surface),
+      ]))
+  #expect(connection.setCursor(.pointer))
+  #expect(try await drain(connection, &peer).isEmpty)
+  try connection.receive(
+    .init(
+      object: peer.pointer, opcode: 0,
+      arguments: [
+        .uint(19), .uint(peer.surface), .int(0), .int(0),
+      ]))
+  let entered = try await drain(connection, &peer)
+  #expect(
+    entered.contains {
+      $0.id == device && $0.opcode == 1
+        && $0.body.getInteger(at: 0, endianness: .host, as: UInt32.self) == 19
+    })
+  try connection.receive(.init(object: peer.seat, opcode: 0, arguments: [.uint(0)]))
+  let removed = try await drain(connection, &peer)
+  #expect(removed.first?.id == device && removed.first?.opcode == 0)
+}
+
+@Test @MainActor func modernPointerEventsReachOnlyTheFocusedSurface() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer(seatVersion: 9)
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let popup = try await configurePopup(connection, &peer)
+  _ = connection.beginFrame()
+  _ = connection.takePopupInput()
+  try connection.receive(
+    .init(
+      object: peer.pointer, opcode: 0,
+      arguments: [
+        .uint(1), .uint(popup.surface), .int(0), .int(0),
+      ]))
+  try connection.receive(
+    .init(
+      object: peer.pointer, opcode: 3,
+      arguments: [
+        .uint(2), .uint(0), .uint(0x111), .uint(1),
+      ]))
+  try connection.receive(.init(object: peer.pointer, opcode: 9, arguments: [.uint(0), .int(30)]))
+  try connection.receive(.init(object: peer.pointer, opcode: 10, arguments: [.uint(0), .uint(1)]))
+  try connection.receive(.init(object: peer.pointer, opcode: 5, arguments: []))
+  let input = try #require(connection.takePopupInput())
+  #expect(input.secondaryPressed && input.secondaryDown && !input.primaryDown)
+  #expect(input.scrollStepsY == 0.25 && input.scrollInvertedY == true)
+  #expect(connection.input.scrollStepsY == 0 && !connection.input.secondaryPressed)
+}
+
+@Test @MainActor func inputMethodTransactionsReachPopupOnlyAtDoneAndClearOnRemoval() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let popup = try await configurePopup(connection, &peer)
+  try connection.receive(
+    .init(
+      object: peer.registry, opcode: 0,
+      arguments: [
+        .uint(41), .string("zwp_text_input_manager_v3"), .uint(2),
+      ]))
+  let requests = try await drain(connection, &peer)
+  let bind = try #require(requests.first { $0.id == peer.registry })
+  let manager: UInt32 = try #require(
+    bind.body.getInteger(at: bind.body.writerIndex - 4, endianness: .host))
+  let create = try #require(requests.first { $0.id == manager && $0.opcode == 1 })
+  let text: UInt32 = try #require(create.body.getInteger(at: 0, endianness: .host))
+  #expect(
+    connection.setTextInput(
+      .init(
+        surroundingText: "", cursor: 0, anchor: 0,
+        cursorRectangle: SIMD4(0, 0, 1, 20)), popup: true))
+  try connection.receive(.init(object: text, opcode: 0, arguments: [.uint(popup.surface)]))
+  _ = connection.beginFrame()
+  _ = connection.takePopupInput()
+  try connection.receive(
+    .init(object: text, opcode: 2, arguments: [.string("日"), .int(3), .int(3)]))
+  try connection.receive(.init(object: text, opcode: 3, arguments: [.string("語")]))
+  #expect(connection.popupInput?.textEvents.isEmpty == true)
+  try connection.receive(.init(object: text, opcode: 5, arguments: [.uint(1)]))
+  let input = try #require(connection.takePopupInput())
+  #expect(
+    input.textEvents == [
+      .init(committed: "語", preedit: .init(text: "日", cursorBegin: 3, cursorEnd: 3))
+    ])
+  #expect(connection.input.textEvents.isEmpty && !connection.redrawRequested)
+  try connection.receive(.init(object: peer.registry, opcode: 1, arguments: [.uint(41)]))
+  #expect(connection.takePopupInput()?.textEvents == [.init()])
+  #expect(
+    !connection.setTextInput(
+      .init(
+        surroundingText: "", cursor: 0, anchor: 0,
+        cursorRectangle: .zero), popup: true))
+  try connection.receive(.init(object: text, opcode: 3, arguments: [.string("late")]))
+  try connection.receive(.init(object: text, opcode: 5, arguments: [.uint(1)]))
+  #expect(connection.popupInput?.textEvents.isEmpty == true)
+}
+
+@Test @MainActor func cursorShapesArePerSurfaceAndIgnoreDuplicateRequests() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let popup = try await configurePopup(connection, &peer)
+  try connection.receive(
+    .init(
+      object: peer.registry, opcode: 0,
+      arguments: [
+        .uint(40), .string("wp_cursor_shape_manager_v1"), .uint(1),
+      ]))
+  _ = try await drain(connection, &peer)
+  #expect(connection.setCursor(.text))
+  #expect(connection.setCursor(.grabbing, popup: true))
+  _ = try await drain(connection, &peer)
+  for (surface, serial, shape): (UInt32, UInt32, UInt32) in [
+    (peer.surface, 31, 9), (popup.surface, 32, 17), (peer.surface, 33, 9),
+  ] {
+    try connection.receive(
+      .init(
+        object: peer.pointer, opcode: 0,
+        arguments: [
+          .uint(serial), .uint(surface), .int(0), .int(0),
+        ]))
+    let requests = try await drain(connection, &peer)
+    let request = try #require(requests.first { $0.opcode == 1 })
+    #expect(request.body.getInteger(at: 0, endianness: .host, as: UInt32.self) == serial)
+    #expect(request.body.getInteger(at: 4, endianness: .host, as: UInt32.self) == shape)
+  }
+  #expect(connection.setCursor(.text))
+  #expect(try await drain(connection, &peer).isEmpty)
 }

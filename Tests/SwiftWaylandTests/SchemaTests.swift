@@ -27,7 +27,9 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
       enumeration = interface + "." + (attributes["name"] ?? "")
     case "entry":
       if let enumeration, let name = attributes["name"],
-        let value = attributes["value"].flatMap(UInt32.init)
+        let value = attributes["value"].flatMap({ raw in
+          raw.hasPrefix("0x") ? UInt32(raw.dropFirst(2), radix: 16) : UInt32(raw)
+        })
       {
         enumValues[enumeration, default: [:]][name] = value
       }
@@ -103,7 +105,7 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
 @Test func swiftWireSchemaMatchesPinnedProtocolXML() throws {
   let schema = SchemaParser()
   for name in [
-    "wayland", "xdg-shell", "wlr-layer-shell-unstable-v1", "linux-dmabuf-v1",
+    "cursor-shape-v1", "text-input-unstable-v3", "wayland", "xdg-shell", "wlr-layer-shell-unstable-v1", "linux-dmabuf-v1",
     "idle-inhibit-unstable-v1", "fractional-scale-v1", "viewporter"
   ] {
     let url = try #require(
@@ -132,6 +134,13 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
       "xkb_v1": WaylandKeyboardKeymapFormat.xkbV1.rawValue
     ]
   ]
+  for shape in WaylandCursorShape.allCases {
+    #expect(schema.enumValues["wp_cursor_shape_device_v1.shape"]?.values.contains(shape.rawValue) == true)
+  }
+  #expect(schema.enumValues["zwp_text_input_v3.content_purpose"]?["password"]
+    == WaylandTextInputState.Purpose.password.rawValue)
+  #expect(schema.enumValues["zwp_text_input_v3.content_hint"]?["sensitive_data"]
+    == WaylandTextInputState.Hints.sensitiveData.rawValue)
   for (name, values) in inputEnums { #expect(schema.enumValues[name] == values) }
   for (name, events) in WireSchema.events { #expect(schema.events[name] == events) }
   for (name, requests) in WireSchema.requests {

@@ -1,5 +1,7 @@
 # Protocol inputs
 
+- `cursor-shape-v1.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/staging/cursor-shape/cursor-shape-v1.xml).
+- `text-input-unstable-v3.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/unstable/text-input/text-input-unstable-v3.xml).
 - `wayland.xml`: [Wayland 1.26.0](https://github.com/wayland-mirror/wayland/blob/1.26.0/protocol/wayland.xml).
 - `idle-inhibit-unstable-v1.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml).
 - `linux-dmabuf-v1.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/stable/linux-dmabuf/linux-dmabuf-v1.xml).
@@ -19,7 +21,9 @@ wl_compositor v3…6 → surfaces / transforms / integer buffer scale
 xdg_wm_base v1     → toplevel / child popup
 layer-shell v1    → passive top bar / child popup
 fractional-scale v1 + viewporter v1 → per-surface scale / logical destination
-wl_seat v4…5      → pointer / keyboard
+wl_seat v4…9      → pointer / keyboard / wheel value120 / relative direction
+cursor-shape v1  → per-surface cursor intent using wl_pointer.enter serial
+text-input-v3 v1 → editor state / atomic preedit + commit + surrounding deletion
 linux-dmabuf v3…4 → v3 announcements / v4 atomic device + format/modifier feedback
 idle-inhibit v1   → visible-parent surface inhibition; disconnect releases it
 ```
@@ -91,3 +95,39 @@ fractionalScale120 == nil → renderScale = Double(bufferScale)
 are required; otherwise `wl_surface.preferred_buffer_scale` / entered outputs
 supply the integer fallback. Clips use the actual rounded pixel-to-logical ratio
 on each axis; input coordinates remain logical.
+
+## Desktop input
+
+```text
+wl_keyboard.key → Keyboard + xkb_compose_state
+                ├─ WaylandKeyEvent                 (shortcuts, physical identity)
+                └─ WaylandTextInputEvent.committed  (UTF-8, possibly multiple scalars)
+
+zwp_text_input_v3
+  enter(surface) → setTextInput(editorState) → enable + state + commit
+  preedit_string ─┐
+  commit_string ──┼─ done(serial) → WaylandTextInputEvent
+  delete_surrounding_text ─┘
+  leave(surface) → clear preedit
+
+WaylandInput → NativeWindowInput → Roots.Input → onPrepareFrame / onFrameUpdate
+  textEvents     → remove old preedit → delete bytes → insert commit → new preedit
+  keyEvents      → shortcuts / navigation (not a second text insertion)
+  scrollX/Y      → compositor logical distance
+  scrollStepsX/Y → wheel detents, value120 / 120 (not added to scrollX/Y)
+  scrollInvertedX/Y → physical direction metadata; do not invert scrollX/Y again
+
+UIStore.cursorStyle → NativeWindow.setCursor(_:popup:) → cursor-shape-v1
+```
+
+`NativeWindow.setTextInput(_:popup:)` accepts `NativeTextInputState` with UTF-8
+cursor/anchor offsets, at most 4000 bytes of surrounding text, a logical cursor
+rectangle, content purpose and hints. Disable with `nil` before switching editors;
+update state after edits (`changeCausedByInputMethod: true` for IME edits).
+`done` always delivers edits; stale serials defer state requests until a matching
+`done`. No built-in editable widget or preedit renderer is added here.
+
+Cursor-shape and text-input are optional; setters return `false` when unsupported.
+Keyboard compose remains available without text-input. A compositor/input method
+consumes IME keys; unconsumed `wl_keyboard` keys still use local compose. Touch,
+legacy cursor-theme fallback, and text-input-v3 v2 actions are not implemented.

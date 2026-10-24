@@ -22,6 +22,17 @@ public struct NativeWindowInput: Sendable {
   public internal(set) var primaryDown = false
   public internal(set) var primaryPressed = false
   public internal(set) var primaryReleased = false
+  public internal(set) var secondaryDown = false
+  public internal(set) var secondaryPressed = false
+  public internal(set) var secondaryReleased = false
+  public internal(set) var middleDown = false
+  public internal(set) var middlePressed = false
+  public internal(set) var middleReleased = false
+  public internal(set) var scrollStepsX: Float = 0
+  public internal(set) var scrollStepsY: Float = 0
+  public internal(set) var scrollInvertedX: Bool?
+  public internal(set) var scrollInvertedY: Bool?
+  public internal(set) var textEvents: [TextInputEvent] = []
   public internal(set) var keyEvents: [KeyEvent] = []
   public internal(set) var focusLost = false
 
@@ -44,6 +55,23 @@ public struct NativeWindowInput: Sendable {
     primaryDown = input.primaryDown
     primaryPressed = input.primaryPressed
     primaryReleased = input.primaryReleased
+    secondaryDown = input.secondaryDown
+    secondaryPressed = input.secondaryPressed
+    secondaryReleased = input.secondaryReleased
+    middleDown = input.middleDown
+    middlePressed = input.middlePressed
+    middleReleased = input.middleReleased
+    scrollStepsX = input.scrollStepsX
+    scrollStepsY = input.scrollStepsY
+    scrollInvertedX = input.scrollInvertedX
+    scrollInvertedY = input.scrollInvertedY
+    textEvents = input.textEvents.map {
+      TextInputEvent(
+        committed: $0.committed,
+        preedit: $0.preedit.map {
+          TextPreedit(text: $0.text, cursorBegin: $0.cursorBegin, cursorEnd: $0.cursorEnd)
+        }, deleteBefore: $0.deleteBefore, deleteAfter: $0.deleteAfter)
+    }
     focusLost = input.focusLost
     keyEvents = input.keyEvents.map {
       KeyEvent(

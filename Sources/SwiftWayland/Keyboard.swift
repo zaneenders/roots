@@ -1,4 +1,5 @@
 import CXKBCommon
+import Foundation
 import Glibc
 
 @safe struct Keyboard: ~Copyable {
@@ -10,13 +11,31 @@ import Glibc
   private var rate: Int32 = 0
   private var delay: Int32 = 0
   private var held: Repeat?
+  private var compose: OpaquePointer?
+  private var repeatedText: String?
+  private var composedRepeat = false
 
   var isRepeating: Bool { held != nil }
   var repeatDeadline: ContinuousClock.Instant? { held?.next }
 
-  init() { unsafe context = xkb_context_new(XKB_CONTEXT_NO_FLAGS) }
+  init(locale: String? = nil) {
+    unsafe context = xkb_context_new(XKB_CONTEXT_NO_FLAGS)
+    let environment = ProcessInfo.processInfo.environment
+    let locale =
+      locale ?? ["LC_ALL", "LC_CTYPE", "LANG"].compactMap {
+        environment[$0].flatMap { $0.isEmpty ? nil : $0 }
+      }.first ?? "C"
+    if let context = unsafe context,
+      let table = unsafe xkb_compose_table_new_from_locale(
+        context, locale, XKB_COMPOSE_COMPILE_NO_FLAGS)
+    {
+      unsafe compose = xkb_compose_state_new(table, XKB_COMPOSE_STATE_NO_FLAGS)
+      unsafe xkb_compose_table_unref(table)
+    }
+  }
 
   deinit {
+    if let compose = unsafe compose { unsafe xkb_compose_state_unref(compose) }
     if let state = unsafe state { unsafe xkb_state_unref(state) }
     if let keymap = unsafe keymap { unsafe xkb_keymap_unref(keymap) }
     if let context = unsafe context { unsafe xkb_context_unref(context) }
@@ -61,6 +80,7 @@ import Glibc
   }
 
   private mutating func clear() {
+    resetCompose()
     cancelRepeat()
     if let state = unsafe state { unsafe xkb_state_unref(state) }
     if let keymap = unsafe keymap { unsafe xkb_keymap_unref(keymap) }
@@ -86,6 +106,7 @@ import Glibc
 
   mutating func leave(input: inout WaylandInput) {
     cancelRepeat()
+    resetCompose()
     input.leaveKeyboard()
   }
 
@@ -100,6 +121,9 @@ import Glibc
     }
     guard !event.key.isModifier else { return }
     cancelRepeat()
+    let text = text(for: key, event: event)
+    repeatedText = text
+    if let text, !text.isEmpty { input.textEvents.append(.init(committed: text)) }
     if rate > 0, key <= UInt32.max - 8, let keymap = unsafe keymap,
       unsafe xkb_keymap_key_repeats(keymap, key + 8) != 0
     {
@@ -112,12 +136,64 @@ import Glibc
     let interval = Duration.nanoseconds(1_000_000_000 / Int64(rate))
     var count = 0
     while now >= held.next && count < 32 {
-      input.keyEvents.append(event(for: held.key, phase: .repeated))
+      let event = event(for: held.key, phase: .repeated)
+      input.keyEvents.append(event)
+      let text = allowsText(event) ? (composedRepeat ? repeatedText : plainText(event)) : nil
+      if let text, !text.isEmpty {
+        input.textEvents.append(.init(committed: text))
+      }
       held.next = held.next.advanced(by: interval)
       count += 1
     }
     if now >= held.next { held.next = now.advanced(by: interval) }
     self.held = held
+  }
+
+  mutating func resetCompose() {
+    if let compose = unsafe compose { unsafe xkb_compose_state_reset(compose) }
+    repeatedText = nil
+    composedRepeat = false
+  }
+
+  private func allowsText(_ event: WaylandKeyEvent) -> Bool {
+    event.modifiers.intersection([.control, .super]).isEmpty
+      && (!event.modifiers.contains(.alt) || event.modifiers.contains(.altGraph))
+  }
+
+  private func plainText(_ event: WaylandKeyEvent) -> String? {
+    guard allowsText(event), case .character(let scalar) = event.key
+    else { return nil }
+    return String(scalar)
+  }
+
+  private mutating func text(for key: UInt32, event: WaylandKeyEvent) -> String? {
+    composedRepeat = false
+    guard allowsText(event) else {
+      resetCompose()
+      return nil
+    }
+    guard key <= UInt32.max - 8, let state = unsafe state, let compose = unsafe compose else {
+      return plainText(event)
+    }
+    let symbol = unsafe xkb_state_key_get_one_sym(state, key + 8)
+    _ = unsafe xkb_compose_state_feed(compose, symbol)
+    switch unsafe xkb_compose_state_get_status(compose) {
+    case XKB_COMPOSE_COMPOSING:
+      composedRepeat = true
+      return nil
+    case XKB_COMPOSE_COMPOSED:
+      let count = unsafe xkb_compose_state_get_utf8(compose, nil, 0)
+      var bytes = [CChar](repeating: 0, count: Int(count) + 1)
+      _ = unsafe xkb_compose_state_get_utf8(compose, &bytes, bytes.count)
+      unsafe xkb_compose_state_reset(compose)
+      composedRepeat = true
+      return String(decoding: bytes.dropLast().map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    case XKB_COMPOSE_CANCELLED:
+      unsafe xkb_compose_state_reset(compose)
+      composedRepeat = true
+      return nil
+    default: return plainText(event)
+    }
   }
 
   private func event(for key: UInt32, phase: WaylandKeyPhase) -> WaylandKeyEvent {
@@ -127,7 +203,7 @@ import Glibc
     var modifiers: WaylandKeyModifiers = []
     for (name, flag): (String, WaylandKeyModifiers) in [
       ("Shift", .shift), ("Control", .control), ("Mod1", .alt), ("Mod4", .super),
-      ("Mod5", .altGraph), ("Lock", .capsLock), ("Mod2", .numLock)
+      ("Mod5", .altGraph), ("Lock", .capsLock), ("Mod2", .numLock),
     ] {
       if unsafe xkb_state_mod_name_is_active(state, name, XKB_STATE_MODS_EFFECTIVE) > 0 {
         modifiers.insert(flag)

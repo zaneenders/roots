@@ -1,4 +1,8 @@
 import Foundation
+import SwiftWayland
+
+public typealias NativeCursorShape = WaylandCursorShape
+public typealias NativeTextInputState = WaylandTextInputState
 
 public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   case invalidConfiguration
@@ -42,6 +46,16 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   public static func requestPopupRedraw() { host?.requestPopupRedraw() }
 
   public static func requestClose() { host?.requestClose() }
+
+  @discardableResult
+  public static func setCursor(_ shape: NativeCursorShape, popup: Bool = false) -> Bool {
+    host?.connection.setCursor(shape, popup: popup) ?? false
+  }
+
+  @discardableResult
+  public static func setTextInput(_ state: NativeTextInputState?, popup: Bool = false) -> Bool {
+    host?.connection.setTextInput(state, popup: popup) ?? false
+  }
 
   @discardableResult
   public static func presentPopup(

@@ -60,6 +60,10 @@ import NIOCore
   private var keyboardInPopup = false
   private var pointerSerial: UInt32?
   private var callbacks: Set<UInt32> = []
+  private var cursorManagerName: UInt32?
+  private var textManagerName: UInt32?
+  private lazy var cursor = WaylandCursor(objects: objects)
+  private lazy var textInput = WaylandTextInput(objects: objects)
   private lazy var clipboard = WaylandClipboard(objects: objects)
   private lazy var dmabuf = WaylandDMABuf(objects: objects)
 
@@ -417,6 +421,18 @@ import NIOCore
         updateBufferScale()
       }
     case "wl_seat": if opcode == 0 { updateCapabilities(a[0].word) }
+    case "zwp_text_input_v3":
+      if opcode <= 1 { typing.resetCompose() }
+      if let update = textInput.event(message) {
+        typing.resetCompose()
+        if update.surface == surface {
+          input.textEvents.append(update.edit)
+          requestRedraw()
+        } else if update.surface == popup?.surface {
+          popup?.input.textEvents.append(update.edit)
+          requestPopupRedraw()
+        }
+      }
     case "wl_pointer": pointerEvent(opcode, a)
     case "wl_keyboard": keyboardEvent(opcode, a)
     case "wl_data_device", "wl_data_offer", "wl_data_source": clipboard.event(message)
@@ -452,8 +468,14 @@ import NIOCore
     case "wl_output" where version >= 2:
       outputs[name] = WaylandOutput(
         id: objects.bind(registry, name, interface, min(version, 3)), version: min(version, 3))
+    case "wp_cursor_shape_manager_v1" where cursor.manager == 0 && version >= 1:
+      cursor.manager = objects.bind(registry, name, interface, 1)
+      cursorManagerName = name
+    case "zwp_text_input_manager_v3" where textInput.manager == 0 && version >= 1:
+      textInput.manager = objects.bind(registry, name, interface, 1)
+      textManagerName = name
     case "wl_seat" where seat == 0 && version >= 4:
-      seatVersion = min(version, 5)
+      seatVersion = min(version, 9)
       seat = objects.bind(registry, name, interface, seatVersion)
       seatName = name
     case "wl_data_device_manager" where clipboard.manager == 0:
@@ -466,9 +488,22 @@ import NIOCore
       dmabufName = name
     default: break
     }
-    if seat != 0 { clipboard.attach(seat: seat) }
+    if seat != 0 {
+      clipboard.attach(seat: seat)
+      textInput.attach(seat: seat)
+    }
+    cursor.attach(pointer: pointer)
   }
   private func removeGlobal(_ name: UInt32) {
+    if cursorManagerName == name {
+      cursor.close()
+      cursorManagerName = nil
+    }
+    if textManagerName == name {
+      clearTextFocus()
+      textInput.close()
+      textManagerName = nil
+    }
     if fractionalManagerName == name {
       objects.request(fractionalManager, 0)
       fractionalManager = 0
@@ -502,6 +537,8 @@ import NIOCore
     }
     if seatName == name {
       updateCapabilities(0)
+      clearTextFocus()
+      textInput.detach()
       clipboard.detachSeat()
       if seatVersion >= 5 { objects.request(seat, 3) } else { objects.retire(seat) }
       seat = 0
@@ -512,7 +549,9 @@ import NIOCore
     defer { scheduleKeyRepeat() }
     if capabilities & 1 != 0 {
       if pointer == 0 { pointer = objects.create(seat, 0, "wl_pointer") }
+      cursor.attach(pointer: pointer)
     } else if pointer != 0 {
+      cursor.detach()
       objects.request(pointer, 1)
       pointer = 0
       pointerInput.leavePointer()
@@ -535,10 +574,13 @@ import NIOCore
     switch opcode {
     case 0:
       pointerInPopup = a[1].word == popup?.surface
+      cursor.enter(surface: a[1].word, serial: a[0].word)
       pointerInput.pointerInside = true
       pointerInput.pointerX = Float(a[2].signed) / 256
       pointerInput.pointerY = Float(a[3].signed) / 256
-    case 1: pointerInput.leavePointer()
+    case 1:
+      cursor.leave()
+      pointerInput.leavePointer()
     case 2:
       pointerInput.pointerX = Float(a[1].signed) / 256
       pointerInput.pointerY = Float(a[2].signed) / 256
@@ -550,11 +592,18 @@ import NIOCore
     case 5:
       let previous = pointerInput.scrollVelocityY
       pointerInput.pointerFrame()
-      if pointerInput.scrollVelocityY == previous { return }
+      if pointerInput.scrollVelocityY == previous,
+        pointerInput.scrollStepsX == 0, pointerInput.scrollStepsY == 0
+      {
+        return
+      }
     case 6:
       pointerInput.axisSource(a[0].word)
       return
     case 7: pointerInput.axisStop(a[1].word, time: a[0].word)
+    case 8: pointerInput.axisSteps(a[0].word, value: a[1].signed, highResolution: false)
+    case 9: pointerInput.axisSteps(a[0].word, value: a[1].signed, highResolution: true)
+    case 10: pointerInput.axisDirection(a[0].word, inverted: a[1].word == 1)
     default: return
     }
     if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
@@ -569,6 +618,7 @@ import NIOCore
     case 1:
       clipboard.serial = a[0].word
       clipboard.focused = true
+      typing.resetCompose()
       keyboardInPopup = a[1].word == popup?.surface
     case 2:
       clipboard.focused = false
@@ -696,6 +746,8 @@ import NIOCore
     if keyboardInPopup { typing.leave(input: &child.input) }
     keyboardInPopup = false
     scheduleKeyRepeat()
+    textInput.set(nil, on: child.surface)
+    cursor.forget(child.surface)
     dmabuf.unwatch(surface: child.surface)
     child.close()
     signal()
@@ -752,6 +804,39 @@ import NIOCore
     guard target != 0 else { throw WaylandError.connection }
     try buffer.present(on: target)
   }
+  /// Returns false when the compositor does not support cursor-shape-v1.
+  @discardableResult public func setCursor(_ shape: WaylandCursorShape, popup: Bool = false) -> Bool
+  {
+    let target = popup ? self.popup?.surface ?? 0 : surface
+    guard running, lifecycle == .connected, cursor.manager != 0, target != 0 else { return false }
+    cursor.set(shape, on: target)
+    return true
+  }
+
+  /// nil disables text input. Disable before switching editors, then send the new editor state.
+  /// Return false means unsupported protocol or invalid UTF-8 offsets/state.
+  @discardableResult public func setTextInput(
+    _ state: WaylandTextInputState?, popup: Bool = false
+  ) -> Bool {
+    let target = popup ? self.popup?.surface ?? 0 : surface
+    guard running, lifecycle == .connected, target != 0,
+      state?.isValid != false, state == nil || textInput.manager != 0
+    else { return false }
+    textInput.set(state, on: target)
+    return true
+  }
+
+  private func clearTextFocus() {
+    if textInput.surface == surface {
+      input.textEvents.append(.init())
+      requestRedraw()
+    } else if textInput.surface == popup?.surface {
+      popup?.input.textEvents.append(.init())
+      requestPopupRedraw()
+    }
+    typing.resetCompose()
+  }
+
   public func readClipboard() async -> String? {
     guard running, let fd = clipboard.beginRead() else { return nil }
     guard let bytes = try? await clipboard.io.read(from: fd) else { return nil }
@@ -796,6 +881,8 @@ import NIOCore
     scale.close(objects: objects)
     objects.request(fractionalManager, 0)
     objects.request(viewporter, 0)
+    cursor.close()
+    textInput.close()
     clipboard.close()
     let io = clipboard.io
     clipboardShutdown = Task { await io.shutdown() }

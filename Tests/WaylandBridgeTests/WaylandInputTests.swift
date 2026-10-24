@@ -53,3 +53,26 @@ func waylandInputAdapterPreservesCoordinatesEdgesAndOrderedKeyEvents(fractionalS
   source.keyEvents = sourceKeys.map { WaylandKeyEvent($0) }
   #expect(NativeWindowInput(source).keyEvents.map(\.key) == expected)
 }
+
+@Test func desktopInputAdapterPreservesTextButtonsAndWheelMetadata() {
+  var source = WaylandInput(width: 100, height: 80)
+  source.button(0x111, state: 1)
+  source.button(0x112, state: 1)
+  source.axisSteps(0, value: 30, highResolution: true)
+  source.axisDirection(0, inverted: true)
+  source.pointerFrame()
+  source.textEvents = [
+    .init(
+      committed: "é", preedit: .init(text: "日", cursorBegin: -1, cursorEnd: -1),
+      deleteBefore: 2, deleteAfter: 0)
+  ]
+  let input = NativeWindowInput(source)
+  #expect(input.secondaryDown && input.secondaryPressed && input.middleDown && input.middlePressed)
+  #expect(input.scrollStepsY == 0.25 && input.scrollInvertedY == true)
+  #expect(
+    input.textEvents == [
+      .init(
+        committed: "é", preedit: .init(text: "日", cursorBegin: -1, cursorEnd: -1),
+        deleteBefore: 2, deleteAfter: 0)
+    ])
+}

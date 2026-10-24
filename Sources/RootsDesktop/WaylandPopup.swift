@@ -67,7 +67,7 @@ public struct WaylandPopup<Content: Block> {
     let presented = NativeWindow.presentPopup(
       configuration: configuration,
       frame: { snapshot, renderer in
-        DesktopSystem.frame(snapshot, renderer: renderer, runtime: runtime)
+        DesktopSystem.frame(snapshot, renderer: renderer, runtime: runtime, popup: true)
       },
       onDismiss: {
         runtime.stop()

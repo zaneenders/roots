@@ -365,3 +365,67 @@ func invalidKeymapSizeClearsTheOldLayout(size: UInt32) throws {
         arguments: [.uint(1), .fd(try WireDescriptor.duplicate(fd)), .uint(UInt32(bytes.count))]))
   }
 }
+
+@Test func deadKeysComposeTextWithoutChangingPhysicalKeyEvents() {
+  var keyboard = Keyboard(locale: "en_US.UTF-8")
+  keyboard.load(keymap: keymap)
+  keyboard.repeatInfo(rate: 20, delay: 200)
+  var input = WaylandInput(width: 10, height: 10)
+  let now = ContinuousClock.now
+  keyboard.key(47, pressed: true, input: &input, now: now)
+  keyboard.key(47, pressed: false, input: &input, now: now)
+  #expect(input.textEvents.isEmpty)
+  keyboard.key(16, pressed: true, input: &input, now: now)
+  #expect(input.textEvents == [.init(committed: "á")])
+  #expect(input.keyEvents.map(\.physicalCode) == [47, 47, 16])
+  #expect(input.keyEvents.last?.key == .character("a"))
+  input.resetEdges()
+  keyboard.repeatKeys(input: &input, now: now.advanced(by: .milliseconds(200)))
+  #expect(input.textEvents == [.init(committed: "á")])
+}
+
+@Test func composeCancellationFocusLossAndShortcutsDoNotInsertText() {
+  var keyboard = Keyboard(locale: "en_US.UTF-8")
+  keyboard.load(keymap: keymap)
+  var input = WaylandInput(width: 10, height: 10)
+  keyboard.key(47, pressed: true, input: &input)
+  keyboard.key(1, pressed: true, input: &input)
+  #expect(input.textEvents.isEmpty)
+  keyboard.key(16, pressed: true, input: &input)
+  #expect(input.textEvents == [.init(committed: "a")])
+  keyboard.key(47, pressed: true, input: &input)
+  keyboard.leave(input: &input)
+  keyboard.key(16, pressed: true, input: &input)
+  #expect(input.textEvents == [.init(committed: "a")])
+  input.resetEdges()
+  keyboard.modifiers(depressed: 4, latched: 0, locked: 0, group: 0)
+  keyboard.key(16, pressed: true, input: &input)
+  #expect(input.textEvents.isEmpty)
+  #expect(input.keyEvents.last?.modifiers == .control)
+}
+
+@Test func composeKeySequenceAndRepeatedTextRespectShortcutModifiers() {
+  var keyboard = Keyboard(locale: "en_US.UTF-8")
+  let map = keymap.replacingOccurrences(of: "[ F1 ]", with: "[ Multi_key ]")
+  keyboard.load(keymap: map)
+  keyboard.repeatInfo(rate: 20, delay: 200)
+  var input = WaylandInput(width: 10, height: 10)
+  let now = ContinuousClock.now
+  for key: UInt32 in [59, 16, 16] { keyboard.key(key, pressed: true, input: &input, now: now) }
+  #expect(input.textEvents == [.init(committed: "å")])
+  input.resetEdges()
+  keyboard.modifiers(depressed: 4, latched: 0, locked: 0, group: 0)
+  keyboard.repeatKeys(input: &input, now: now.advanced(by: .milliseconds(200)))
+  #expect(input.textEvents.isEmpty)
+  #expect(input.keyEvents.last?.modifiers == .control)
+}
+
+@Test func composeCanCommitMultipleUnicodeScalars() {
+  var keyboard = Keyboard(locale: "en_US.UTF-8")
+  keyboard.load(keymap: keymap.replacingOccurrences(of: "[ a, A ]", with: "[ j, J ]"))
+  var input = WaylandInput(width: 10, height: 10)
+  keyboard.key(47, pressed: true, input: &input)
+  keyboard.key(16, pressed: true, input: &input)
+  #expect(input.textEvents.first?.committed?.unicodeScalars.count == 2)
+  #expect(input.textEvents.first?.committed == "j\u{301}")
+}

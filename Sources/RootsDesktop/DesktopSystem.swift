@@ -83,6 +83,16 @@ public enum DesktopSystem {
   }
 
   #if os(Linux)
+  @discardableResult
+  public static func setCursor(_ shape: NativeCursorShape, popup: Bool = false) -> Bool {
+    NativeWindow.setCursor(shape, popup: popup)
+  }
+
+  @discardableResult
+  public static func setTextInput(_ state: NativeTextInputState?, popup: Bool = false) -> Bool {
+    NativeWindow.setTextInput(state, popup: popup)
+  }
+
   static func run<Content: Block>(
     configuration: NativeWindowConfiguration, runtime: DesktopRuntime<Content>,
     offscreen: Bool = false
@@ -96,18 +106,26 @@ public enum DesktopSystem {
   static func input(_ snapshot: NativeWindowInput) -> Input {
     let hasPointer =
       snapshot.pointerInside || snapshot.primaryDown || snapshot.primaryPressed
-      || snapshot.primaryReleased
+      || snapshot.primaryReleased || snapshot.secondaryDown || snapshot.secondaryPressed
+      || snapshot.secondaryReleased || snapshot.middleDown || snapshot.middlePressed
+      || snapshot.middleReleased
     return Input(
       mousePosition: hasPointer ? Coordinate(x: snapshot.pointerX, y: snapshot.pointerY) : nil,
       pressed: snapshot.primaryPressed, released: snapshot.primaryReleased,
       scrollX: snapshot.scrollX, scrollY: snapshot.scrollY,
       scrollVelocityY: snapshot.scrollVelocityY,
-      keyEvents: snapshot.keyEvents, focusLost: snapshot.focusLost)
+      keyEvents: snapshot.keyEvents, focusLost: snapshot.focusLost,
+      secondaryDown: snapshot.secondaryDown, secondaryPressed: snapshot.secondaryPressed,
+      secondaryReleased: snapshot.secondaryReleased, middleDown: snapshot.middleDown,
+      middlePressed: snapshot.middlePressed, middleReleased: snapshot.middleReleased,
+      scrollStepsX: snapshot.scrollStepsX, scrollStepsY: snapshot.scrollStepsY,
+      scrollInvertedX: snapshot.scrollInvertedX, scrollInvertedY: snapshot.scrollInvertedY,
+      textEvents: snapshot.textEvents)
   }
 
   static func frame<Content: Block>(
     _ snapshot: NativeWindowInput, renderer: borrowing RenderFrame,
-    runtime: DesktopRuntime<Content>
+    runtime: DesktopRuntime<Content>, popup: Bool = false
   ) {
     runtime.frame(
       input: input(snapshot),
@@ -115,6 +133,12 @@ public enum DesktopSystem {
         size: .init(width: Float(snapshot.width), height: Float(snapshot.height)),
         scale: Float(snapshot.renderScale)),
       time: snapshot.timeSeconds, present: { renderer.render($0) })
+    let shape: NativeCursorShape = switch runtime.cursorStyle {
+    case .default: .default
+    case .pointer: .pointer
+    case .text: .text
+    }
+    _ = NativeWindow.setCursor(shape, popup: popup)
   }
   #endif
 }

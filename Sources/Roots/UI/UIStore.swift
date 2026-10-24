@@ -24,6 +24,15 @@ struct UIStore: ~Copyable {
 
   var selectedText: String? { storage.selectedText }
 
+  var cursorStyle: CursorStyle {
+    if storage.scrollbarDrag != nil { return .default }
+    let hit = storage.hitTest(at: storage.mousePosition)
+    guard hit.scrollbar == nil, let i = hit.node else { return .default }
+    if storage.nodes[i].textLayout != nil { return .text }
+    if case .button = storage.nodes[i].interaction { return .pointer }
+    return .default
+  }
+
   func state(for handle: NodeHandle) -> NodeState? {
     guard let i = storage.resolve(handle) else { return nil }
     let node = storage.nodes[i]

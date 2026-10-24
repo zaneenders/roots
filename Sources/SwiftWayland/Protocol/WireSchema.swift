@@ -1,5 +1,7 @@
 enum WireSchema {
   static let destructors: [String: UInt16] = [
+    "wp_cursor_shape_manager_v1": 0, "wp_cursor_shape_device_v1": 0,
+    "zwp_text_input_manager_v3": 0, "zwp_text_input_v3": 0,
     "wp_viewporter": 0, "wp_viewport": 0,
     "wp_fractional_scale_manager_v1": 0, "wp_fractional_scale_v1": 0,
     "wl_compositor": 2, "wl_buffer": 0, "wl_data_offer": 2, "wl_data_source": 1,
@@ -8,9 +10,12 @@ enum WireSchema {
     "xdg_wm_base": 0, "xdg_positioner": 0, "xdg_surface": 0, "xdg_toplevel": 0, "xdg_popup": 0,
     "zwlr_layer_shell_v1": 1, "zwlr_layer_surface_v1": 7,
     "zwp_idle_inhibit_manager_v1": 0, "zwp_idle_inhibitor_v1": 0,
-    "zwp_linux_dmabuf_feedback_v1": 0, "zwp_linux_dmabuf_v1": 0, "zwp_linux_buffer_params_v1": 0
+    "zwp_linux_dmabuf_feedback_v1": 0, "zwp_linux_dmabuf_v1": 0, "zwp_linux_buffer_params_v1": 0,
   ]
   static let events: [String: [String]] = [
+    "wp_cursor_shape_manager_v1": [], "wp_cursor_shape_device_v1": [],
+    "zwp_text_input_manager_v3": [],
+    "zwp_text_input_v3": ["u", "u", "sii", "s", "uu", "u", "uu", "s", "uuu"],
     "wp_viewporter": [], "wp_viewport": [],
     "wp_fractional_scale_manager_v1": [], "wp_fractional_scale_v1": ["u"],
     "wl_display": ["uus", "u"],
@@ -38,9 +43,13 @@ enum WireSchema {
     "zwp_idle_inhibit_manager_v1": [], "zwp_idle_inhibitor_v1": [],
     "zwp_linux_dmabuf_feedback_v1": ["", "hu", "a", "", "a", "a", "u"],
     "zwp_linux_dmabuf_v1": ["u", "uuu"],
-    "zwp_linux_buffer_params_v1": ["u", ""]
+    "zwp_linux_buffer_params_v1": ["u", ""],
   ]
   static let requests: [String: [String]] = [
+    "wp_cursor_shape_manager_v1": ["", "uu", "uu"],
+    "wp_cursor_shape_device_v1": ["", "uu"],
+    "zwp_text_input_manager_v3": ["", "uu"],
+    "zwp_text_input_v3": ["", "", "", "sii", "u", "uu", "iiii", "", "a", "", ""],
     "wp_viewporter": ["", "uu"], "wp_viewport": ["", "iiii", "ii"],
     "wp_fractional_scale_manager_v1": ["", "uu"], "wp_fractional_scale_v1": [""],
     "wl_display": ["u", "u"],
@@ -68,6 +77,6 @@ enum WireSchema {
     "zwp_idle_inhibit_manager_v1": ["", "uu"], "zwp_idle_inhibitor_v1": [""],
     "zwp_linux_dmabuf_feedback_v1": [""],
     "zwp_linux_dmabuf_v1": ["", "u", "u", "uu"],
-    "zwp_linux_buffer_params_v1": ["", "huuuuu", "iiuu", "uiiuu", "a"]
+    "zwp_linux_buffer_params_v1": ["", "huuuuu", "iiuu", "uiiuu", "a"],
   ]
 }

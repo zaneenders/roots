@@ -115,13 +115,17 @@ final class DesktopRuntime<Content: Block> {
     let mouseMoved = input.mousePosition != mousePosition
     mousePosition = input.mousePosition
     if mouseMoved || input.pressed || input.released || input.focusLost
-      || !input.keyEvents.isEmpty
+      || !input.keyEvents.isEmpty || !input.textEvents.isEmpty
+      || input.secondaryPressed || input.secondaryReleased || input.middlePressed
+      || input.middleReleased
+      || input.scrollStepsX != 0 || input.scrollStepsY != 0
       || input.scrollX != 0 || input.scrollY != 0 || input.scrollVelocityY != nil
     {
       invalidation.request()
     }
   }
 
+  var cursorStyle: CursorStyle { host.cursorStyle }
   var droppedDraws: Int { host.droppedDraws }
   var needsAnimationFrame: Bool {
     host.needsAnimationFrame || frameCallbacks.needsAnimationFrame?() == true

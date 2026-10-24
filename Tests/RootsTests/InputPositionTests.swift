@@ -79,3 +79,23 @@ func nonfiniteMousePositionsAreIgnored(position: Coordinate) {
     }, present: { _ in })
   #expect(events.isEmpty)
 }
+
+@Test func cursorIntentFollowsHitTestingAndClearsOnFocusLoss() {
+  var store = UIStore()
+  func build(_ frame: inout UIFrame) {
+    frame.beginColumn(in: Region(0, 0, 100, 100))
+    frame.button(key: 1, "button", extent: 40)
+    frame.label(key: 2, "text", extent: 40)
+    frame.end()
+  }
+  store.frame(input: Input(mousePosition: .init(x: 10, y: 10)), build: build, present: { _ in })
+  #expect(store.cursorStyle == .pointer)
+  store.frame(input: Input(mousePosition: .init(x: 10, y: 60)), build: build, present: { _ in })
+  #expect(store.cursorStyle == .text)
+  store.frame(
+    input: Input(mousePosition: .init(x: 10, y: 60), focusLost: true),
+    build: build, present: { _ in })
+  #expect(store.cursorStyle == .default)
+  store.frame(input: Input(mousePosition: .init(x: 200, y: 200)), build: build, present: { _ in })
+  #expect(store.cursorStyle == .default)
+}

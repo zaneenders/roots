@@ -17,6 +17,7 @@
   public var liveCount: Int { store.liveCount }
   public var droppedDraws: Int { store.droppedDraws }
   public var needsAnimationFrame: Bool { store.needsAnimationFrame }
+  public var cursorStyle: CursorStyle { store.cursorStyle }
   public var selectedText: String? { store.selectedText }
   public func state(for key: UInt64) -> NodeState? {
     guard let handle = store.handle(for: key) else { return nil }
