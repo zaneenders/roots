@@ -1,4 +1,5 @@
 import Roots
+// expected-error: escaping closure captures 'inout' parameter 'frame'
 
 struct Invalid: Block {
   typealias Body = Never

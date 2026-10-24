@@ -67,6 +67,9 @@ var targets: [Target] = [
   .target(name: "RootsCPU", dependencies: ["Roots"], swiftSettings: swiftSettings),
   .testTarget(name: "RootsTests", dependencies: ["Roots"], swiftSettings: swiftSettings),
   .testTarget(
+    name: "CompilerFixtureTests", dependencies: ["Roots"],
+    resources: [.copy("Inputs")], swiftSettings: swiftSettings),
+  .testTarget(
     name: "RootsCPUTests", dependencies: ["Roots", "RootsCPU"], swiftSettings: swiftSettings)
 ]
 #if os(Linux)
