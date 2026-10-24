@@ -27,8 +27,9 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
   let io = ClipboardIO()
   let fds = try clipboardPipe()
   let text = String(repeating: "hello café 🙂\n", count: 20_000)
-  async let write: Void = io.write(Array(text.utf8), to: OwnedFD(taking: fds[1]))
-  let bytes = try await io.read(from: OwnedFD(taking: fds[0]))
+  async let write: Void = io.write(
+    Array(text.utf8), to: OwnedFD(taking: FileDescriptor(rawValue: fds[1])))
+  let bytes = try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])))
   #expect(String(bytes: bytes, encoding: .utf8) == text)
   try await write
 }
@@ -36,8 +37,8 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
 @Test func clipboardPreservesInvalidUTF8ForTheCallerToReject() async throws {
   let io = ClipboardIO()
   let fds = try clipboardPipe()
-  async let write: Void = io.write([0xFF], to: OwnedFD(taking: fds[1]))
-  let bytes = try await io.read(from: OwnedFD(taking: fds[0]))
+  async let write: Void = io.write([0xFF], to: OwnedFD(taking: FileDescriptor(rawValue: fds[1])))
+  let bytes = try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])))
   #expect(bytes == [0xFF])
   #expect(String(bytes: bytes, encoding: .utf8) == nil)
   try await write
@@ -46,9 +47,11 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
 @Test func clipboardRejectsOversizedReadsAndWrites() async throws {
   let io = ClipboardIO()
   let fds = try clipboardPipe()
-  let writer = Task { try await io.write([1, 2, 3], to: OwnedFD(taking: fds[1])) }
+  let writer = Task {
+    try await io.write([1, 2, 3], to: OwnedFD(taking: FileDescriptor(rawValue: fds[1])))
+  }
   await #expect(throws: ClipboardIO.Failure.tooLarge) {
-    try await io.read(from: OwnedFD(taking: fds[0]), limit: 2)
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])), limit: 2)
   }
   _ = await writer.result
   let oversized = try clipboardPipe()
@@ -56,7 +59,7 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
   await #expect(throws: ClipboardIO.Failure.tooLarge) {
     try await io.write(
       [UInt8](repeating: 65, count: ClipboardIO.maximumBytes + 1),
-      to: OwnedFD(taking: oversized[1]))
+      to: OwnedFD(taking: FileDescriptor(rawValue: oversized[1])))
   }
   #expect(await peerClosed(oversized[0], writing: false))
 }
@@ -65,7 +68,7 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
   let io = ClipboardIO()
   let fds = try clipboardPipe()
   defer { _ = close(fds[1]) }
-  let reader = Task { try await io.read(from: OwnedFD(taking: fds[0])) }
+  let reader = Task { try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0]))) }
   try await Task.sleep(for: .milliseconds(20))
   reader.cancel()
   await #expect(throws: CancellationError.self) { try await reader.value }
@@ -78,7 +81,7 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
   defer { _ = close(fds[1]) }
   let reader = Task {
     unsafe withUnsafeCurrentTask { unsafe $0?.cancel() }
-    return try await io.read(from: OwnedFD(taking: fds[0]))
+    return try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])))
   }
   await #expect(throws: CancellationError.self) { try await reader.value }
   #expect(await peerClosed(fds[1], writing: true))
@@ -89,7 +92,9 @@ private func peerClosed(_ descriptor: Int32, writing: Bool) async -> Bool {
   let fds = try clipboardPipe()
   defer { _ = close(fds[0]) }
   let writer = Task {
-    try await io.write([UInt8](repeating: 42, count: 1024 * 1024), to: OwnedFD(taking: fds[1]))
+    try await io.write(
+      [UInt8](repeating: 42, count: 1024 * 1024),
+      to: OwnedFD(taking: FileDescriptor(rawValue: fds[1])))
   }
   try await Task.sleep(for: .milliseconds(20))
   writer.cancel()
@@ -106,10 +111,12 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
   await #expect(throws: ClipboardIO.Failure.timedOut) {
     if writing {
       try await io.write(
-        [UInt8](repeating: 42, count: 1024 * 1024), to: OwnedFD(taking: active),
+        [UInt8](repeating: 42, count: 1024 * 1024),
+        to: OwnedFD(taking: FileDescriptor(rawValue: active)),
         timeout: .milliseconds(20))
     } else {
-      _ = try await io.read(from: OwnedFD(taking: active), timeout: .milliseconds(20))
+      _ = try await io.read(
+        from: OwnedFD(taking: FileDescriptor(rawValue: active)), timeout: .milliseconds(20))
     }
   }
   #expect(await peerClosed(fds[writing ? 0 : 1], writing: !writing))
@@ -125,7 +132,8 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
   defer { _ = close(fds[0]) }
   try #require(shutdown(fds[0], Int32(SHUT_RD)) == 0)
   await #expect(throws: (any Error).self) {
-    try await io.write(Array("no recipient".utf8), to: OwnedFD(taking: fds[1]))
+    try await io.write(
+      Array("no recipient".utf8), to: OwnedFD(taking: FileDescriptor(rawValue: fds[1])))
   }
   #expect(await peerClosed(fds[0], writing: false))
 }
@@ -136,7 +144,7 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
     let pipe = try FileDescriptor.pipe(options: .closeOnExec)
     try pipe.readEnd.close()
     do {
-      try await ClipboardIO().write([42], to: OwnedFD(taking: pipe.writeEnd.rawValue))
+      try await ClipboardIO().write([42], to: OwnedFD(taking: pipe.writeEnd))
       Issue.record("Writing to a closed pipe unexpectedly succeeded")
     } catch {}
   }
@@ -148,20 +156,20 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
   for path in ["/proc/self/status", "/dev/null"] {
     let fd = try FileDescriptor.open(FilePath(path), .readOnly, options: .closeOnExec)
     await #expect(throws: ClipboardIO.Failure.invalidDescriptor) {
-      try await io.read(from: OwnedFD(taking: fd.rawValue))
+      try await io.read(from: OwnedFD(taking: fd))
     }
   }
   let fds = try clipboardPipe()
   _ = close(fds[1])
-  let bytes = try await io.read(from: OwnedFD(taking: fds[0]))
+  let bytes = try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])))
   #expect(bytes.isEmpty)
 }
 
 @Test func clipboardEmptyTransferReachesEOF() async throws {
   let io = ClipboardIO()
   let fds = try clipboardPipe()
-  async let write: Void = io.write([], to: OwnedFD(taking: fds[1]))
-  let bytes = try await io.read(from: OwnedFD(taking: fds[0]), limit: 0)
+  async let write: Void = io.write([], to: OwnedFD(taking: FileDescriptor(rawValue: fds[1])))
+  let bytes = try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])), limit: 0)
   #expect(bytes.isEmpty)
   try await write
 }
@@ -170,12 +178,14 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
   let io = ClipboardIO(maximumTransfers: 1, maximumBufferedBytes: 16)
   let first = try clipboardPipe()
   defer { _ = close(first[1]) }
-  let reader = Task { try await io.read(from: OwnedFD(taking: first[0]), limit: 16) }
+  let reader = Task {
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: first[0])), limit: 16)
+  }
   try await Task.sleep(for: .milliseconds(20))
   let second = try clipboardPipe()
   defer { _ = close(second[1]) }
   await #expect(throws: ClipboardIO.Failure.busy) {
-    try await io.read(from: OwnedFD(taking: second[0]), limit: 1)
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: second[0])), limit: 1)
   }
   #expect(await peerClosed(second[1], writing: true))
   reader.cancel()
@@ -184,7 +194,7 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
   let third = try clipboardPipe()
   defer { _ = close(third[1]) }
   await #expect(throws: ClipboardIO.Failure.busy) {
-    try await io.read(from: OwnedFD(taking: third[0]), limit: 17)
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: third[0])), limit: 17)
   }
   #expect(await peerClosed(third[1], writing: true))
 }
@@ -193,18 +203,21 @@ func clipboardTransfersHaveDeadlines(writing: Bool) async throws {
   let io = ClipboardIO(maximumTransfers: 2, maximumBufferedBytes: 16)
   let first = try clipboardPipe()
   defer { _ = close(first[1]) }
-  let reader = Task { try await io.read(from: OwnedFD(taking: first[0]), limit: 16) }
+  let reader = Task {
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: first[0])), limit: 16)
+  }
   try await Task.sleep(for: .milliseconds(20))
   let second = try clipboardPipe()
   defer { _ = close(second[1]) }
   await #expect(throws: ClipboardIO.Failure.busy) {
-    try await io.read(from: OwnedFD(taking: second[0]), limit: 1)
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: second[0])), limit: 1)
   }
   reader.cancel()
   _ = await reader.result
   let third = try clipboardPipe()
   _ = close(third[1])
-  let bytes = try await io.read(from: OwnedFD(taking: third[0]), limit: 16)
+  let bytes = try await io.read(
+    from: OwnedFD(taking: FileDescriptor(rawValue: third[0])), limit: 16)
   #expect(bytes.isEmpty)
 }
 
@@ -217,9 +230,11 @@ func clipboardShutdownCancelsTransfersAndRejectsNewOnes(writing: Bool) async thr
   defer { _ = close(peer) }
   let transfer = Task {
     if writing {
-      try await io.write([UInt8](repeating: 42, count: 1024 * 1024), to: OwnedFD(taking: active))
+      try await io.write(
+        [UInt8](repeating: 42, count: 1024 * 1024),
+        to: OwnedFD(taking: FileDescriptor(rawValue: active)))
     } else {
-      _ = try await io.read(from: OwnedFD(taking: active))
+      _ = try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: active)))
     }
   }
   try await Task.sleep(for: .milliseconds(20))
@@ -229,7 +244,7 @@ func clipboardShutdownCancelsTransfersAndRejectsNewOnes(writing: Bool) async thr
   let next = try clipboardPipe()
   defer { _ = close(next[1]) }
   await #expect(throws: ClipboardIO.Failure.closed) {
-    try await io.read(from: OwnedFD(taking: next[0]))
+    try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: next[0])))
   }
   #expect(await peerClosed(next[1], writing: true))
 }
@@ -240,7 +255,7 @@ func clipboardShutdownCancelsTransfersAndRejectsNewOnes(writing: Bool) async thr
     let fds = try clipboardPipe()
     try FileDescriptor(rawValue: fds[1]).writeAll([UInt8(42)])
     _ = close(fds[1])
-    let bytes = try await io.read(from: OwnedFD(taking: fds[0]), limit: 1)
+    let bytes = try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0])), limit: 1)
     #expect(bytes == [42])
   }
   await io.shutdown()
@@ -250,16 +265,19 @@ func clipboardShutdownCancelsTransfersAndRejectsNewOnes(writing: Bool) async thr
   let io = ClipboardIO(maximumTransfers: 1)
   for _ in 0..<10 {
     let fds = try clipboardPipe()
-    let reader = Task { try await io.read(from: OwnedFD(taking: fds[0])) }
+    let reader = Task { try await io.read(from: OwnedFD(taking: FileDescriptor(rawValue: fds[0]))) }
     try await Task.sleep(for: .milliseconds(1))
     reader.cancel()
     _ = await reader.result
     _ = close(fds[1])
 
     let next = try clipboardPipe()
-    let writer = Task { try await io.write([42], to: OwnedFD(taking: next[1])) }
+    let writer = Task {
+      try await io.write([42], to: OwnedFD(taking: FileDescriptor(rawValue: next[1])))
+    }
     try await writer.value
-    let bytes = try await io.read(from: OwnedFD(taking: next[0]), timeout: .seconds(1))
+    let bytes = try await io.read(
+      from: OwnedFD(taking: FileDescriptor(rawValue: next[0])), timeout: .seconds(1))
     #expect(bytes == [42])
   }
 }

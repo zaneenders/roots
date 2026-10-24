@@ -59,7 +59,7 @@ import SystemPackage
         }
         let bytes = payload
         Task { [io] in
-          try? await io.write(bytes, to: OwnedFD(taking: fd.take()))
+          try? await io.write(bytes, to: OwnedFD(taking: FileDescriptor(rawValue: fd.take())))
         }
       } else if message.opcode == 2 {
         objects.request(source, 1)
@@ -88,7 +88,7 @@ import SystemPackage
       return nil
     }
     guard let pipe = try? FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking]) else { return nil }
-    let read = OwnedFD(taking: pipe.readEnd.rawValue)
+    let read = OwnedFD(taking: pipe.readEnd)
     let write = WireDescriptor(taking: pipe.writeEnd.rawValue)
     objects.request(selection, 1, [.string(mime), .fd(write)])
     return read
