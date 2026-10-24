@@ -98,6 +98,29 @@ private func bundledAtlasData() throws -> Data {
     ])
 }
 
+@Test func unicodeMinusHasInkAndDoesNotUseFallback() throws {
+  let messages = Mutex<[String]>([])
+  let atlas = try FontAtlas(data: bundledAtlasData()) { message in
+    messages.withLock { $0.append(message) }
+  }
+  try #require(atlas.contains("−"))
+  let uv = atlas.glyphUV("−")
+  #expect(uv != atlas.glyphUV("�"))
+  #expect(uv != atlas.glyphUV("-"))
+  #expect(atlas.glyphUV("−\u{FE0E}") == uv)
+  let mip = atlas.mipLevels[0]
+  let x = Int((uv.x * Float(mip.width)).rounded())
+  let y = Int((uv.y * Float(mip.height)).rounded())
+  #expect(
+    (y..<(y + 84)).contains { row in
+      mip.pixels[(row * mip.width + x)..<(row * mip.width + x + 60)].contains { $0 > 0 }
+    })
+  for character in "−7.0% −4.9%" {
+    _ = atlas.glyphUV(character)
+  }
+  #expect(messages.withLock { $0.isEmpty })
+}
+
 @Test func missingControlGlyphsAreEscapedAndUsePaddedCodePoints() throws {
   let messages = Mutex<[String]>([])
   let atlas = try FontAtlas(data: bundledAtlasData()) { message in
