@@ -125,7 +125,7 @@ func trancheEvents(
 @Test @MainActor func surfaceFeedbackOverridesDefaultAndRetirementIgnoresLateUpdates() throws {
   let objects = WaylandObjects()
   let dmabuf = WaylandDMABuf(objects: objects)
-  dmabuf.factory = objects.allocate("zwp_linux_dmabuf_v1")
+  dmabuf.factory = objects.allocate("zwp_linux_dmabuf_v1", version: 4)
   dmabuf.version = 4
   dmabuf.watch()
   dmabuf.watch(surface: 42)

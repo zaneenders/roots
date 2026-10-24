@@ -34,7 +34,8 @@ import Testing
   clipboard.event(.init(object: device, opcode: 5, arguments: [.uint(first)]))
   clipboard.event(.init(object: device, opcode: 5, arguments: [.uint(second)]))
   let selectionRequests = try objects.takeRequests()
-  #expect(selectionRequests.count == 1)
+  #expect(selectionRequests.count == 2)
+  #expect(selectionRequests.last?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == 1)
   #expect(selectionRequests[0].bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == first)
   clipboard.close()
   clipboard.close()
@@ -117,6 +118,7 @@ import Testing
   clipboard.event(.init(object: device, opcode: 0, arguments: [.uint(offer)]))
   #expect(objects.interfaces[offer] == "wl_data_offer" && !objects.isLive(offer))
   let requests = try objects.takeRequests()
-  #expect(requests.count == 1)
+  #expect(requests.count == 2)
+  #expect(requests.last?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == 1)
   #expect(requests.first?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == offer)
 }

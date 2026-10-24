@@ -390,7 +390,12 @@ private struct ConnectionPeer: Sendable {
   defer { connection.cleanup() }
   _ = connection.beginFrame()
   try peer.send(1, 0, [.uint(peer.surface), .uint(0), .string("rejected commit")])
-  await #expect(throws: WaylandError.dispatch) { try await connection.dispatchAsync() }
+  await #expect(
+    throws: WaylandError.protocolViolation(
+      .init(
+        objectID: peer.surface, interface: "wl_surface", code: 0, message: "rejected commit"
+      ))
+  ) { try await connection.dispatchAsync() }
   #expect(!connection.running && connection.protocolError == "rejected commit")
 }
 
@@ -419,7 +424,12 @@ private struct ConnectionPeer: Sendable {
   } else {
     peer.socket.close()
   }
-  await #expect(throws: WaylandError.dispatch) {
+  await #expect(
+    throws: WaylandError.protocolViolation(
+      .init(
+        objectID: peer.surface, interface: "wl_surface", code: 0, message: "rejected final commit"
+      ))
+  ) {
     while connection.running {
       _ = connection.beginFrame()
       try await connection.dispatchAsync()
@@ -436,7 +446,12 @@ private struct ConnectionPeer: Sendable {
     _ = try peer.throughSync()
     try peer.send(1, 0, [.uint(peer.surface), .uint(0), .string("rejected final commit")])
   }
-  await #expect(throws: WaylandError.dispatch) { try await connection.drain() }
+  await #expect(
+    throws: WaylandError.protocolViolation(
+      .init(
+        objectID: peer.surface, interface: "wl_surface", code: 0, message: "rejected final commit"
+      ))
+  ) { try await connection.drain() }
   try await server.value
   #expect(!connection.running && connection.protocolError == "rejected final commit")
 }
@@ -1351,4 +1366,65 @@ func keyboardRepeatWaitsForDelayedSurfaceCallback(popup: Bool) async throws {
   }
   #expect(connection.setCursor(.text))
   #expect(try await drain(connection, &peer).isEmpty)
+}
+
+@Test @MainActor func reclamationBarrierDrainsLateBufferEventsBeforeForgettingTheID() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
+  try #require(fd >= 0)
+  defer { _ = close(fd) }
+  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 400)]
+  let buffer = try connection.importDMABuf(
+    width: 100, height: 80, format: 0x3432_5241, modifier: 0, planes: planes.span)
+  let requests = try await drain(connection, &peer)
+  let create = try #require(requests.first { $0.id == peer.dmabuf && $0.opcode == 1 })
+  let params: UInt32 = try #require(
+    create.body.getInteger(at: create.body.readerIndex, endianness: .host))
+  let id: UInt32 = 0xff00_0000
+  try connection.receive(.init(object: params, opcode: 0, arguments: [.uint(id)]))
+  buffer.close()
+  try connection.receive(.init(object: peer.shell, opcode: 0, arguments: [.uint(99)]))
+  let snapshot = peer
+  let sync = try await blockingTestTask {
+    var peer = snapshot
+    return try peer.throughSync()
+  }.value
+  let callback = sync.callback
+  let destroyed = sync.requests
+  #expect(destroyed.contains { $0.id == id && $0.opcode == 0 })
+
+  var bytes = try WirePacket(object: id, opcode: 0, arguments: []).bytes
+  bytes.writeImmutableBuffer(
+    try WirePacket(object: callback, opcode: 0, arguments: [.uint(0)]).bytes)
+  bytes.writeImmutableBuffer(
+    try WirePacket(object: 1, opcode: 1, arguments: [.uint(callback)]).bytes)
+  var chunk = WireChunk(bytes: bytes, descriptors: [])
+  try connection.receive(&chunk)
+  #expect(buffer.state == .closed && connection.running)
+  // No metadata remains once the barrier has completed.
+  var late = WireChunk(
+    bytes: try WirePacket(object: id, opcode: 0, arguments: []).bytes, descriptors: [])
+  #expect(throws: WaylandError.dispatch) { try connection.receive(&late) }
+}
+
+@Test @MainActor func protocolErrorsIdentifyRetiredAndUnknownObjects() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let popup = try await configurePopup(connection, &peer)
+  connection.dismissPopup()
+  for (id, interface): (UInt32, String?) in [(popup.surface, "wl_surface"), (999_999, nil)] {
+    let error = WaylandProtocolError(
+      objectID: id, interface: interface, code: 3, message: "invalid object")
+    #expect(throws: WaylandError.protocolViolation(error)) {
+      try connection.receive(
+        .init(object: 1, opcode: 0, arguments: [.uint(id), .uint(3), .string(error.message)]))
+    }
+    #expect(connection.protocolFailure == error)
+    #expect(connection.protocolError == error.message)
+  }
+  await connection.close()
+  #expect(connection.protocolFailure?.objectID == 999_999)
 }

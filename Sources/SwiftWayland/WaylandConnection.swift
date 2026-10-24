@@ -10,7 +10,8 @@ import NIOCore
   private var writes: AsyncStream<Void>.Continuation?
   private var clipboardShutdown: Task<Void, Never>?
   private var decoder = WireDecoder()
-  public private(set) var protocolError: String?
+  public private(set) var protocolFailure: WaylandProtocolError?
+  public var protocolError: String? { protocolFailure?.message }
   private var terminalError: (any Error)?
   private var dispatching = false
   private var waiting: CheckedContinuation<Void, any Error>?
@@ -126,35 +127,45 @@ import NIOCore
         throw CancellationError()
       }
       installIO(transport)
-      registry = objects.create(1, 1, "wl_registry")
+      registry = objects.create(1, WlDisplayRequest.getRegistry, "wl_registry")
       try await synchronize()
       try await synchronize()
       guard compositor != 0, shell != 0, compositorVersion >= 3 else {
         throw WaylandError.missingGlobals
       }
-      surface = objects.create(compositor, 0, "wl_surface")
+      surface = objects.create(compositor, WlCompositorRequest.createSurface, "wl_surface")
       setupSurfaceScales()
       dmabuf.watch(surface: surface)
       if configuration.topBar {
         guard layerShell != 0 else { throw WaylandError.missingGlobals }
         layerSurface = objects.create(
-          layerShell, 0, "zwlr_layer_surface_v1",
-          [.uint(surface), .uint(0), .uint(2), .string(configuration.layerNamespace)])
+          layerShell, ZwlrLayerShellV1Request.getLayerSurface, "zwlr_layer_surface_v1",
+          [
+            .uint(surface), .uint(0), .uint(WaylandLayer.top.rawValue),
+            .string(configuration.layerNamespace),
+          ])
         objects.request(
-          layerSurface, 0,
+          layerSurface, ZwlrLayerSurfaceV1Request.setSize,
           [.uint(0), .uint(UInt32(configuration.height + configuration.topBarOverlayHeight))])
-        objects.request(layerSurface, 1, [.uint(1 | 4 | 8)])
-        objects.request(layerSurface, 2, [.int(configuration.height)])
-        objects.request(layerSurface, 4, [.uint(0)])
-      } else {
-        xdgSurface = objects.create(shell, 2, "xdg_surface", [.uint(surface)])
-        toplevel = objects.create(xdgSurface, 1, "xdg_toplevel")
-        objects.request(toplevel, 2, [.string(configuration.title)])
-        objects.request(toplevel, 3, [.string(configuration.appID)])
         objects.request(
-          toplevel, 8, [.int(configuration.minimumWidth), .int(configuration.minimumHeight)])
+          layerSurface, ZwlrLayerSurfaceV1Request.setAnchor,
+          [.uint(WaylandLayerAnchor([.top, .left, .right]).rawValue)])
+        objects.request(
+          layerSurface, ZwlrLayerSurfaceV1Request.setExclusiveZone, [.int(configuration.height)])
+        objects.request(
+          layerSurface, ZwlrLayerSurfaceV1Request.setKeyboardInteractivity,
+          [.uint(WaylandKeyboardInteractivity.none.rawValue)])
+      } else {
+        xdgSurface = objects.create(
+          shell, XdgWmBaseRequest.getXdgSurface, "xdg_surface", [.uint(surface)])
+        toplevel = objects.create(xdgSurface, XdgSurfaceRequest.getToplevel, "xdg_toplevel")
+        objects.request(toplevel, XdgToplevelRequest.setTitle, [.string(configuration.title)])
+        objects.request(toplevel, XdgToplevelRequest.setAppId, [.string(configuration.appID)])
+        objects.request(
+          toplevel, XdgToplevelRequest.setMinSize,
+          [.int(configuration.minimumWidth), .int(configuration.minimumHeight)])
       }
-      objects.request(surface, 6)
+      objects.request(surface, WlSurfaceRequest.commit)
       while running && (!configured || !dmabuf.ready(surface: surface)) {
         try await waitForEvent()
       }
@@ -240,14 +251,15 @@ import NIOCore
   func receive(_ chunk: inout WireChunk) throws {
     guard lifecycle != .closed else { return }
     try decoder.append(&chunk.bytes, descriptors: chunk.descriptors)
-    while let message = try decoder.next(interfaces: objects.interfaces) {
+    while let message = try decoder.next(interfaces: objects.interfaces, versions: objects.versions)
+    {
       try receive(message)
     }
     signal()
   }
 
   private func synchronize() async throws {
-    let callback = objects.create(1, 0, "wl_callback")
+    let callback = objects.create(1, WlDisplayRequest.sync, "wl_callback")
     callbacks.insert(callback)
     while callbacks.contains(callback), running { try await waitForEvent() }
   }
@@ -286,7 +298,7 @@ import NIOCore
     defer { dispatching = false }
     try Task.checkCancellation()
     if let terminalError { throw terminalError }
-    let callback = objects.create(1, 0, "wl_callback")
+    let callback = objects.create(1, WlDisplayRequest.sync, "wl_callback")
     callbacks.insert(callback)
     var expired = false
     let deadline = Task { @MainActor in
@@ -341,8 +353,11 @@ import NIOCore
     switch interface {
     case "wl_display":
       if opcode == 0 {
-        protocolError = a[2].text
-        throw WaylandError.dispatch
+        let error = WaylandProtocolError(
+          objectID: a[0].word, interface: objects.interfaces[a[0].word],
+          code: a[1].word, message: a[2].text ?? "")
+        protocolFailure = error
+        throw WaylandError.protocolViolation(error)
       }
       objects.deleted(a[0].word)
     case "wl_registry":
@@ -352,14 +367,15 @@ import NIOCore
         removeGlobal(a[0].word)
       }
     case "wl_callback":
+      objects.completeReclamation(id)
       objects.retire(id)
       callbacks.remove(id)
       frame.complete(id)
       popup?.frame.complete(id)
-    case "xdg_wm_base": objects.request(id, 3, [.uint(a[0].word)])
+    case "xdg_wm_base": objects.request(id, XdgWmBaseRequest.pong, [.uint(a[0].word)])
     case "xdg_surface":
       guard id == xdgSurface || id == popup?.xdgSurface else { return }
-      objects.request(id, 4, [.uint(a[0].word)])
+      objects.request(id, XdgSurfaceRequest.ackConfigure, [.uint(a[0].word)])
       if id == xdgSurface {
         if let pendingSize {
           if pendingSize.x > 0 { input.width = pendingSize.x }
@@ -384,7 +400,7 @@ import NIOCore
       }
     case "zwlr_layer_surface_v1":
       if opcode == 0 {
-        objects.request(id, 6, [.uint(a[0].word)])
+        objects.request(id, ZwlrLayerSurfaceV1Request.ackConfigure, [.uint(a[0].word)])
         configureLayer(width: a[1].word, height: a[2].word)
       } else {
         requestClose()
@@ -505,29 +521,33 @@ import NIOCore
       textManagerName = nil
     }
     if fractionalManagerName == name {
-      objects.request(fractionalManager, 0)
+      objects.request(fractionalManager, WpFractionalScaleManagerV1Request.destroy)
       fractionalManager = 0
       fractionalManagerName = nil
     }
     if viewporterName == name {
-      objects.request(viewporter, 0)
+      objects.request(viewporter, WpViewporterRequest.destroy)
       viewporter = 0
       viewporterName = nil
     }
     if idleManagerName == name {
       _ = setIdleInhibited(false)
-      objects.request(idleManager, 0)
+      objects.request(idleManager, ZwpIdleInhibitManagerV1Request.destroy)
       idleManager = 0
       idleManagerName = nil
     }
     if let output = outputs.removeValue(forKey: name) {
-      if output.version >= 3 { objects.request(output.id, 0) } else { objects.retire(output.id) }
+      if output.version >= 3 {
+        objects.request(output.id, WlOutputRequest.release)
+      } else {
+        objects.retire(output.id)
+      }
       scale.outputs.remove(output.id)
       popup?.scale.outputs.remove(output.id)
       updateBufferScale()
     }
     if dmabufName == name {
-      objects.request(dmabuf.factory, 0)
+      objects.request(dmabuf.factory, ZwpLinuxDmabufV1Request.destroy)
       dmabuf.close()
       dmabufName = nil
     }
@@ -540,7 +560,11 @@ import NIOCore
       clearTextFocus()
       textInput.detach()
       clipboard.detachSeat()
-      if seatVersion >= 5 { objects.request(seat, 3) } else { objects.retire(seat) }
+      if seatVersion >= 5 {
+        objects.request(seat, WlSeatRequest.release)
+      } else {
+        objects.retire(seat)
+      }
       seat = 0
       seatName = nil
     }
@@ -548,11 +572,11 @@ import NIOCore
   private func updateCapabilities(_ capabilities: UInt32) {
     defer { scheduleKeyRepeat() }
     if capabilities & 1 != 0 {
-      if pointer == 0 { pointer = objects.create(seat, 0, "wl_pointer") }
+      if pointer == 0 { pointer = objects.create(seat, WlSeatRequest.getPointer, "wl_pointer") }
       cursor.attach(pointer: pointer)
     } else if pointer != 0 {
       cursor.detach()
-      objects.request(pointer, 1)
+      objects.request(pointer, WlPointerRequest.release)
       pointer = 0
       pointerInput.leavePointer()
       pointerSerial = nil
@@ -560,9 +584,9 @@ import NIOCore
       if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
     }
     if capabilities & 2 != 0 {
-      if keyboard == 0 { keyboard = objects.create(seat, 1, "wl_keyboard") }
+      if keyboard == 0 { keyboard = objects.create(seat, WlSeatRequest.getKeyboard, "wl_keyboard") }
     } else if keyboard != 0 {
-      objects.request(keyboard, 0)
+      objects.request(keyboard, WlKeyboardRequest.release)
       keyboard = 0
       clipboard.focused = false
       typing.leave(input: &keyboardInput)
@@ -645,10 +669,12 @@ import NIOCore
     if width > 0 { input.width = Int32(width) }
     if height > 0 { input.height = Int32(height) }
     if compositor != 0, surface != 0 {
-      let region = objects.create(compositor, 1, "wl_region")
-      objects.request(region, 1, [.int(0), .int(0), .int(input.width), .int(configuration.height)])
-      objects.request(surface, 5, [.uint(region)])
-      objects.request(region, 0)
+      let region = objects.create(compositor, WlCompositorRequest.createRegion, "wl_region")
+      objects.request(
+        region, WlRegionRequest.add,
+        [.int(0), .int(0), .int(input.width), .int(configuration.height)])
+      objects.request(surface, WlSurfaceRequest.setInputRegion, [.uint(region)])
+      objects.request(region, WlRegionRequest.destroy)
     }
     frame.configured = true
     requestRedraw()
@@ -851,10 +877,12 @@ import NIOCore
     if enabled {
       guard idleManager != 0, surface != 0 else { return false }
       if idleInhibitor == 0 {
-        idleInhibitor = objects.create(idleManager, 1, "zwp_idle_inhibitor_v1", [.uint(surface)])
+        idleInhibitor = objects.create(
+          idleManager, ZwpIdleInhibitManagerV1Request.createInhibitor, "zwp_idle_inhibitor_v1",
+          [.uint(surface)])
       }
     } else if idleInhibitor != 0 {
-      objects.request(idleInhibitor, 0)
+      objects.request(idleInhibitor, ZwpIdleInhibitorV1Request.destroy)
       idleInhibitor = 0
     }
     return true
@@ -879,8 +907,8 @@ import NIOCore
     dismissPopup()
     dmabuf.close()
     scale.close(objects: objects)
-    objects.request(fractionalManager, 0)
-    objects.request(viewporter, 0)
+    objects.request(fractionalManager, WpFractionalScaleManagerV1Request.destroy)
+    objects.request(viewporter, WpViewporterRequest.destroy)
     cursor.close()
     textInput.close()
     clipboard.close()

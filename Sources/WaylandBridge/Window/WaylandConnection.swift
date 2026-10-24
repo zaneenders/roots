@@ -201,13 +201,14 @@ import SwiftWayland
 }
 
 extension NativeWindowError {
-  fileprivate init(_ error: WaylandError) {
+  init(_ error: WaylandError) {
     switch error {
     case .invalidConfiguration: self = .invalidConfiguration
     case .connection: self = .waylandConnection
     case .missingGlobals: self = .missingWaylandGlobals
     case .busy: self = .waylandDispatchBusy
     case .dispatch: self = .waylandDispatch
+    case .protocolViolation(let error): self = .waylandProtocol(error)
     }
   }
 }

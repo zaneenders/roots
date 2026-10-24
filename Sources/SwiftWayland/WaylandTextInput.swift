@@ -96,7 +96,8 @@ public struct WaylandTextInputState: Equatable, Sendable {
 
   func attach(seat: UInt32) {
     guard id == 0, manager != 0, seat != 0 else { return }
-    id = objects.create(manager, 1, "zwp_text_input_v3", [.uint(seat)])
+    id = objects.create(
+      manager, ZwpTextInputManagerV3Request.getTextInput, "zwp_text_input_v3", [.uint(seat)])
   }
 
   func set(_ state: WaylandTextInputState?, on surface: UInt32) {
@@ -114,19 +115,25 @@ public struct WaylandTextInputState: Equatable, Sendable {
     guard dirty || enabled != (state != nil) else { return }
     dirty = false
     if let state {
-      if !enabled { objects.request(id, 1) }
+      if !enabled { objects.request(id, ZwpTextInputV3Request.enable) }
       objects.request(
-        id, 3, [.string(state.surroundingText), .int(state.cursor), .int(state.anchor)])
-      objects.request(id, 4, [.uint(state.changeCausedByInputMethod ? 0 : 1)])
-      objects.request(id, 5, [.uint(state.hints.rawValue), .uint(state.purpose.rawValue)])
+        id, ZwpTextInputV3Request.setSurroundingText,
+        [.string(state.surroundingText), .int(state.cursor), .int(state.anchor)])
+      objects.request(
+        id, ZwpTextInputV3Request.setTextChangeCause,
+        [.uint(state.changeCausedByInputMethod ? 0 : 1)])
+      objects.request(
+        id, ZwpTextInputV3Request.setContentType,
+        [.uint(state.hints.rawValue), .uint(state.purpose.rawValue)])
       let r = state.cursorRectangle
-      objects.request(id, 6, [.int(r.x), .int(r.y), .int(r.z), .int(r.w)])
+      objects.request(
+        id, ZwpTextInputV3Request.setCursorRectangle, [.int(r.x), .int(r.y), .int(r.z), .int(r.w)])
     } else {
-      objects.request(id, 2)
+      objects.request(id, ZwpTextInputV3Request.disable)
       pending = .init()
     }
     enabled = state != nil
-    objects.request(id, 7)
+    objects.request(id, ZwpTextInputV3Request.commit)
     serial &+= 1
   }
 
@@ -168,7 +175,7 @@ public struct WaylandTextInputState: Equatable, Sendable {
   }
 
   func detach() {
-    objects.request(id, 0)
+    objects.request(id, ZwpTextInputV3Request.destroy)
     id = 0
     surface = 0
     enabled = false
@@ -178,7 +185,7 @@ public struct WaylandTextInputState: Equatable, Sendable {
   }
   func close() {
     detach()
-    objects.request(manager, 0)
+    objects.request(manager, ZwpTextInputManagerV3Request.destroy)
     manager = 0
     states.removeAll()
   }

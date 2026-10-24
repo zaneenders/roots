@@ -11,6 +11,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   case waylandConnection
   case missingWaylandGlobals
   case waylandDispatch
+  case waylandProtocol(WaylandProtocolError)
   case waylandDispatchBusy
   case egl(Int32)
   case shader(String)
@@ -26,6 +27,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     case .waylandConnection: "Cannot connect to Wayland. Check WAYLAND_DISPLAY and XDG_RUNTIME_DIR."
     case .missingWaylandGlobals:
       "Wayland compositor is missing wl_compositor or the requested surface-role protocol."
+    case .waylandProtocol(let error): "Wayland protocol violation: \(error)"
     case .waylandDispatch: "Wayland event dispatch failed."
     case .waylandDispatchBusy: "Wayland dispatch is already in progress on this connection."
     case .egl(let code): "EGL operation failed: 0x\(String(code, radix: 16))."

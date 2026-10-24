@@ -19,7 +19,9 @@ public enum WaylandCursorShape: UInt32, Sendable, CaseIterable {
 
   func attach(pointer: UInt32) {
     guard device == 0, manager != 0, pointer != 0 else { return }
-    device = objects.create(manager, 1, "wp_cursor_shape_device_v1", [.uint(pointer)])
+    device = objects.create(
+      manager, WpCursorShapeManagerV1Request.getPointer, "wp_cursor_shape_device_v1",
+      [.uint(pointer)])
     apply()
   }
   func enter(surface: UInt32, serial: UInt32) {
@@ -42,18 +44,20 @@ public enum WaylandCursorShape: UInt32, Sendable, CaseIterable {
   }
   private func apply() {
     guard device != 0, let serial else { return }
-    objects.request(device, 1, [.uint(serial), .uint((shapes[surface] ?? .default).rawValue)])
+    objects.request(
+      device, WpCursorShapeDeviceV1Request.setShape,
+      [.uint(serial), .uint((shapes[surface] ?? .default).rawValue)])
   }
   func detach() {
-    objects.request(device, 0)
+    objects.request(device, WpCursorShapeDeviceV1Request.destroy)
     device = 0
     leave()
   }
   func close() {
     // Manager removal does not end pointer focus; reuse the enter serial if it returns.
-    objects.request(device, 0)
+    objects.request(device, WpCursorShapeDeviceV1Request.destroy)
     device = 0
-    objects.request(manager, 0)
+    objects.request(manager, WpCursorShapeManagerV1Request.destroy)
     manager = 0
   }
 }

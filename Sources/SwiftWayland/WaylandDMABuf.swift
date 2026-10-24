@@ -24,7 +24,7 @@ public struct WaylandDMABufPlane: Sendable {
   }
   func created(_ id: UInt32) {
     guard state == .importing else {
-      objects.request(id, 0)
+      objects.request(id, WlBufferRequest.destroy)
       return
     }
     self.id = id
@@ -38,29 +38,38 @@ public struct WaylandDMABufPlane: Sendable {
     finishImport()
   }
   private func finishImport() {
-    objects.request(params, 0)
+    objects.request(params, ZwpLinuxBufferParamsV1Request.destroy)
     params = 0
     changed()
   }
   func released() {
-    guard state == .submitted else { return }
-    state = .available
-    changed()
+    if state == .closed {
+      objects.request(id, WlBufferRequest.destroy)
+      id = 0
+    } else if state == .submitted {
+      state = .available
+      changed()
+    }
   }
   func present(on surface: UInt32) throws {
     guard state == .available else { throw WaylandError.busy }
     state = .submitted
-    objects.request(surface, 7, [.int(6)])
-    objects.request(surface, 1, [.uint(id), .int(0), .int(0)])
-    objects.request(surface, 2, [.int(0), .int(0), .int(.max), .int(.max)])
-    objects.request(surface, 6)
+    objects.request(
+      surface, WlSurfaceRequest.setBufferTransform,
+      [.int(WaylandBufferTransform.flipped180.rawValue)])
+    objects.request(surface, WlSurfaceRequest.attach, [.uint(id), .int(0), .int(0)])
+    objects.request(surface, WlSurfaceRequest.damage, [.int(0), .int(0), .int(.max), .int(.max)])
+    objects.request(surface, WlSurfaceRequest.commit)
   }
   public func close() {
     guard state != .closed else { return }
-    objects.request(params, 0)
-    objects.request(id, 0)
+    objects.request(params, ZwpLinuxBufferParamsV1Request.destroy)
     params = 0
-    id = 0
+    // Keep submitted buffers registered until the compositor releases its use.
+    if state != .submitted {
+      objects.request(id, WlBufferRequest.destroy)
+      id = 0
+    }
     state = .closed
   }
 }
@@ -77,12 +86,15 @@ public struct WaylandDMABufPlane: Sendable {
   func watch(surface: UInt32 = 0) {
     guard factory != 0, version >= 4, feedback[surface] == nil else { return }
     let id = objects.create(
-      factory, surface == 0 ? 2 : 3, "zwp_linux_dmabuf_feedback_v1",
+      factory, surface == 0 ? ZwpLinuxDmabufV1Request.getDefaultFeedback : .getSurfaceFeedback,
+      "zwp_linux_dmabuf_feedback_v1",
       surface == 0 ? [] : [.uint(surface)])
     feedback[surface] = DMABufFeedback(id: id)
   }
   func unwatch(surface: UInt32) {
-    if let removed = feedback.removeValue(forKey: surface) { objects.request(removed.id, 0) }
+    if let removed = feedback.removeValue(forKey: surface) {
+      objects.request(removed.id, ZwpLinuxDmabufFeedbackV1Request.destroy)
+    }
   }
   func preferences(surface: UInt32 = 0) -> WaylandDMABufFeedback? {
     guard factory != 0 else { return nil }
@@ -127,18 +139,21 @@ public struct WaylandDMABufPlane: Sendable {
     }
     var fds: [WireDescriptor] = []
     for plane in planes { fds.append(try WireDescriptor.duplicate(plane.descriptor)) }
-    buffers.removeAll { $0.state == .closed }
-    let params = objects.create(factory, 1, "zwp_linux_buffer_params_v1")
+    buffers.removeAll { $0.state == .closed && $0.id == 0 }
+    let params = objects.create(
+      factory, ZwpLinuxDmabufV1Request.createParams, "zwp_linux_buffer_params_v1")
     for index in planes.indices {
       objects.request(
-        params, 1,
+        params, ZwpLinuxBufferParamsV1Request.add,
         [
           .fd(fds[index]), .uint(UInt32(index)), .uint(planes[index].offset),
           .uint(planes[index].stride), .uint(UInt32(truncatingIfNeeded: modifier >> 32)),
           .uint(UInt32(truncatingIfNeeded: modifier)),
         ])
     }
-    objects.request(params, 2, [.int(width), .int(height), .uint(format), .uint(0)])
+    objects.request(
+      params, ZwpLinuxBufferParamsV1Request.create,
+      [.int(width), .int(height), .uint(format), .uint(0)])
     let buffer = WaylandDMABufBuffer(params: params, objects: objects, changed: changed)
     buffers.append(buffer)
     return buffer
@@ -157,7 +172,7 @@ public struct WaylandDMABufPlane: Sendable {
     {
       let id = message.arguments[0].word
       objects.register(id, "wl_buffer")
-      objects.request(id, 0)
+      objects.request(id, WlBufferRequest.destroy)
     }
   }
   func owns(_ buffer: WaylandDMABufBuffer) -> Bool { buffers.contains { $0 === buffer } }

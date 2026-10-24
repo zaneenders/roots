@@ -13,7 +13,7 @@
 
   func endFrame(on surface: UInt32, objects: WaylandObjects, continuously: Bool) throws {
     guard frameReady else { throw WaylandError.connection }
-    callback = objects.create(surface, 3, "wl_callback")
+    callback = objects.create(surface, WlSurfaceRequest.frame, "wl_callback")
     redrawRequested = redrawRequested || continuously
   }
 

@@ -62,7 +62,7 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
 @Test func wireRejectsInvalidLengthOpcodeObjectAndMissingStringTerminator() throws {
   var interfaces: [UInt32: String] = [1: "wl_display"]
   for (object, header): (UInt32, UInt32) in [
-    (1, 4 << 16), (1, 9 << 16), (999, 8 << 16), (1, 8 << 16 | 99)
+    (1, 4 << 16), (1, 9 << 16), (999, 8 << 16), (1, 8 << 16 | 99),
   ] {
     var decoder = WireDecoder()
     var bytes = ByteBufferAllocator().buffer(capacity: 8)
@@ -119,18 +119,21 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
 
 @Test @MainActor func wireDMABufStateRequiresReleaseAndClosesTerminally() throws {
   let objects = WaylandObjects()
-  let buffer = WaylandDMABufBuffer(params: 3, objects: objects, changed: {})
-  #expect(throws: WaylandError.busy) { try buffer.present(on: 2) }
+  let surface = objects.allocate("wl_surface", version: 3)
+  let params = objects.allocate("zwp_linux_buffer_params_v1")
+  let buffer = WaylandDMABufBuffer(params: params, objects: objects, changed: {})
+  #expect(throws: WaylandError.busy) { try buffer.present(on: surface) }
   buffer.created(0xff00_0000)
-  try buffer.present(on: 2)
+  try buffer.present(on: surface)
   #expect(buffer.state == .submitted)
-  #expect(throws: WaylandError.busy) { try buffer.present(on: 2) }
+  #expect(throws: WaylandError.busy) { try buffer.present(on: surface) }
   buffer.released()
   #expect(buffer.state == .available)
   buffer.close()
   buffer.close()
   buffer.released()
   #expect(buffer.state == .closed)
+  _ = try objects.takeRequests()
 }
 
 @Test @MainActor func destroyedObjectsKeepOnlyDecodingMetadataUntilIDReuse() throws {
@@ -158,6 +161,7 @@ private func event(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue])
   dmabuf.event(.init(object: params, opcode: 0, arguments: [.uint(buffer)]))
   #expect(objects.interfaces[buffer] == "wl_buffer" && !objects.isLive(buffer))
   let requests = try objects.takeRequests()
-  #expect(requests.count == 1)
+  #expect(requests.count == 2)
+  #expect(requests.last?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == 1)
   #expect(requests.first?.bytes.getInteger(at: 0, endianness: .host, as: UInt32.self) == buffer)
 }

@@ -7,8 +7,11 @@
 
   func setup(surface: UInt32, manager: UInt32, viewporter: UInt32, objects: WaylandObjects) {
     guard surface != 0, fractional == 0, manager != 0, viewporter != 0 else { return }
-    viewport = objects.create(viewporter, 1, "wp_viewport", [.uint(surface)])
-    fractional = objects.create(manager, 1, "wp_fractional_scale_v1", [.uint(surface)])
+    viewport = objects.create(
+      viewporter, WpViewporterRequest.getViewport, "wp_viewport", [.uint(surface)])
+    fractional = objects.create(
+      manager, WpFractionalScaleManagerV1Request.getFractionalScale, "wp_fractional_scale_v1",
+      [.uint(surface)])
   }
 
   func update(
@@ -21,19 +24,19 @@
     else { return false }
     input.bufferScale = bufferScale
     input.fractionalScale120 = fractionalScale120
-    objects.request(surface, 8, [.int(bufferScale)])
+    objects.request(surface, WlSurfaceRequest.setBufferScale, [.int(bufferScale)])
     return true
   }
 
   func prepare(width: Int32, height: Int32, objects: WaylandObjects) {
     if preferredFractionalScale != nil {
-      objects.request(viewport, 2, [.int(width), .int(height)])
+      objects.request(viewport, WpViewportRequest.setDestination, [.int(width), .int(height)])
     }
   }
 
   func close(objects: WaylandObjects) {
-    objects.request(fractional, 0)
-    objects.request(viewport, 0)
+    objects.request(fractional, WpFractionalScaleV1Request.destroy)
+    objects.request(viewport, WpViewportRequest.destroy)
     fractional = 0
     viewport = 0
   }

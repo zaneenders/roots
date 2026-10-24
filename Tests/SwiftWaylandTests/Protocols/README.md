@@ -13,8 +13,9 @@
 Copyright/permission notices are retained in the XML. These are test-only resources;
 runtime builds use compact Swift request/event signatures in
 [`WireSchema.swift`](../../../Sources/SwiftWayland/Protocol/WireSchema.swift).
-`SchemaTests` verifies signatures, opcode declaration order, and input enum values
-against these pinned inputs. No scanner or generated C bindings are used.
+`SchemaTests` verifies interface versions, message names/signatures/`since` versions,
+request opcodes, destructors, and input/surface enum values against these pinned inputs.
+No scanner or generated C bindings are used.
 
 ```text
 wl_compositor v3…6 → surfaces / transforms / integer buffer scale
@@ -28,9 +29,29 @@ linux-dmabuf v3…4 → v3 announcements / v4 atomic device + format/modifier fe
 idle-inhibit v1   → visible-parent surface inhibition; disconnect releases it
 ```
 
-Objects keep tombstone metadata for queued events; client IDs are not reused until
-`wl_display.delete_id`. Server-created IDs are registered before decoding the next
-event. The dmabuf presenter uses `created`/`failed`, not `create_immed`.
+## Protocol metadata and lifetimes
+
+```swift
+WireSchema.Message(name, signature, since: version)
+WaylandObjects.versions[objectID]  // bound version; children inherit, capped by interface version
+WaylandObjects.request(surface, WlSurfaceRequest.commit)
+WaylandError.protocolViolation(WaylandProtocolError(
+  objectID: 42, interface: "wl_surface", code: 3, message: "invalid buffer scale"))
+```
+
+```text
+request → interface + signature + since ≤ bound version → WirePacket
+ event  → signature + since ≤ bound version → dispatch
+
+client ID: live → retired (decodable) → wl_display.delete_id → reusable
+server ID: live → destroy → retired (decodable) → wl_display.sync.done → forgotten
+                  └─ re-registration increments generation; old sync cannot forget new object
+wl_buffer: submitted → close() → closed, awaiting release → destroy → reclamation sync
+```
+
+Server-created IDs are registered before decoding the next event. Reclamation batches
+use at most one in-flight sync; disconnect clears all metadata. The dma-buf presenter
+uses `created`/`failed`, not `create_immed`.
 
 ## Surface scheduling
 
