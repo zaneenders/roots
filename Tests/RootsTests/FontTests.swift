@@ -125,6 +125,50 @@ private func bundledAtlasData() throws -> Data {
   #expect(messages.withLock { $0.isEmpty })
 }
 
+@Test func stackedAcuteAccentsHaveTheirOwnGlyphWithoutLogging() throws {
+  let messages = Mutex<[String]>([])
+  let atlas = try FontAtlas(data: bundledAtlasData()) { message in
+    messages.withLock { $0.append(message) }
+  }
+  let character: Character = "é\u{301}"
+  try #require(atlas.contains(character))
+  let uv = atlas.glyphUV(character)
+  #expect(uv != atlas.glyphUV("�"))
+  #expect(uv != atlas.glyphUV("é"))
+  #expect(atlas.glyphUV("e\u{301}\u{301}") == uv)
+  #expect(atlas.glyphUV("é\u{301}\u{FE0E}") == uv)
+  let mip = atlas.mipLevels[0]
+  let x = Int((uv.x * Float(mip.width)).rounded())
+  let y = Int((uv.y * Float(mip.height)).rounded())
+  let base = atlas.glyphUV("é")
+  let baseX = Int((base.x * Float(mip.width)).rounded())
+  let baseY = Int((base.y * Float(mip.height)).rounded())
+  var hasExtraInk = false
+  for row in 0..<84 {
+    for column in 0..<60 {
+      let pixel = mip.pixels[(y + row) * mip.width + x + column]
+      let basePixel = mip.pixels[(baseY + row) * mip.width + baseX + column]
+      #expect(pixel >= basePixel)
+      if pixel > basePixel { hasExtraInk = true }
+    }
+  }
+  #expect(hasExtraInk)
+  for row in (y - 3)..<(y + 87) {
+    for column in (x - 3)..<(x + 63)
+    where row < y || row >= y + 84 || column < x || column >= x + 60 {
+      #expect(mip.pixels[row * mip.width + column] == 0)
+    }
+  }
+  var storage = UIStorage(nodeCapacity: 0, drawCapacity: nil)
+  let font = MonospaceFont(size: 20)
+  let end = storage.drawText(String(character), x: 0, y: 0, font: font, color: .text, clip: nil)
+  #expect(end == font.advance)
+  #expect(storage.draws.count == 1)
+  #expect(storage.draws[0].glyphUV == uv)
+  #expect(!storage.draws[0].colorGlyph)
+  #expect(messages.withLock { $0.isEmpty })
+}
+
 @Test func concurrentMissingGlyphLookupsLogOnlyOnce() async throws {
   let messages = Mutex<[String]>([])
   let atlas = try FontAtlas(data: bundledAtlasData()) { message in
@@ -138,14 +182,17 @@ private func bundledAtlasData() throws -> Data {
   #expect(messages.withLock { $0.count } == 1)
 }
 
-@Test func atlasRejectsMalformedData() throws {
+@Test(arguments: [UInt32(1), 2]) func atlasRejectsMalformedData(version: UInt32) throws {
   var data = Data()
   func append(_ word: UInt32) {
     for shift in stride(from: 0, to: 32, by: 8) {
       data.append(UInt8(truncatingIfNeeded: word >> shift))
     }
   }
-  for word: UInt32 in [0x4C54_4143, 1, 2112, 90, 1, 0xFFFD] { append(word) }
+  for word: UInt32 in [0x4C54_4143, version, 2112, 90, 1] { append(word) }
+  if version == 2 { append(1) }
+  append(0xFFFD)
+  let scalarOffset = version == 1 ? 20 : 24
   var width = 2112
   var height = 90
   while true {
@@ -158,9 +205,11 @@ private func bundledAtlasData() throws -> Data {
   for cut in [0, 4, 19, 23, data.count - 1] {
     #expect(throws: FontAtlas.AssetError.self) { _ = try FontAtlas(data: Data(data.prefix(cut))) }
   }
-  for (offset, word): (Int, UInt32) in [
-    (0, 0), (4, 2), (8, 0), (12, 4097), (16, .max), (20, 0xD800), (20, 65)
-  ] {
+  var invalidWords: [(Int, UInt32)] = [
+    (0, 0), (4, 3), (8, 0), (12, 4097), (16, .max), (scalarOffset, 0xD800), (scalarOffset, 65)
+  ]
+  if version == 2 { invalidWords += [(20, 0), (20, 17), (20, .max)] }
+  for (offset, word) in invalidWords {
     var corrupt = data
     for byte in 0..<4 { corrupt[offset + byte] = UInt8(truncatingIfNeeded: word >> (byte * 8)) }
     #expect(throws: FontAtlas.AssetError.self) { _ = try FontAtlas(data: corrupt) }
