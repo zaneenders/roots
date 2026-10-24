@@ -5,6 +5,7 @@ struct MacOSInputState {
   private(set) var primaryDown = false
   private(set) var pointerInside = false
   private var heldKeys: [UInt32: KeyEvent] = [:]
+  private var physicalModifiers: Set<UInt32> = []
   private(set) var modifiers: KeyModifiers = []
   static let keyLimit = 256
 
@@ -21,14 +22,25 @@ struct MacOSInputState {
 
   mutating func key(_ event: KeyEvent) {
     modifiers = event.modifiers
+    // Reserve one queue slot for every accepted held key's eventual release.
+    // Dropping a press or repeat is preferable to leaving a consumer's key stuck.
+    var heldCount = heldKeys.count
+    if let code = event.physicalCode {
+      if event.phase == .released {
+        if heldKeys[code] != nil { heldCount -= 1 }
+      } else if heldKeys[code] == nil {
+        heldCount += 1
+      }
+    }
+    guard input.keyEvents.count + 1 + heldCount <= Self.keyLimit else { return }
     if let code = event.physicalCode {
       if event.phase == .released {
         heldKeys.removeValue(forKey: code)
-      } else if heldKeys.count < Self.keyLimit {
+      } else {
         heldKeys[code] = event
       }
     }
-    if input.keyEvents.count < Self.keyLimit { input.keyEvents.append(event) }
+    input.keyEvents.append(event)
   }
 
   mutating func flags(_ flags: KeyModifiers, code: UInt32, key: Key) {
@@ -52,7 +64,14 @@ struct MacOSInputState {
             physicalCode: code))
       }
     } else {
-      let down = flags.contains(flag) && heldKeys[code] == nil
+      // Modifier identity follows physical transitions even if the queue drops
+      // the press. Accepted keys alone cannot disambiguate overlapping sides.
+      let down = flags.contains(flag) && !physicalModifiers.contains(code)
+      if down {
+        if physicalModifiers.count < Self.keyLimit { physicalModifiers.insert(code) }
+      } else {
+        physicalModifiers.remove(code)
+      }
       self.key(
         KeyEvent(key, phase: down ? .pressed : .released, modifiers: flags, physicalCode: code))
     }
@@ -78,13 +97,19 @@ struct MacOSInputState {
 
   mutating func loseFocus() {
     input.focusLost = true
-    input.keyEvents.removeAll(keepingCapacity: true)
-    for code in heldKeys.keys.sorted() {
+    input.keyEvents.removeAll { $0.phase != .released }
+    var releasedCodes: Set<UInt32> = []
+    input.keyEvents.removeAll { event in
+      guard let code = event.physicalCode else { return false }
+      return !releasedCodes.insert(code).inserted
+    }
+    for code in heldKeys.keys.sorted() where !releasedCodes.contains(code) {
       if let event = heldKeys[code] {
         input.keyEvents.append(KeyEvent(event.key, phase: .released, physicalCode: code))
       }
     }
     heldKeys.removeAll(keepingCapacity: true)
+    physicalModifiers.removeAll(keepingCapacity: true)
     modifiers = []
     input.pressed = false
     input.released = primaryDown

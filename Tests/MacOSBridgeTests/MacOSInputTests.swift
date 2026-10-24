@@ -56,7 +56,7 @@ import Testing
   for _ in 0..<1000 {
     state.key(KeyEvent(.character("a"), phase: .repeated, modifiers: .super, physicalCode: 0))
   }
-  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit)
+  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit - 1)
   state.loseFocus()
   #expect(state.input.focusLost)
   #expect(state.input.released && !state.primaryDown && !state.input.pressed)
@@ -110,7 +110,11 @@ func overlappingModifiersPreservePhysicalTransitions(
       KeyEvent(key, phase: .released, physicalCode: right)
     ])
   state.loseFocus()
-  #expect(state.input.keyEvents.isEmpty)
+  #expect(
+    state.input.keyEvents == [
+      KeyEvent(key, phase: .released, modifiers: flag, physicalCode: left),
+      KeyEvent(key, phase: .released, physicalCode: right),
+    ])
 }
 
 @Test func focusLossReleasesBothPhysicalModifiersAndAllowsNewPresses() {
@@ -138,5 +142,116 @@ func overlappingModifiersPreservePhysicalTransitions(
     state.input.keyEvents == [
       KeyEvent(.capsLock, modifiers: .capsLock, physicalCode: 57),
       KeyEvent(.capsLock, phase: .released, physicalCode: 57)
+    ])
+}
+
+@Test func focusLossPreservesQueuedReleasesAndDoesNotDuplicateRepressedKeys() {
+  var state = MacOSInputState()
+  let a = KeyEvent(.character("a"), physicalCode: 0)
+  let b = KeyEvent(.character("b"), physicalCode: 11)
+  let releaseA = KeyEvent(.character("a"), phase: .released, physicalCode: 0)
+  let releaseB = KeyEvent(.character("b"), phase: .released, physicalCode: 11)
+  state.key(a)
+  state.key(b)
+  state.consumeEdges()
+  state.key(releaseA)
+  state.key(a)
+  state.loseFocus()
+  #expect(state.input.keyEvents == [releaseA, releaseB])
+  state.loseFocus()
+  #expect(state.input.keyEvents == [releaseA, releaseB])
+  state.consumeEdges()
+  state.loseFocus()
+  #expect(state.input.keyEvents.isEmpty)
+}
+
+@Test func queueOverflowReservesReleasesForPreviouslyDeliveredKeys() {
+  var state = MacOSInputState()
+  let a = KeyEvent(.character("a"), physicalCode: 0)
+  let b = KeyEvent(.character("b"), physicalCode: 11)
+  state.key(a)
+  state.key(b)
+  state.consumeEdges()
+  for _ in 0..<1000 {
+    state.key(KeyEvent(.character("a"), phase: .repeated, physicalCode: 0))
+  }
+  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit - 2)
+  state.key(KeyEvent(.character("c"), physicalCode: 8))
+  let releaseA = KeyEvent(.character("a"), phase: .released, physicalCode: 0)
+  let releaseB = KeyEvent(.character("b"), phase: .released, physicalCode: 11)
+  state.key(releaseA)
+  state.key(releaseB)
+  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit)
+  #expect(Array(state.input.keyEvents.suffix(2)) == [releaseA, releaseB])
+  state.loseFocus()
+  #expect(state.input.keyEvents == [releaseA, releaseB])
+}
+
+@Test func queuedReleasesStayBoundedAcrossRepeatedPressCycles() {
+  var state = MacOSInputState()
+  for _ in 0..<1000 {
+    state.key(KeyEvent(.character("a"), physicalCode: 0))
+    state.key(KeyEvent(.character("a"), phase: .released, physicalCode: 0))
+  }
+  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit)
+  state.loseFocus()
+  #expect(state.input.keyEvents == [KeyEvent(.character("a"), phase: .released, physicalCode: 0)])
+}
+
+@Test func codeLessEventsCannotUseReservedReleaseSlots() {
+  var state = MacOSInputState()
+  state.key(KeyEvent(.shift, physicalCode: 56))
+  state.consumeEdges()
+  for _ in 0..<1000 { state.key(KeyEvent(.character("x"))) }
+  state.flags([], code: 56, key: .shift)
+  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit)
+  #expect(state.input.keyEvents.last == KeyEvent(.shift, phase: .released, physicalCode: 56))
+  state.consumeEdges()
+  state.loseFocus()
+  #expect(state.input.keyEvents.isEmpty)
+}
+
+@Test func focusLossRetainsAReleaseQueuedAfterThePressWasConsumed() {
+  var state = MacOSInputState()
+  state.key(KeyEvent(.character("a"), physicalCode: 0))
+  state.consumeEdges()
+  let release = KeyEvent(.character("a"), phase: .released, physicalCode: 0)
+  state.key(release)
+  state.loseFocus()
+  #expect(state.input.keyEvents == [release])
+}
+
+@Test func manyHeldKeysReserveSpaceAcrossFrames() {
+  var state = MacOSInputState()
+  for code in 0..<UInt32(MacOSInputState.keyLimit) {
+    state.key(KeyEvent(.symbol(code), physicalCode: code))
+    state.consumeEdges()
+  }
+  state.loseFocus()
+  #expect(state.input.keyEvents.count == MacOSInputState.keyLimit - 1)
+  #expect(
+    Set(state.input.keyEvents.compactMap(\.physicalCode)).count == state.input.keyEvents.count)
+  #expect(state.input.keyEvents.allSatisfy { $0.phase == .released })
+  state.consumeEdges()
+  state.key(KeyEvent(.symbol(256), phase: .repeated, physicalCode: 256))
+  #expect(state.input.keyEvents == [KeyEvent(.symbol(256), phase: .repeated, physicalCode: 256)])
+  state.loseFocus()
+  #expect(state.input.keyEvents == [KeyEvent(.symbol(256), phase: .released, physicalCode: 256)])
+}
+
+@Test func droppedModifierPressDoesNotTurnItsReleaseIntoAPress() {
+  var state = MacOSInputState()
+  state.flags(.shift, code: 56, key: .shift)
+  state.consumeEdges()
+  for _ in 0..<1000 { state.key(KeyEvent(.character("x"))) }
+  state.flags(.shift, code: 60, key: .shift)
+  #expect(!state.input.keyEvents.contains { $0.physicalCode == 60 })
+  state.consumeEdges()
+  state.flags(.shift, code: 60, key: .shift)
+  state.flags([], code: 56, key: .shift)
+  #expect(
+    state.input.keyEvents == [
+      KeyEvent(.shift, phase: .released, modifiers: .shift, physicalCode: 60),
+      KeyEvent(.shift, phase: .released, physicalCode: 56),
     ])
 }

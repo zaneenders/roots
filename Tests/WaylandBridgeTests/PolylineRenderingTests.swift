@@ -35,7 +35,8 @@ extension NativeSessionTests {
     let data = try Data(contentsOf: path)
     let pixels = Array(data.dropFirst(Data("P6\n\(width) \(height)\n255\n".utf8).count))
     let s = Float(scale)
-    let physicalStroke = try #require(PolylineStroke(points: points.map { $0 * s }, width: 4 * s))
+    let physicalStroke = try #require(
+      PolylineStroke(points: points.map { Coordinate(x: $0.x * s, y: $0.y * s) }, width: 4 * s))
     let physical = [
       DrawRect(Region(0, 0, Float(width), Float(height)), Color(0, 0, 0)),
       DrawRect(
