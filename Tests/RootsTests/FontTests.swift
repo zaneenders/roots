@@ -303,11 +303,11 @@ func invalidFontSizesAreRejected(size: Float) async {
   #expect(fractional.truncating("ABCDE", to: 38.5) == "AB…")
 }
 
-@Test func fontWidthCountsGraphemesAndOnlySplitsLFCharacters() {
+@Test func fontWidthCountsGraphemesAndSplitsLFCRLFAndCR() {
   let font = MonospaceFont(size: 17.5)
   for (text, columns) in [
     ("", 0), ("\n\n", 0), ("\nABC\nx\n", 3), ("A\nBC", 2),
-    ("e\u{301}👩‍💻🇳🇿", 5), ("\r\n", 1), ("A\r\nB\n", 3), ("A\rB\u{2028}C", 5)
+    ("e\u{301}👩‍💻🇳🇿", 5), ("\r\n", 0), ("A\r\nB\n", 1), ("A\rB\u{2028}C", 3)
   ] {
     #expect(font.width(of: text) == Float(columns) * font.advance)
   }
@@ -317,7 +317,7 @@ func invalidFontSizesAreRejected(size: Float) async {
   let font = MonospaceFont(size: 20)
   for (text, expected) in [
     ("", ""), ("\n\n", "\n\n"), ("ABC\n\nAB\n", "ABC\n\nAB\n"),
-    ("e\u{301}👩‍💻🇳🇿X", "e\u{301}…"), ("A\r\nB", "A\r\nB"), ("A\r\nBC", "A\r\n…"),
+    ("e\u{301}👩‍💻🇳🇿X", "e\u{301}…"), ("A\r\nB", "A\r\nB"), ("A\r\nBC", "A\r\nBC"),
     ("ABCD\n", "AB…\n"), ("ABCD\nWXYZ", "AB…\nWX…"),
     ("A\n\nBCDEF\nZ\n12345\n", "A\n\nBC…\nZ\n12…\n")
   ] {
@@ -356,7 +356,9 @@ func invalidFontSizesAreRejected(size: Float) async {
       widths.append(contentsOf: [boundary.nextDown, boundary, boundary.nextUp])
     }
     for text in texts {
-      let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+      let newlines: Set<Character> = ["\n", "\r\n", "\r"]
+      let lines = text.split(omittingEmptySubsequences: false, whereSeparator: newlines.contains)
+      let separators = text.filter(newlines.contains).map(String.init)
       #expect(
         font.width(of: text) == Float(lines.map { MonospaceFont.columnCount(of: $0) }.max() ?? 0)
           * font.advance)
@@ -370,7 +372,7 @@ func invalidFontSizesAreRejected(size: Float) async {
           let capacity =
             Int(min(Float(Int32.max), ((width - font.glyphWidth) / font.advance).rounded(.down)))
             + 1
-          expected = lines.map { line in
+          let truncated = lines.map { line in
             var used = 0
             let fits = line.allSatisfy { character in
               let count = MonospaceFont.columnWidth(of: character)
@@ -381,7 +383,10 @@ func invalidFontSizesAreRejected(size: Float) async {
             }
             let end = MonospaceFont.prefixEnd(in: line, columns: capacity - 1)
             return fits ? String(line) : String(line[..<end]) + "…"
-          }.joined(separator: "\n")
+          }
+          expected = truncated.enumerated().map { index, line in
+            (index == 0 ? "" : separators[index - 1]) + line
+          }.joined()
         }
         #expect(font.truncating(text, to: width).utf8.elementsEqual(expected.utf8))
       }

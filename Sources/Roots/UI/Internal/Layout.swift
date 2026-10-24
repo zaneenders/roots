@@ -98,7 +98,7 @@ extension UIStorage {
       let displayed =
         node.textOverflow == .truncateTail ? node.font.truncating(node.title, to: node.region.width - 24) : node.title
       let y = (node.region.height - node.font.height(of: node.title)) / 2
-      content = displayed.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map {
+      content = displayed.split(omittingEmptySubsequences: false, whereSeparator: \.isTextLineBreak).enumerated().map {
         TextLine(
           [TextRun(String($0.element), color: node.foregroundColor)], y: y + Float($0.offset) * node.font.lineHeight,
           size: node.font.size)

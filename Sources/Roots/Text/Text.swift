@@ -81,7 +81,7 @@ struct PlainTextStyle {
 
   func lines(for text: String, in region: Region, color: Color) -> [TextLine] {
     let y = (region.height - font.height(of: text)) * alignment.y
-    return text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map { index, line in
+    return text.split(omittingEmptySubsequences: false, whereSeparator: \.isTextLineBreak).enumerated().map { index, line in
       let displayed = overflow == .truncateTail ? font.truncating(String(line), to: region.width) : String(line)
       let x = (region.width - font.layoutWidth(of: displayed[...])) * alignment.x
       return TextLine(
@@ -92,7 +92,7 @@ struct PlainTextStyle {
 
   func size(of text: String) -> SIMD2<Float> {
     let width =
-      text.split(separator: "\n", omittingEmptySubsequences: false)
+      text.split(omittingEmptySubsequences: false, whereSeparator: \.isTextLineBreak)
       .map { font.layoutWidth(of: $0) }.max() ?? 0
     return SIMD2(width, font.height(of: text))
   }

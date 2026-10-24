@@ -60,7 +60,7 @@ struct MonospaceFont: Equatable, Sendable {
     var longestLine = 0
     var lineLength = 0
     for character in text {
-      if character == "\n" {
+      if character.isTextLineBreak {
         longestLine = max(longestLine, lineLength)
         lineLength = 0
       } else {
@@ -71,7 +71,7 @@ struct MonospaceFont: Equatable, Sendable {
   }
 
   func height(of text: String) -> Float {
-    glyphHeight + Float(text.reduce(0) { $0 + ($1 == "\n" ? 1 : 0) }) * lineHeight
+    glyphHeight + Float(text.reduce(0) { $0 + ($1.isTextLineBreak ? 1 : 0) }) * lineHeight
   }
 
   func truncating(_ text: String, to width: Float) -> String {
@@ -85,7 +85,7 @@ struct MonospaceFont: Equatable, Sendable {
     var lineColumns = 0
     var overflowed = false
     for index in text.indices {
-      if text[index] == "\n" {
+      if text[index].isTextLineBreak {
         if overflowed { copyStart = index }
         lineColumns = 0
         overflowed = false

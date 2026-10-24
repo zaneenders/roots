@@ -114,7 +114,7 @@ extension UIStorage {
     var x = x
     var y = y
     for character in text {
-      if character == "\n" {
+      if character.isTextLineBreak {
         x = origin
         y += font.lineHeight
         continue

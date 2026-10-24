@@ -21,6 +21,9 @@ swift run --package-path Examples/Markdown MarkdownDemo
 swift run --package-path Examples/Tetris Tetris
 ```
 
+Text measurement, drawing, and paragraphs recognize LF, CRLF, and CR line breaks.
+Selectable plain text copies its displayed lines with LF separators.
+
 ## Platforms
 
 macOS 27+ and Linux (Hyprland). PRs for other backends welcome.
