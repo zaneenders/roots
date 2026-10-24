@@ -4,14 +4,12 @@ public struct PointerEvent: Sendable {
     case cancelled
   }
   public var phase: Phase
-  public var x: Float
-  public var y: Float
-  public var rect: Rect
+  public var position: Coordinate
+  public var region: Region
 
-  public init(phase: Phase, x: Float, y: Float, rect: Rect) {
+  public init(phase: Phase, position: Coordinate, region: Region) {
     self.phase = phase
-    self.x = x
-    self.y = y
-    self.rect = rect
+    self.position = position
+    self.region = region
   }
 }

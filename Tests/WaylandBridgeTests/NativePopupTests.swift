@@ -152,7 +152,7 @@ extension NativeSessionTests {
         frame: { input, renderer in
           #expect(input.width == 300 && input.height == 240)
           #expect(input.bufferScale == host.input.bufferScale)
-          let draws = [DrawRect(Rect(0, 0, 300, 240), Color(0.1, 0.2, 0.3))]
+          let draws = [DrawRect(Region(0, 0, 300, 240), Color(0.1, 0.2, 0.3))]
           renderer.render(draws.span)
           frames += 1
         }, onDismiss: { dismissals += 1 })

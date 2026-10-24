@@ -49,20 +49,20 @@ import Testing
           snapshot.input.keyEvents == [
             KeyEvent(.character("a"), modifiers: .super, physicalCode: 0)
           ])
-        #expect(snapshot.input.pressed && snapshot.input.x == 15 && snapshot.input.y == 25)
+        #expect(snapshot.input.pressed && snapshot.input.mousePosition == Coordinate(x: 15, y: 25))
         #expect(snapshot.input.scrollY == 2 && snapshot.input.scrollVelocityY == nil)
         host.input.pointer(x: -20, y: 500, inside: false)
         host.input.button(down: false)
       } else if frames == 3 {
-        #expect(snapshot.input.released && snapshot.input.x == -20 && snapshot.input.y == 500)
+        #expect(snapshot.input.released && snapshot.input.mousePosition == Coordinate(x: -20, y: 500))
         #expect(!snapshot.input.pressed && snapshot.input.keyEvents.isEmpty)
       } else if frames >= 4 {
         #expect(snapshot.logicalSize == .init(600, 400))
         #expect(snapshot.drawableSize.x >= 600 && snapshot.drawableSize.y >= 400)
-        #expect(!snapshot.input.released && snapshot.input.x == -1)
+        #expect(!snapshot.input.released && snapshot.input.mousePosition == nil)
       }
       let draws = [
-        DrawRect(Rect(0, 0, snapshot.logicalSize.x, snapshot.logicalSize.y), Color(0, 1, 0))
+        DrawRect(Region(0, 0, snapshot.logicalSize.x, snapshot.logicalSize.y), Color(0, 1, 0))
       ]
       frame.render(draws.span)
     }
@@ -78,7 +78,7 @@ import Testing
       configuration: .init(logicalSize: .init(420, 320), title: "Quit test")
     ) { _, frame in
       frames += 1
-      let draws = [DrawRect(Rect(0, 0, 420, 320), Color(1, 0, 0))]
+      let draws = [DrawRect(Region(0, 0, 420, 320), Color(1, 0, 0))]
       frame.render(draws.span)
       if frames < 3 { MacOSWindow.requestRedraw() }
       if frames == 3 {
@@ -88,8 +88,7 @@ import Testing
     }
     #expect(frames == 3)
     var reopened = 0
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2))
-    { _, _ in
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2)) { _, _ in
       reopened += 1
     }
     #expect(reopened == 2)
@@ -112,8 +111,7 @@ import Testing
         _, _ in
       }
     }
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1))
-    { _, _ in }
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1)) { _, _ in }
   }
 
   @Test func idleWindowPausesAndCoalescesRedrawRequests() async throws {
@@ -154,8 +152,7 @@ import Testing
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
     var reopened = 0
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2))
-    { _, _ in
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 2)) { _, _ in
       reopened += 1
     }
     #expect(reopened == 2)
@@ -167,8 +164,7 @@ import Testing
     }
     task.cancel()
     await #expect(throws: CancellationError.self) { try await task.value }
-    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1))
-    { _, _ in }
+    try await MacOSWindow.runAsync(configuration: .init(logicalSize: .init(420, 320), maxFrames: 1)) { _, _ in }
   }
 
   @Test func clipboardRoundTripsTextAndBoundsPublication() async throws {

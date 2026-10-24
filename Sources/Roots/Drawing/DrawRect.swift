@@ -1,20 +1,20 @@
 public struct DrawRect: Sendable {
   public private(set) var polyline: PolylineStroke?
-  public var rect: Rect
+  public var region: Region
   public var color: Color
   public var radius: Float
   public var strokeWidth: Float
   public var axis: SIMD2<Float>
-  public var clip: Rect?
-  public var glyphUV: Rect?
+  public var clip: Region?
+  public var glyphUV: Region?
   public var colorGlyph: Bool
   public init(
-    _ rect: Rect, _ color: Color, radius: Float = 0, strokeWidth: Float = 0,
-    axis: SIMD2<Float> = SIMD2(1, 0), clip: Rect? = nil, glyphUV: Rect? = nil,
+    _ region: Region, _ color: Color, radius: Float = 0, strokeWidth: Float = 0,
+    axis: SIMD2<Float> = SIMD2(1, 0), clip: Region? = nil, glyphUV: Region? = nil,
     colorGlyph: Bool = false
   ) {
     self.polyline = nil
-    self.rect = rect
+    self.region = region
     self.color = color
     self.radius = radius
     self.strokeWidth = strokeWidth
@@ -24,7 +24,7 @@ public struct DrawRect: Sendable {
     self.colorGlyph = colorGlyph
   }
 
-  public init(polyline: PolylineStroke, color: Color, clip: Rect? = nil) {
+  public init(polyline: PolylineStroke, color: Color, clip: Region? = nil) {
     self.init(polyline.bounds, color, clip: clip)
     self.polyline = polyline
   }
@@ -32,12 +32,12 @@ public struct DrawRect: Sendable {
   @inlinable
   public var isValid: Bool {
     if let polyline {
-      return rect == polyline.bounds && axis == SIMD2(1, 0) && radius == 0 && strokeWidth == 0
+      return region == polyline.bounds && axis == SIMD2(1, 0) && radius == 0 && strokeWidth == 0
         && glyphUV == nil
         && color.r.isFinite && color.g.isFinite && color.b.isFinite && color.a.isFinite
     }
-    guard rect.x.isFinite, rect.y.isFinite, rect.width.isFinite, rect.height.isFinite,
-      rect.width > 0, rect.height > 0,
+    guard region.x.isFinite, region.y.isFinite, region.width.isFinite, region.height.isFinite,
+      region.width > 0, region.height > 0,
       color.r.isFinite, color.g.isFinite, color.b.isFinite, color.a.isFinite,
       radius.isFinite, strokeWidth.isFinite, strokeWidth >= 0,
       axis == SIMD2(1, 0)
@@ -45,8 +45,8 @@ public struct DrawRect: Sendable {
           && abs(axis.x * axis.x + axis.y * axis.y - 1) < 0.0001)
     else { return false }
     if axis == SIMD2(1, 0) {
-      guard (rect.x + rect.width + edgePadding).isFinite,
-        (rect.y + rect.height + edgePadding).isFinite
+      guard (region.x + region.width + edgePadding).isFinite,
+        (region.y + region.height + edgePadding).isFinite
       else {
         return false
       }
@@ -67,30 +67,30 @@ public struct DrawRect: Sendable {
   public var edgePadding: Float { glyphUV == nil ? 1 : 0 }
 
   @inlinable
-  public func position(at local: SIMD2<Float>) -> SIMD2<Float> {
-    if axis == SIMD2(1, 0) { return SIMD2(rect.x, rect.y) + local }
-    return SIMD2(rect.x, rect.y) + axis * local.x + SIMD2(-axis.y, axis.x) * local.y
+  public func position(at local: Coordinate) -> Coordinate {
+    if axis == SIMD2(1, 0) { return Coordinate(x: region.x + local.x, y: region.y + local.y) }
+    return Coordinate(SIMD2(region.x, region.y) + axis * local.x + SIMD2(-axis.y, axis.x) * local.y)
   }
 
   @inlinable
-  public func localPosition(at point: SIMD2<Float>) -> SIMD2<Float> {
-    let delta = point - SIMD2(rect.x, rect.y)
-    if axis == SIMD2(1, 0) { return delta }
-    return SIMD2(delta.x * axis.x + delta.y * axis.y, -delta.x * axis.y + delta.y * axis.x)
+  public func localPosition(at point: Coordinate) -> Coordinate {
+    let delta = point.vector - SIMD2(region.x, region.y)
+    if axis == SIMD2(1, 0) { return Coordinate(delta) }
+    return Coordinate(x: delta.x * axis.x + delta.y * axis.y, y: -delta.x * axis.y + delta.y * axis.x)
   }
 
   @inlinable
-  public var bounds: Rect {
+  public var bounds: Region {
     if let polyline { return polyline.bounds }
     let padding = edgePadding
     if axis == SIMD2(1, 0) {
-      return Rect(
-        rect.x - padding, rect.y - padding, rect.width + 2 * padding, rect.height + 2 * padding)
+      return Region(
+        region.x - padding, region.y - padding, region.width + 2 * padding, region.height + 2 * padding)
     }
-    let origin = position(at: SIMD2(-padding, -padding))
-    let dx = axis * (rect.width + 2 * padding)
-    let dy = SIMD2(-axis.y, axis.x) * (rect.height + 2 * padding)
-    return Rect(
+    let origin = position(at: .init(x: -padding, y: -padding))
+    let dx = axis * (region.width + 2 * padding)
+    let dy = SIMD2(-axis.y, axis.x) * (region.height + 2 * padding)
+    return Region(
       origin.x + min(0, dx.x) + min(0, dy.x), origin.y + min(0, dx.y) + min(0, dy.y),
       abs(dx.x) + abs(dy.x), abs(dx.y) + abs(dy.y))
   }

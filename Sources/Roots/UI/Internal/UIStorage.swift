@@ -8,10 +8,20 @@ struct UIStorage: ~Copyable {
   var epoch: UInt64 = 0
   var nodes = UniqueArray<Node>()
   var keys: [UInt64: Int] = [:]
+  var implicitKeys: [ImplicitNodeIdentity: Int] = [:]
+  var identityPath: [ItemIdentity] = []
   var free = UniqueArray<Int>()
   var order = UniqueArray<Int>()
   var cursors = UniqueArray<Cursor>()
+  var layouts: [LayoutElement] = []
+  var backgrounds: [BackgroundRegion] = []
+  var activeBackgrounds = 0
+  var foregroundColor: Color?
+  var selectionGroup: UInt64?
+  var selectionGroupKeys: Set<UInt64> = []
+  var groupSelection: GroupSelection?
   var focused: NodeHandle?
+  var focusAfterLayout: NodeHandle?
   var focusToReveal: NodeHandle?
   var pressed: NodeHandle?
   var scrollTarget: NodeHandle?
@@ -26,7 +36,8 @@ struct UIStorage: ~Copyable {
   let drawCapacity: Int?
   var pendingScrollbars = UniqueArray<Int>()
   var draws = UniqueArray<DrawRect>()
-  var pointerPosition: SIMD2<Float>?
+  var mousePosition: Coordinate?
+  var lastMousePosition: Coordinate?
   var droppedDraws = 0
   var needsAnimationFrame = false
 

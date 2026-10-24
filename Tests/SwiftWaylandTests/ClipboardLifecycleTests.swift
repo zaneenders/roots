@@ -48,15 +48,19 @@ import Testing
   clipboard.event(.init(object: device, opcode: 0, arguments: [.uint(offer)]))
   clipboard.event(.init(object: offer, opcode: 0, arguments: [.string("text/plain;charset=utf-8")]))
   clipboard.event(.init(object: device, opcode: 5, arguments: [.uint(offer)]))
-  let reader = try #require(clipboard.beginRead())
-  defer { _ = close(reader) }
+  guard let reader = clipboard.beginRead() else {
+    Issue.record("Missing clipboard reader")
+    return
+  }
+  let descriptorValue = reader.descriptor
+  let readDescriptor = try #require(descriptorValue)
   let (requests, _) = try objects.takeRequests()
   let descriptor = try #require(requests.first?.descriptors.first)
   #expect(descriptor.borrow { fcntl($0, F_GETFD) & FD_CLOEXEC != 0 })
-  #expect(fcntl(reader, F_GETFD) & FD_CLOEXEC != 0)
-  #expect(fcntl(reader, F_GETFL) & O_NONBLOCK != 0)
+  #expect(fcntl(readDescriptor.rawValue, F_GETFD) & FD_CLOEXEC != 0)
+  #expect(fcntl(readDescriptor.rawValue, F_GETFL) & O_NONBLOCK != 0)
   descriptor.close()
-  #expect(fcntl(reader, F_GETFD) >= 0)
+  #expect(fcntl(readDescriptor.rawValue, F_GETFD) >= 0)
   clipboard.close()
 }
 
@@ -74,8 +78,8 @@ import Testing
     ))
   clipboard.event(.init(object: source, opcode: 2, arguments: []))
   clipboard.close()
-  let task = blockingTestTask { ClipboardTransfer.read(from: pipe.readEnd.rawValue) }
-  #expect(await task.value == text)
+  let bytes = try await ClipboardIO().read(from: OwnedFD(taking: pipe.readEnd))
+  #expect(String(bytes: bytes, encoding: .utf8) == text)
 }
 
 @Test @MainActor func retiredDataDeviceStillDestroysLateOffers() throws {

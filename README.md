@@ -4,37 +4,21 @@
 
 A Swift-native UI toolkit.
 
-```swift
-import Roots
-import RootsDesktop
+## Examples
 
-@MainActor
-final class WorkspaceModel {
-  var count = 0
-}
+Explore the runnable apps in [Examples](Examples):
 
-@main
-struct ShapeTree: RootsApp {
-  let model = WorkspaceModel()
+- [Markdown](Examples/Markdown): styled paragraphs, selectable text, scrolling,
+  and clipboard support.
+- [Tetris](Examples/Tetris): declarative blocks, keyboard input, observation,
+  and frame-driven animation.
 
-  var window: some Window {
-    DesktopWindow("ShapeTree", size: .init(1180, 820)) { viewport in
-      WorkspaceBlock(model: model, bounds: viewport.bounds)
-    }
-  }
-}
+After following the [setup instructions](#development), run either example from
+the repository root:
 
-struct WorkspaceBlock: Block {
-  let model: WorkspaceModel
-  let bounds: Rect
-
-  var body: some Block {
-    ColumnBlock(in: bounds) {
-      LabelBlock(key: 1, "Count: \(model.count)")
-      ButtonBlock(key: 2, "Increment") { model.count += 1 }
-    }
-  }
-}
+```sh
+swift run --package-path Examples/Markdown MarkdownDemo
+swift run --package-path Examples/Tetris Tetris
 ```
 
 ## Platforms

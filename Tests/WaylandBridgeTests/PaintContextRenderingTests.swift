@@ -18,20 +18,20 @@ extension NativeSessionTests {
     var physicalDraws: [DrawRect] = []
     ui.frame(
       build: {
-        RowBlock(in: Rect(0, 0, 64, 48)) {
-          CanvasBlock(key: 1, extent: 64) { context in
-            context.fillRect(context.rect, color: Color(0, 0, 0))
-            context.strokeRect(Rect(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
-            context.strokeRect(Rect(4, 32, 8, 8), color: Color(1, 0, 1), radius: 2, width: 10)
+        Row(in: Region(0, 0, 64, 48)) {
+          Canvas(key: 1, extent: 64) { context in
+            context.fillRect(context.region, color: Color(0, 0, 0))
+            context.strokeRect(Region(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
+            context.strokeRect(Region(4, 32, 8, 8), color: Color(1, 0, 1), radius: 2, width: 10)
             context.strokeLine(
-              from: .init(32, 6), to: .init(56, 24), color: Color(1, 1, 1, 0.6), width: 3)
+              from: .init(x: 32, y: 6), to: .init(x: 56, y: 24), color: Color(1, 1, 1, 0.6), width: 3)
             context.strokeLine(
-              from: .init(56, 30), to: .init(32, 42), color: Color(1, 0, 0), width: 2, cap: .butt)
+              from: .init(x: 56, y: 30), to: .init(x: 32, y: 42), color: Color(1, 0, 0), width: 2, cap: .butt)
             context.strokeLine(
-              from: .init(20, 36), to: .init(20, 36), color: Color(0, 0, 1), width: 4)
+              from: .init(x: 20, y: 36), to: .init(x: 20, y: 36), color: Color(0, 0, 1), width: 4)
             context.withOrigin(x: 60, y: 36) { local in
               local.strokeLine(
-                from: .init(-4, -3), to: .init(8, 5), color: Color(1, 1, 0), width: 2)
+                from: .init(x: -4, y: -3), to: .init(x: 8, y: 5), color: Color(1, 1, 0), width: 2)
             }
           }
         }
@@ -41,11 +41,11 @@ extension NativeSessionTests {
         for draw in draws {
           var physical = draw
           let s = Float(scale)
-          physical.rect = Rect(
-            draw.rect.x * s, draw.rect.y * s, draw.rect.width * s, draw.rect.height * s)
+          physical.region = Region(
+            draw.region.x * s, draw.region.y * s, draw.region.width * s, draw.region.height * s)
           physical.radius *= s
           physical.strokeWidth *= s
-          physical.clip = draw.clip.map { Rect($0.x * s, $0.y * s, $0.width * s, $0.height * s) }
+          physical.clip = draw.clip.map { Region($0.x * s, $0.y * s, $0.width * s, $0.height * s) }
           physicalDraws.append(physical)
         }
       })

@@ -27,7 +27,7 @@ public final class CPURenderer {
     }
 
     for draw in draws {
-      let r = draw.rect
+      let r = draw.region
       guard draw.isValid else { continue }
       var bounds = draw.bounds
       if let clip = draw.clip {
@@ -60,8 +60,8 @@ public final class CPURenderer {
         lod = 0
       }
       func distance(_ x: Float, _ y: Float) -> Float {
-        if let stroke = draw.polyline { return stroke.distance(to: SIMD2(x, y)) }
-        let local = draw.localPosition(at: SIMD2(x, y))
+        if let stroke = draw.polyline { return stroke.distance(to: .init(x: x, y: y)) }
+        let local = draw.localPosition(at: .init(x: x, y: y))
         let qx = abs(local.x - r.width / 2) - r.width / 2 + radius
         let qy = abs(local.y - r.height / 2) - r.height / 2 + radius
         let dx = max(qx, 0)
@@ -79,7 +79,7 @@ public final class CPURenderer {
           guard px >= bounds.x, px < bounds.x + bounds.width,
             py >= bounds.y, py < bounds.y + bounds.height
           else { continue }
-          let local = draw.localPosition(at: SIMD2(px, py))
+          let local = draw.localPosition(at: .init(x: px, y: py))
           var alpha = alpha
           if draw.glyphUV == nil {
             let d = distance(px, py)

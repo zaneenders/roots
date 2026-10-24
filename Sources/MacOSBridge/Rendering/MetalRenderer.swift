@@ -109,8 +109,7 @@ private struct MetalFrameSlot: ~Copyable {
     }
     let rowBytes = (target.width * 4 + 255) & ~255
     if readback {
-      if slots[slotID].readback == nil || slots[slotID].readback!.length < rowBytes * target.height
-      {
+      if slots[slotID].readback == nil || slots[slotID].readback!.length < rowBytes * target.height {
         slots[slotID].readback = device.makeBuffer(
           length: rowBytes * target.height, options: .storageModeShared)
       }
@@ -215,7 +214,7 @@ private struct MetalFrameSlot: ~Copyable {
       let clip =
         run.scissor
         ?? MetalScissorRect(
-          Rect(0, 0, logicalSize.x, logicalSize.y), logicalSize: logicalSize,
+          Region(0, 0, logicalSize.x, logicalSize.y), logicalSize: logicalSize,
           drawableSize: drawableSize)
       encoder.setScissorRect(
         MTLScissorRect(x: clip.x, y: clip.y, width: clip.width, height: clip.height))
@@ -227,7 +226,7 @@ private struct MetalFrameSlot: ~Copyable {
         var width = stroke.width
         var color = SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a)
         unsafe encoder.setVertexBytes(&bounds, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
-        stroke.points.withUnsafeBytes { bytes in
+        stroke.points.map(\.vector).withUnsafeBytes { bytes in
           unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
         }
         unsafe encoder.setFragmentBytes(&count, length: MemoryLayout<UInt32>.stride, index: 1)
@@ -262,8 +261,7 @@ private struct MetalFrameSlot: ~Copyable {
     return result
   }
 
-  private static func makeTarget(device: any MTLDevice, size: SIMD2<Int32>) throws -> any MTLTexture
-  {
+  private static func makeTarget(device: any MTLDevice, size: SIMD2<Int32>) throws -> any MTLTexture {
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
       pixelFormat: .bgra8Unorm, width: Int(size.x), height: Int(size.y), mipmapped: false)
     descriptor.storageMode = .private
@@ -317,10 +315,10 @@ private struct MetalFrameSlot: ~Copyable {
       MemoryLayout<MetalVertex>.offset(of: \.glyphUV)!,
       MemoryLayout<MetalVertex>.offset(of: \.textured)!,
       MemoryLayout<MetalVertex>.offset(of: \.strokeWidth)!,
-      MemoryLayout<MetalVertex>.offset(of: \.axis)!,
+      MemoryLayout<MetalVertex>.offset(of: \.axis)!
     ]
     let formats: [MTLVertexFormat] = [
-      .float2, .float2, .float4, .float, .float4, .float, .float, .float2,
+      .float2, .float2, .float4, .float, .float4, .float, .float, .float2
     ]
     for index in offsets.indices {
       vertices.attributes[index].format = formats[index]

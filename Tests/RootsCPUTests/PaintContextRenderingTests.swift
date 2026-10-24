@@ -7,11 +7,11 @@ import Testing
   var ui = UIHost()
   ui.frame(
     build: {
-      RowBlock(in: Rect(0, 0, 32, 24)) {
-        CanvasBlock(key: 1, extent: 32, color: Color(0, 0, 1)) { context in
-          context.fillRect(context.rect, color: Color(0, 0, 1))
-          context.strokeRect(Rect(4, 4, 16, 16), color: Color(1, 0, 0, 0.5), radius: 4, width: 2)
-          context.strokeRect(Rect(24, 8, 4, 8), color: Color(0, 1, 0), radius: 2, width: 10)
+      Row(in: Region(0, 0, 32, 24)) {
+        Canvas(key: 1, extent: 32, color: Color(0, 0, 1)) { context in
+          context.fillRect(context.region, color: Color(0, 0, 1))
+          context.strokeRect(Region(4, 4, 16, 16), color: Color(1, 0, 0, 0.5), radius: 4, width: 2)
+          context.strokeRect(Region(24, 8, 4, 8), color: Color(0, 1, 0), radius: 2, width: 10)
         }
       }
     }, present: { renderer.render($0) })
@@ -29,13 +29,14 @@ import Testing
   var ui = UIHost()
   ui.frame(
     build: {
-      RowBlock(in: Rect(0, 0, 40, 32)) {
-        CanvasBlock(key: 1, extent: 40) { context in
-          context.fillRect(context.rect, color: Color(0, 0, 0))
-          context.strokeLine(from: .init(8, 8), to: .init(24, 8), color: Color(1, 1, 1), width: 4)
+      Row(in: Region(0, 0, 40, 32)) {
+        Canvas(key: 1, extent: 40) { context in
+          context.fillRect(context.region, color: Color(0, 0, 0))
+          context.strokeLine(from: .init(x: 8, y: 8), to: .init(x: 24, y: 8), color: Color(1, 1, 1), width: 4)
           context.strokeLine(
-            from: .init(8, 20), to: .init(24, 20), color: Color(1, 1, 1), width: 4, cap: .butt)
-          context.strokeLine(from: .init(30, 4), to: .init(35, 28), color: Color(1, 1, 1), width: 1)
+            from: .init(x: 8, y: 20), to: .init(x: 24, y: 20), color: Color(1, 1, 1), width: 4, cap: .butt)
+          context.strokeLine(
+            from: .init(x: 30, y: 4), to: .init(x: 35, y: 28), color: Color(1, 1, 1), width: 1)
         }
       }
     }, present: { renderer.render($0) })

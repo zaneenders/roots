@@ -16,8 +16,8 @@ struct BlockPerformanceTests {
       imperative.frame(
         dt: 0,
         build: { frame in
-          frame.beginColumn(in: Rect(0, 0, 100, 20000), gap: 0)
-          for key in keys { frame.label(key: key, "", extent: 20, selectable: false) }
+          frame.beginColumn(in: Region(0, 0, 100, 20000), gap: 0)
+          for key in keys { frame.canvas(key: key, extent: 20) { _ in } }
           frame.end()
         }, present: { checksum += $0.count })
     }
@@ -25,8 +25,8 @@ struct BlockPerformanceTests {
       composed.frame(
         dt: 0,
         build: {
-          ColumnBlock(in: Rect(0, 0, 100, 20000), gap: 0) {
-            ForEachBlock(keys) { LabelBlock(key: $0, "", extent: 20, selectable: false) }
+          Column(in: Region(0, 0, 100, 20000), gap: 0) {
+            ForEach(keys) { Canvas(key: $0, extent: 20) { _ in } }
           }
         }, present: { checksum += $0.count })
     }
@@ -61,6 +61,6 @@ struct BlockPerformanceTests {
     #expect(blockMedian <= legacyMedian * 1.2, "Block lowering regressed more than 20%")
     #expect(checksum == 512 * (200 + 12000))
     #expect(composed.liveCount == imperative.liveCount)
-    #expect(composed.state(for: 512)?.rect == Rect(0, 10220, 100, 20))
+    #expect(composed.state(for: 512)?.region == Region(0, 10220, 100, 20))
   }
 }

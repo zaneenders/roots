@@ -11,7 +11,7 @@ import Testing
     WindowConfiguration(logicalSize: .init(0, 1), maxFrames: 1),
     WindowConfiguration(logicalSize: .init(.nan, 1), maxFrames: 1),
     WindowConfiguration(logicalSize: .init(8193, 1), maxFrames: 1),
-    WindowConfiguration(maxFrames: 0), WindowConfiguration(maxFrames: -1),
+    WindowConfiguration(maxFrames: 0), WindowConfiguration(maxFrames: -1)
   ] {
     do {
       try await MacOSWindow.renderOffscreen(configuration: configuration) { _, _ in
@@ -53,7 +53,7 @@ import Testing
       #expect(snapshot.timeSeconds == Double(frames) / 60)
       #expect(snapshot.drawableSize == .init(17, 13))
       frames += 1
-      let draws = [DrawRect(Rect(0, 0, 17, 13), Color(1, 0, 0))]
+      let draws = [DrawRect(Region(0, 0, 17, 13), Color(1, 0, 0))]
       frame.render(draws.span)
     }
     #expect(frames == 2)
@@ -69,12 +69,12 @@ import Testing
   {
     let renderer = try MetalRenderer(logicalSize: .init(17, 13), drawableSize: .init(34, 26))
     for count in [1025, 3, 2049] {
-      var draws = [DrawRect](repeating: DrawRect(Rect(0, 0, 17, 13), Color(1, 0, 0)), count: count)
-      draws.append(DrawRect(Rect(0, 0, 17, 13), Color(0, 1, 0), clip: Rect(0, 0, 8, 6)))
-      draws.append(DrawRect(Rect(0, 0, 17, 13), Color(0, 0, 1), clip: Rect(0, 0, 0, 1)))
-      draws.append(DrawRect(Rect(0, 0, 17, 13), .text, clip: Rect(.nan, 0, 1, 1)))
-      draws.append(DrawRect(Rect(12, 9, 5, 4), Color(0, 0, 1)))
-      draws.append(DrawRect(Rect(8, 0, 9, 6), Color(0, 0, 1, 0.5)))
+      var draws = [DrawRect](repeating: DrawRect(Region(0, 0, 17, 13), Color(1, 0, 0)), count: count)
+      draws.append(DrawRect(Region(0, 0, 17, 13), Color(0, 1, 0), clip: Region(0, 0, 8, 6)))
+      draws.append(DrawRect(Region(0, 0, 17, 13), Color(0, 0, 1), clip: Region(0, 0, 0, 1)))
+      draws.append(DrawRect(Region(0, 0, 17, 13), .text, clip: Region(.nan, 0, 1, 1)))
+      draws.append(DrawRect(Region(12, 9, 5, 4), Color(0, 0, 1)))
+      draws.append(DrawRect(Region(8, 0, 9, 6), Color(0, 0, 1, 0.5)))
       let image = try #require(await renderer.render(readback: true) { $0.render(draws.span) })
       #expect(pixel(image, width: 34, height: 26, x: 4, y: 4) == [0, 255, 0])
       #expect(pixel(image, width: 34, height: 26, x: 20, y: 16) == [255, 0, 0])
@@ -89,9 +89,9 @@ import Testing
   @Test @MainActor func glyphMipSamplingMatchesCPUWithinRoundingTolerance() async throws {
     let renderer = try MetalRenderer(logicalSize: .init(40, 56), drawableSize: .init(40, 56))
     let draws = [
-      DrawRect(Rect(0, 0, 40, 56), Color(0, 0, 0)),
-      DrawRect(Rect(0, 0, 20, 28), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("A")),
-      DrawRect(Rect(20, 28, 10, 14), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("B")),
+      DrawRect(Region(0, 0, 40, 56), Color(0, 0, 0)),
+      DrawRect(Region(0, 0, 20, 28), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("A")),
+      DrawRect(Region(20, 28, 10, 14), Color(1, 1, 1), glyphUV: FontAtlas.shared.glyphUV("B"))
     ]
     let cpu = CPURenderer(width: 40, height: 56)
     cpu.render(draws.span)
@@ -106,8 +106,8 @@ import Testing
   @Test @MainActor func roundedEdgesKeepCenterOpaqueAndCornersClear() async throws {
     let renderer = try MetalRenderer(logicalSize: .init(20, 20), drawableSize: .init(40, 40))
     let draws = [
-      DrawRect(Rect(0, 0, 20, 20), Color(0, 0, 0)),
-      DrawRect(Rect(2, 2, 16, 16), Color(1, 1, 1), radius: 8),
+      DrawRect(Region(0, 0, 20, 20), Color(0, 0, 0)),
+      DrawRect(Region(2, 2, 16, 16), Color(1, 1, 1), radius: 8)
     ]
     let image = try #require(await renderer.render(readback: true) { $0.render(draws.span) })
     #expect(pixel(image, width: 40, height: 40, x: 20, y: 20) == [255, 255, 255])
@@ -121,14 +121,14 @@ import Testing
     var draws: [DrawRect] = []
     ui.frame(
       build: {
-        RowBlock(in: Rect(0, 0, 64, 48)) {
-          CanvasBlock(key: 1, extent: 64) { context in
-            context.fillRect(context.rect, color: Color(0, 0, 0))
-            context.strokeRect(Rect(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
+        Row(in: Region(0, 0, 64, 48)) {
+          Canvas(key: 1, extent: 64) { context in
+            context.fillRect(context.region, color: Color(0, 0, 0))
+            context.strokeRect(Region(4, 4, 24, 24), color: Color(0, 1, 0, 0.7), radius: 6, width: 2)
             context.strokeLine(
-              from: .init(32, 6), to: .init(56, 24), color: Color(1, 1, 1, 0.6), width: 3)
+              from: .init(x: 32, y: 6), to: .init(x: 56, y: 24), color: Color(1, 1, 1, 0.6), width: 3)
             context.strokeLine(
-              from: .init(56, 30), to: .init(32, 42), color: Color(1, 0, 0), width: 2, cap: .butt)
+              from: .init(x: 56, y: 30), to: .init(x: 32, y: 42), color: Color(1, 0, 0), width: 2, cap: .butt)
           }
         }
       },
@@ -149,11 +149,15 @@ import Testing
   {
     let renderer = try MetalRenderer(logicalSize: .init(48, 40), drawableSize: .init(48, 40))
     let stroke = try #require(
-      PolylineStroke(points: [.init(8, 8), .init(32, 28), .init(8, 28), .init(32, 8)], width: 4))
+      PolylineStroke(
+        points: [
+          Coordinate(x: 8, y: 8), Coordinate(x: 32, y: 28), Coordinate(x: 8, y: 28),
+          Coordinate(x: 32, y: 8)
+        ], width: 4))
     let draws = [
-      DrawRect(Rect(0, 0, 48, 40), Color(0, 0, 0)),
-      DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Rect(4, 4, 32, 28)),
-      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0)),
+      DrawRect(Region(0, 0, 48, 40), Color(0, 0, 0)),
+      DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Region(4, 4, 32, 28)),
+      DrawRect(Region(40, 30, 4, 4), Color(1, 0, 0))
     ]
     let cpu = CPURenderer(width: 48, height: 40)
     cpu.render(draws.span)
@@ -170,7 +174,7 @@ import Testing
     var task: Task<Data?, any Error>?
     task = Task { @MainActor in
       try await renderer.render(readback: true) { frame in
-        let draws = [DrawRect(Rect(0, 0, 8, 8), Color(1, 0, 0))]
+        let draws = [DrawRect(Region(0, 0, 8, 8), Color(1, 0, 0))]
         frame.render(draws.span)
         task?.cancel()
       }
@@ -183,7 +187,7 @@ import Testing
     }
     let image = try #require(
       await renderer.render(readback: true) { frame in
-        let draws = [DrawRect(Rect(0, 0, 8, 8), Color(0, 1, 0))]
+        let draws = [DrawRect(Region(0, 0, 8, 8), Color(0, 1, 0))]
         frame.render(draws.span)
       })
     #expect(pixel(image, width: 8, height: 8, x: 4, y: 4) == [0, 255, 0])
@@ -205,7 +209,7 @@ import Testing
     try await MacOSWindow.renderOffscreen(
       configuration: .init(logicalSize: .init(8, 8), maxFrames: 1, screenshotPath: path.path)
     ) { _, frame in
-      let draws = [DrawRect(Rect(0, 0, 8, 8), Color(0, 0, 1))]
+      let draws = [DrawRect(Region(0, 0, 8, 8), Color(0, 0, 1))]
       frame.render(draws.span)
     }
     let image = try Data(contentsOf: path)

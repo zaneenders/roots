@@ -94,7 +94,7 @@ private func bundledAtlasData() throws -> Data {
   #expect(
     messages.withLock { $0 } == [
       "Roots: unsupported glyph \"🙂\" (U+1F642); using U+FFFD replacement glyph\n",
-      "Roots: unsupported glyph \"👩‍💻\" (U+1F469 U+200D U+1F4BB); using U+FFFD replacement glyph\n",
+      "Roots: unsupported glyph \"👩‍💻\" (U+1F469 U+200D U+1F4BB); using U+FFFD replacement glyph\n"
     ])
 }
 
@@ -125,6 +125,50 @@ private func bundledAtlasData() throws -> Data {
   #expect(messages.withLock { $0.isEmpty })
 }
 
+@Test func stackedAcuteAccentsHaveTheirOwnGlyphWithoutLogging() throws {
+  let messages = Mutex<[String]>([])
+  let atlas = try FontAtlas(data: bundledAtlasData()) { message in
+    messages.withLock { $0.append(message) }
+  }
+  let character: Character = "é\u{301}"
+  try #require(atlas.contains(character))
+  let uv = atlas.glyphUV(character)
+  #expect(uv != atlas.glyphUV("�"))
+  #expect(uv != atlas.glyphUV("é"))
+  #expect(atlas.glyphUV("e\u{301}\u{301}") == uv)
+  #expect(atlas.glyphUV("é\u{301}\u{FE0E}") == uv)
+  let mip = atlas.mipLevels[0]
+  let x = Int((uv.x * Float(mip.width)).rounded())
+  let y = Int((uv.y * Float(mip.height)).rounded())
+  let base = atlas.glyphUV("é")
+  let baseX = Int((base.x * Float(mip.width)).rounded())
+  let baseY = Int((base.y * Float(mip.height)).rounded())
+  var hasExtraInk = false
+  for row in 0..<84 {
+    for column in 0..<60 {
+      let pixel = mip.pixels[(y + row) * mip.width + x + column]
+      let basePixel = mip.pixels[(baseY + row) * mip.width + baseX + column]
+      #expect(pixel >= basePixel)
+      if pixel > basePixel { hasExtraInk = true }
+    }
+  }
+  #expect(hasExtraInk)
+  for row in (y - 3)..<(y + 87) {
+    for column in (x - 3)..<(x + 63)
+    where row < y || row >= y + 84 || column < x || column >= x + 60 {
+      #expect(mip.pixels[row * mip.width + column] == 0)
+    }
+  }
+  var storage = UIStorage(nodeCapacity: 0, drawCapacity: nil)
+  let font = MonospaceFont(size: 20)
+  let end = storage.drawText(String(character), x: 0, y: 0, font: font, color: .text, clip: nil)
+  #expect(end == font.advance)
+  #expect(storage.draws.count == 1)
+  #expect(storage.draws[0].glyphUV == uv)
+  #expect(!storage.draws[0].colorGlyph)
+  #expect(messages.withLock { $0.isEmpty })
+}
+
 @Test func concurrentMissingGlyphLookupsLogOnlyOnce() async throws {
   let messages = Mutex<[String]>([])
   let atlas = try FontAtlas(data: bundledAtlasData()) { message in
@@ -138,14 +182,17 @@ private func bundledAtlasData() throws -> Data {
   #expect(messages.withLock { $0.count } == 1)
 }
 
-@Test func atlasRejectsMalformedData() throws {
+@Test(arguments: [UInt32(1), 2]) func atlasRejectsMalformedData(version: UInt32) throws {
   var data = Data()
   func append(_ word: UInt32) {
     for shift in stride(from: 0, to: 32, by: 8) {
       data.append(UInt8(truncatingIfNeeded: word >> shift))
     }
   }
-  for word: UInt32 in [0x4C54_4143, 1, 2112, 90, 1, 0xFFFD] { append(word) }
+  for word: UInt32 in [0x4C54_4143, version, 2112, 90, 1] { append(word) }
+  if version == 2 { append(1) }
+  append(0xFFFD)
+  let scalarOffset = version == 1 ? 20 : 24
   var width = 2112
   var height = 90
   while true {
@@ -158,9 +205,11 @@ private func bundledAtlasData() throws -> Data {
   for cut in [0, 4, 19, 23, data.count - 1] {
     #expect(throws: FontAtlas.AssetError.self) { _ = try FontAtlas(data: Data(data.prefix(cut))) }
   }
-  for (offset, word): (Int, UInt32) in [
-    (0, 0), (4, 2), (8, 0), (12, 4097), (16, .max), (20, 0xD800), (20, 65),
-  ] {
+  var invalidWords: [(Int, UInt32)] = [
+    (0, 0), (4, 3), (8, 0), (12, 4097), (16, .max), (scalarOffset, 0xD800), (scalarOffset, 65)
+  ]
+  if version == 2 { invalidWords += [(20, 0), (20, 17), (20, .max)] }
+  for (offset, word) in invalidWords {
     var corrupt = data
     for byte in 0..<4 { corrupt[offset + byte] = UInt8(truncatingIfNeeded: word >> (byte * 8)) }
     #expect(throws: FontAtlas.AssetError.self) { _ = try FontAtlas(data: corrupt) }
@@ -182,10 +231,10 @@ private func bundledAtlasData() throws -> Data {
   let end = storage.drawText("Aé🙂\nx", x: 2, y: 3, font: font, color: .text, clip: nil)
   #expect(end == 2 + font.advance)
   #expect(storage.draws.count == 4)
-  #expect(storage.draws[0].rect == Rect(2, 3, 17.5, 24.5))
+  #expect(storage.draws[0].region == Region(2, 3, 17.5, 24.5))
   #expect(storage.draws[2].colorGlyph == true)
   #expect(storage.draws[2].glyphUV == EmojiAtlas.shared.glyphUV("🙂"))
-  #expect(storage.draws[3].rect.y == 3 + font.lineHeight)
+  #expect(storage.draws[3].region.y == 3 + font.lineHeight)
 }
 
 @Test func explicitFontRefreshesLabelGeometry() {
@@ -194,15 +243,15 @@ private func bundledAtlasData() throws -> Data {
     let font = MonospaceFont(size: size)
     ui.frame(
       build: { frame in
-        frame.beginColumn(in: Rect(0, 0, 200, 100))
+        frame.beginColumn(in: Region(0, 0, 200, 100))
         frame.label(key: 1, "A\nA", extent: 100, font: font)
         frame.end()
       },
       present: { draws in
         #expect(draws.count == 3)
         #expect(
-          draws[1].rect == Rect(12, (100 - font.height(of: "A\nA")) / 2, size, font.glyphHeight))
-        #expect(draws[2].rect.y == draws[1].rect.y + font.lineHeight)
+          draws[1].region == Region(12, (100 - font.height(of: "A\nA")) / 2, size, font.glyphHeight))
+        #expect(draws[2].region.y == draws[1].region.y + font.lineHeight)
         #expect(draws[1].glyphUV == draws[2].glyphUV)
       })
   }
@@ -212,7 +261,7 @@ private func bundledAtlasData() throws -> Data {
 func invalidFontSizesAreRejected(size: Float) async {
   let bits = size.bitPattern
   await #expect(processExitsWith: .failure) { [bits = bits as UInt32] in
-    _ = MonospaceFont(size: Float(bitPattern: bits))
+    await MainActor.run { _ = Button(key: 1, "", size: Float(bitPattern: bits)) }
   }
 }
 
@@ -235,7 +284,7 @@ func invalidFontSizesAreRejected(size: Float) async {
   let font = MonospaceFont(size: 17.5)
   for (text, columns) in [
     ("", 0), ("\n\n", 0), ("\nABC\nx\n", 3), ("A\nBC", 2),
-    ("e\u{301}👩‍💻🇳🇿", 5), ("\r\n", 1), ("A\r\nB\n", 3), ("A\rB\u{2028}C", 5),
+    ("e\u{301}👩‍💻🇳🇿", 5), ("\r\n", 1), ("A\r\nB\n", 3), ("A\rB\u{2028}C", 5)
   ] {
     #expect(font.width(of: text) == Float(columns) * font.advance)
   }
@@ -247,7 +296,7 @@ func invalidFontSizesAreRejected(size: Float) async {
     ("", ""), ("\n\n", "\n\n"), ("ABC\n\nAB\n", "ABC\n\nAB\n"),
     ("e\u{301}👩‍💻🇳🇿X", "e\u{301}…"), ("A\r\nB", "A\r\nB"), ("A\r\nBC", "A\r\n…"),
     ("ABCD\n", "AB…\n"), ("ABCD\nWXYZ", "AB…\nWX…"),
-    ("A\n\nBCDEF\nZ\n12345\n", "A\n\nBC…\nZ\n12…\n"),
+    ("A\n\nBCDEF\nZ\n12345\n", "A\n\nBC…\nZ\n12…\n")
   ] {
     let truncated = font.truncating(text, to: 44)
     #expect(truncated.utf8.elementsEqual(expected.utf8))
@@ -270,14 +319,14 @@ func invalidFontSizesAreRejected(size: Float) async {
   let texts = [
     "", "\n", "\n\n", "A", "ABCDE", "\nABCDE", "ABCDE\n", "A\nABCDE\n\nBC\n",
     "ABCDE\nFGHIJ", "e\u{301}👩‍💻🇳🇿👍🏽X", "A\r\nBC\nDE\r\n", "A\rB\u{2028}C",
-    "…\nA…B", String(repeating: "A", count: 300), String(repeating: "👩‍💻e\u{301}", count: 100),
+    "…\nA…B", String(repeating: "A", count: 300), String(repeating: "👩‍💻e\u{301}", count: 100)
   ]
   for size: Float in [
-    .leastNonzeroMagnitude, .leastNormalMagnitude, 0.25, 17.5, 20, .greatestFiniteMagnitude / 2,
+    .leastNonzeroMagnitude, .leastNormalMagnitude, 0.25, 17.5, 20, .greatestFiniteMagnitude / 2
   ] {
     let font = MonospaceFont(size: size)
     var widths: [Float] = [
-      -.infinity, -1, -0.0, 0, .leastNonzeroMagnitude, .nan, .infinity, .greatestFiniteMagnitude,
+      -.infinity, -1, -0.0, 0, .leastNonzeroMagnitude, .nan, .infinity, .greatestFiniteMagnitude
     ]
     for columns in 1...6 {
       let boundary = font.glyphWidth + Float(columns - 1) * font.advance
@@ -323,18 +372,18 @@ func invalidFontSizesAreRejected(size: Float) async {
   for overflow: TextOverflow in [.truncateTail, .clip, .truncateTail] {
     ui.frame(
       build: { frame in
-        frame.beginColumn(in: Rect(0, 0, 80, 40))
+        frame.beginColumn(in: Region(0, 0, 80, 40))
         let button = frame.button(key: 1, "ABCDE", font: font, textOverflow: overflow)
         frame.focus(button)
         frame.end()
       },
       present: { draws in
-        var glyphs: [Rect] = []
+        var glyphs: [Region] = []
         for draw in draws where draw.glyphUV != nil {
-          glyphs.append(draw.rect)
-          #expect(draw.rect.width == font.glyphWidth)
+          glyphs.append(draw.region)
+          #expect(draw.region.width == font.glyphWidth)
           if overflow == .truncateTail {
-            #expect(draw.rect.x + draw.rect.width <= 68)
+            #expect(draw.region.x + draw.region.width <= 68)
             if glyphs.count == 4 { #expect(draw.glyphUV == FontAtlas.shared.glyphUV("…")) }
           }
         }
@@ -367,7 +416,7 @@ func invalidFontSizesAreRejected(size: Float) async {
 @Test func columnPrefixesKeepGraphemeBoundariesAndHandleExtremeBudgets() {
   let text = "Ae\u{301}🙂B"
   for (columns, expected) in [
-    (0, ""), (1, "A"), (2, "Ae\u{301}"), (3, "Ae\u{301}"), (4, "Ae\u{301}🙂"), (Int.max, text),
+    (0, ""), (1, "A"), (2, "Ae\u{301}"), (3, "Ae\u{301}"), (4, "Ae\u{301}🙂"), (Int.max, text)
   ] {
     #expect(String(text[..<MonospaceFont.prefixEnd(in: text, columns: columns)]) == expected)
   }

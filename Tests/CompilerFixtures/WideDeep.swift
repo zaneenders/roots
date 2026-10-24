@@ -8,38 +8,38 @@ private struct Forward<Content: Block>: Block {
 
 @MainActor @BlockBuilder
 func wide() -> some Block {
-  LabelBlock(key: 1, "1")
-  LabelBlock(key: 2, "2")
-  LabelBlock(key: 3, "3")
-  LabelBlock(key: 4, "4")
-  LabelBlock(key: 5, "5")
-  LabelBlock(key: 6, "6")
-  LabelBlock(key: 7, "7")
-  LabelBlock(key: 8, "8")
-  LabelBlock(key: 9, "9")
-  LabelBlock(key: 10, "10")
-  LabelBlock(key: 11, "11")
-  LabelBlock(key: 12, "12")
-  LabelBlock(key: 13, "13")
-  LabelBlock(key: 14, "14")
-  LabelBlock(key: 15, "15")
-  LabelBlock(key: 16, "16")
-  LabelBlock(key: 17, "17")
-  LabelBlock(key: 18, "18")
-  LabelBlock(key: 19, "19")
-  LabelBlock(key: 20, "20")
-  LabelBlock(key: 21, "21")
-  LabelBlock(key: 22, "22")
-  LabelBlock(key: 23, "23")
-  LabelBlock(key: 24, "24")
-  LabelBlock(key: 25, "25")
-  LabelBlock(key: 26, "26")
-  LabelBlock(key: 27, "27")
-  LabelBlock(key: 28, "28")
-  LabelBlock(key: 29, "29")
-  LabelBlock(key: 30, "30")
-  LabelBlock(key: 31, "31")
-  LabelBlock(key: 32, "32")
+  Text("1")
+  Text("2")
+  Text("3")
+  Text("4")
+  Text("5")
+  Text("6")
+  Text("7")
+  Text("8")
+  Text("9")
+  Text("10")
+  Text("11")
+  Text("12")
+  Text("13")
+  Text("14")
+  Text("15")
+  Text("16")
+  Text("17")
+  Text("18")
+  Text("19")
+  Text("20")
+  Text("21")
+  Text("22")
+  Text("23")
+  Text("24")
+  Text("25")
+  Text("26")
+  Text("27")
+  Text("28")
+  Text("29")
+  Text("30")
+  Text("31")
+  Text("32")
 }
 
 @MainActor func deep() -> some Block {
@@ -55,7 +55,7 @@ func wide() -> some Block {
                     Forward {
                       Forward {
                         Forward {
-                          LabelBlock(key: 100, "Deep")
+                          Text("Deep")
                         }
                       }
                     }
@@ -71,7 +71,7 @@ func wide() -> some Block {
 }
 
 @MainActor func renderFixtures(into frame: inout UIFrame) {
-  ColumnBlock(in: Rect(0, 0, 100, 2000)) {
+  Column(in: Region(0, 0, 100, 2000)) {
     wide()
     deep()
   }._build(into: &frame)

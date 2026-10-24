@@ -76,8 +76,8 @@ import SwiftWayland
     glUseProgram(program)
   }
 
-  private func setClip(_ rect: Rect?) {
-    let next = rect.map { ScissorRect($0, width: width, height: height, scale: Float(bufferScale)) }
+  private func setClip(_ region: Region?) {
+    let next = region.map { ScissorRect($0, width: width, height: height, scale: Float(bufferScale)) }
     guard next != clip else { return }
     flush()
     clip = next
@@ -187,7 +187,7 @@ import SwiftWayland
     let attributes: [EGLint] = [
       EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8,
-      EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE,
+      EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE
     ]
     var config: EGLConfig?
     var count: EGLint = 0
@@ -245,7 +245,7 @@ import SwiftWayland
     unsafe glGetProgramiv(polylineProgram, GLenum(GL_LINK_STATUS), &linked)
     guard linked != 0 else { throw NativeWindowError.rendering }
     let names: [String] = [
-      "resolution", "bounds", "points[0]", "pointCount", "strokeWidth", "color",
+      "resolution", "bounds", "points[0]", "pointCount", "strokeWidth", "color"
     ]
     polylineLocations = names.map { name in
       name.withCString { unsafe glGetUniformLocation(polylineProgram, $0) }

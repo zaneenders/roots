@@ -40,7 +40,9 @@ public struct FontAtlas: Sendable {
       defer { cursor += 4 }
       return bytes.load(fromByteOffset: cursor, as: UInt32.self, .littleEndian)
     }
-    guard try word() == 0x4C54_4143, try word() == 1 else { throw .invalidAtlas }
+    guard try word() == 0x4C54_4143 else { throw .invalidAtlas }
+    let version = try word()
+    guard version == 1 || version == 2 else { throw .invalidAtlas }
     let width = Int(try word())
     let height = Int(try word())
     let count = Int(try word())
@@ -49,24 +51,29 @@ public struct FontAtlas: Sendable {
     else { throw .invalidAtlas }
     var indices: [Character: Int] = [:]
     for index in 0..<count {
-      guard let scalar = UnicodeScalar(try word()),
-        indices.updateValue(index, forKey: Character(String(scalar))) == nil
-      else { throw .invalidAtlas }
+      let scalarCount = version == 1 ? 1 : Int(try word())
+      guard scalarCount > 0, scalarCount <= 16 else { throw .invalidAtlas }
+      var text = ""
+      for _ in 0..<scalarCount {
+        guard let scalar = UnicodeScalar(try word()) else { throw .invalidAtlas }
+        text.unicodeScalars.append(scalar)
+      }
+      guard text.count == 1, indices.updateValue(index, forKey: Character(text)) == nil else {
+        throw .invalidAtlas
+      }
     }
     guard let fallback = indices["�"] else { throw .invalidAtlas }
     if let space = indices[" "] {
       for value: UInt32 in [
         0xA0, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009,
         0x200A, 0x202F, 0x205F,
-        0x3000,
+        0x3000
       ] {
         if let scalar = UnicodeScalar(value) { indices[Character(String(scalar))] = space }
       }
     }
     for (character, index) in Array(indices) {
-      if character.unicodeScalars.count == 1 {
-        indices[Character(String(character) + "\u{FE0E}")] = index
-      }
+      indices[Character(String(character) + "\u{FE0E}")] = index
     }
     var levels: [MipLevel] = []
     var w = width
@@ -90,7 +97,7 @@ public struct FontAtlas: Sendable {
 
   public func contains(_ character: Character) -> Bool { indices[character] != nil }
 
-  public func glyphUV(_ character: Character) -> Rect {
+  public func glyphUV(_ character: Character) -> Region {
     let index: Int
     if let supported = indices[character] {
       index = supported
@@ -101,12 +108,12 @@ public struct FontAtlas: Sendable {
     return glyphUV(index: index)
   }
 
-  func glyphUVIfPresent(_ character: Character) -> Rect? {
+  func glyphUVIfPresent(_ character: Character) -> Region? {
     indices[character].map { glyphUV(index: $0) }
   }
 
-  private func glyphUV(index: Int) -> Rect {
-    Rect(
+  private func glyphUV(index: Int) -> Region {
+    Region(
       Float((index % 32) * 66 + 3) / Float(width),
       Float((index / 32) * 90 + 3) / Float(height),
       60 / Float(width), 84 / Float(height))

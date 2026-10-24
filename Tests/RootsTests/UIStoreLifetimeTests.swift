@@ -18,7 +18,7 @@ private final class CallbackCapture {
     retainedCapture = capture
     owner?.ui.frame(
       build: { frame in
-        frame.beginRow(in: Rect(0, 0, 100, 40))
+        frame.beginRow(in: Region(0, 0, 100, 40))
         frame.button(key: 1, "", extent: 100, onClick: { capture.clicks += 1 })
         frame.end()
       }, present: { _ in })

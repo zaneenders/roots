@@ -3,12 +3,12 @@ import Foundation
 extension UIStorage {
   mutating func layoutScrolls() {
     for i in order {
-      nodes[i].rect = nodes[i].layoutRect
+      nodes[i].region = nodes[i].layoutRegion
       if let parent = nodes[i].scrollParent {
         let container = nodes[parent]
         nodes[i].scrollTranslation = container.scrollTranslation + container.scrollOffset
-        nodes[i].clip = container.clip.map { $0.intersection(container.rect) } ?? container.rect
-        nodes[i].rect.y -= nodes[i].scrollTranslation
+        nodes[i].clip = container.clip.map { $0.intersection(container.region) } ?? container.region
+        nodes[i].region.y -= nodes[i].scrollTranslation
       } else {
         nodes[i].scrollTranslation = 0
         nodes[i].clip = nil
@@ -17,7 +17,7 @@ extension UIStorage {
   }
 
   mutating func setScrollOffset(_ offset: Float, for i: Int) {
-    let limit = max(0, nodes[i].contentHeight - nodes[i].rect.height)
+    let limit = max(0, nodes[i].contentHeight - nodes[i].region.height)
     let clamped = min(limit, max(0, offset))
     nodes[i].scrollOffset = clamped
     if scrollTarget == handle(i),
@@ -29,14 +29,14 @@ extension UIStorage {
   }
 
   mutating func reveal(_ i: Int, padding: Float = 0) {
-    let node = nodes[i].rect
-    var rect = Rect(
+    let node = nodes[i].region
+    var region = Region(
       node.x - padding, node.y - padding, node.width + 2 * padding, node.height + 2 * padding)
     var parent = nodes[i].scrollParent
     while let p = parent {
-      let viewport = nodes[p].rect
-      let top = rect.y - viewport.y
-      let bottom = rect.y + rect.height - viewport.y - viewport.height
+      let viewport = nodes[p].region
+      let top = region.y - viewport.y
+      let bottom = region.y + region.height - viewport.y - viewport.height
       let delta: Float
       if top < 0 && bottom < 0 {
         delta = max(top, bottom)
@@ -47,9 +47,9 @@ extension UIStorage {
       }
       let previousOffset = nodes[p].scrollOffset
       setScrollOffset(previousOffset + delta, for: p)
-      rect.y -= nodes[p].scrollOffset - previousOffset
+      region.y -= nodes[p].scrollOffset - previousOffset
       layoutScrolls()
-      rect = rect.intersection(viewport)
+      region = region.intersection(viewport)
       parent = nodes[p].scrollParent
     }
   }
@@ -58,7 +58,7 @@ extension UIStorage {
     let node = nodes[i]
     guard node.scrollable, node.showsScrollIndicator else { return nil }
     return VerticalScrollbar(
-      viewport: node.rect, contentHeight: node.contentHeight, offset: node.scrollOffset)
+      viewport: node.region, contentHeight: node.contentHeight, offset: node.scrollOffset)
   }
 
   mutating func updateScrolls(
@@ -89,11 +89,12 @@ extension UIStorage {
     if input.pressed { scrollbarDrag = nil }
     if let i = resolve(focusToReveal), nodes[i].isFocusable { reveal(i, padding: 2) }
     focusToReveal = nil
-    let scrolling = scrollbarDrag == nil && input.scrollY.isFinite && input.scrollY != 0
-    if scrolling {
+    let scrolling =
+      scrollbarDrag == nil && input.mousePosition != nil && input.scrollY.isFinite && input.scrollY != 0
+    if scrolling, let position = input.mousePosition {
       scrollVelocity = 0
       scrollTarget = nil
-      let hit = hitTest(x: input.x, y: input.y, scrollable: true)
+      let hit = hitTest(at: position, scrollable: true)
       var target = hit.scrollbar ?? hit.node
       while let i = target, !nodes[i].scrollable && nodes[i].interaction.onScroll == nil {
         target = nodes[i].scrollParent
@@ -114,9 +115,11 @@ extension UIStorage {
           Float.greatestFiniteMagnitude,
           max(-Float.greatestFiniteMagnitude, input.scrollY * scrollInputMultiplier))
         if let onScroll = nodes[i].interaction.onScroll {
-          let rect = nodes[i].rect
+          let region = nodes[i].region
           onScroll(
-            ScrollEvent(deltaY: distance, x: input.x - rect.x, y: input.y - rect.y, rect: rect))
+            ScrollEvent(
+              deltaY: distance, position: Coordinate(x: position.x - region.x, y: position.y - region.y),
+              region: region))
         } else {
           scrollTarget = handle(i)
           setScrollOffset(nodes[i].scrollOffset + distance, for: i)
@@ -147,15 +150,15 @@ extension UIStorage {
       layoutScrolls()
     }
     if input.scrollVelocityY != nil { scrollInputTarget = nil }
-    if let i = resolve(pressed), !input.pressed, !input.released,
+    if let position = input.mousePosition, let i = resolve(pressed), !input.pressed, !input.released,
       let parent = nodes[i].scrollParent,
       dt.isFinite, dt > 0, nodes[i].textLayout != nil
     {
-      let viewport = nodes[i].clip ?? nodes[parent].rect
+      let viewport = nodes[i].clip ?? nodes[parent].region
       let distance =
-        input.y < viewport.y
-        ? input.y - viewport.y
-        : max(0, input.y - viewport.y - viewport.height)
+        position.y < viewport.y
+        ? position.y - viewport.y
+        : max(0, position.y - viewport.y - viewport.height)
       if distance.isFinite, distance != 0 {
         let previous = nodes[parent].scrollOffset
         setScrollOffset(previous + max(-600, min(600, distance * 10)) * min(dt, 0.1), for: parent)

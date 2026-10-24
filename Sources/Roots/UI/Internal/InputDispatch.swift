@@ -13,16 +13,20 @@ extension UIStorage {
     onCopy: ((String) -> Void)?,
     dispatchInput: Bool = true, inputElapsed: Float? = nil
   ) {
-    pointerPosition =
-      !input.focusLost && input.x.isFinite && input.y.isFinite ? SIMD2(input.x, input.y) : nil
+    var input = input
+    input.mousePosition = input.mousePosition.flatMap { $0.x.isFinite && $0.y.isFinite ? $0 : nil }
+    if dispatchInput, let position = input.mousePosition { lastMousePosition = position }
+    mousePosition = input.focusLost ? nil : input.mousePosition
     precondition(cursors.isEmpty, "Every row/column must be ended")
     for i in 0..<nodes.count where nodes[i].live && nodes[i].seen != epoch {
-      keys.removeValue(forKey: nodes[i].key)
+      if nodes[i].hasKey { keys.removeValue(forKey: nodes[i].key) }
+      if let identity = nodes[i].implicitIdentity { implicitKeys.removeValue(forKey: identity) }
       let next = nodes[i].generation.addingReportingOverflow(1)
       precondition(!next.overflow)
       nodes[i] = Node(generation: next.partialValue)
       free.append(i)
     }
+    reconcileGroupSelection()
     if let i = resolve(focused), !nodes[i].isFocusable { focused = nil }
     if resolve(focused) == nil { focused = nil }
     if let i = resolve(pressed), !nodes[i].isInteractive { pressed = nil }
@@ -35,11 +39,10 @@ extension UIStorage {
       layoutScrolls()
       if let i = resolve(focusToReveal), nodes[i].isFocusable { reveal(i, padding: 2) }
       focusToReveal = nil
-      let hit = hitTest(x: input.x, y: input.y)
+      let hit = hitTest(at: input.mousePosition)
       updateHover(hit: hit.node, scrollbarHit: hit.scrollbar, dt: 0)
       return
     }
-    var input = input
     if input.focusLost {
       if let i = resolve(pressed) { pointer(.cancelled, input: input, to: i) }
       pressed = nil
@@ -47,6 +50,7 @@ extension UIStorage {
       scrollTarget = nil
       scrollVelocity = 0
       scrollInputTarget = nil
+      input.mousePosition = nil
       input.pressed = false
       input.released = false
       input.scrollX = 0
@@ -56,12 +60,14 @@ extension UIStorage {
     needsAnimationFrame = false
     let keyboardInput = input.keyEvents.contains { $0.phase != .released }
     updateScrolls(input: input, dt: dt, keyboardInput: keyboardInput, inputElapsed: inputElapsed)
-    let hits = hitTest(x: input.x, y: input.y)
+    let hits = hitTest(at: input.mousePosition)
     var hit = hits.node
     let scrollbarHit = hits.scrollbar
-    if input.pressed, let i = scrollbarHit, let bar = scrollbar(at: i) {
-      let onThumb = input.y >= bar.thumb.y && input.y < bar.thumb.y + bar.thumb.height
-      scrollbarDrag = (handle(i), onThumb ? input.y - bar.thumb.y : bar.thumb.height / 2)
+    if input.pressed, let position = input.mousePosition, let i = scrollbarHit,
+      let bar = scrollbar(at: i)
+    {
+      let onThumb = position.y >= bar.thumb.y && position.y < bar.thumb.y + bar.thumb.height
+      scrollbarDrag = (handle(i), onThumb ? position.y - bar.thumb.y : bar.thumb.height / 2)
       pressed = nil
       scrollTarget = nil
       scrollVelocity = 0
@@ -69,31 +75,39 @@ extension UIStorage {
     }
     let draggingScrollbar = scrollbarDrag != nil
     if let drag = scrollbarDrag, let i = resolve(drag.handle), let bar = scrollbar(at: i) {
-      if input.y.isFinite {
-        setScrollOffset(bar.scrollOffset(at: input.y, grabOffset: drag.grabOffset), for: i)
+      if let position = input.mousePosition {
+        setScrollOffset(bar.scrollOffset(at: position.y, grabOffset: drag.grabOffset), for: i)
         layoutScrolls()
       }
       if input.released { scrollbarDrag = nil }
     }
     if draggingScrollbar { hit = nil }
-    if input.pressed && !draggingScrollbar {
+    if input.pressed, let position = input.mousePosition, !draggingScrollbar {
+      clearGroupSelection()
       pressed = hit.map { handle($0) }
       focused = hit.flatMap { nodes[$0].isFocusable ? handle($0) : nil }
       if let hit {
         if let layout = nodes[hit].textLayout {
-          let offset = layout.offset(x: input.x - nodes[hit].rect.x, y: input.y - nodes[hit].rect.y)
+          let offset = layout.offset(x: position.x - nodes[hit].region.x, y: position.y - nodes[hit].region.y)
           nodes[hit].selectionAnchor = offset
           nodes[hit].selectionCursor = offset
+          beginGroupSelection(at: hit, offset: offset)
         }
         pointer(.pressed, input: input, to: hit)
       }
     }
     if let i = resolve(pressed), !input.pressed || input.released {
-      if let layout = nodes[i].textLayout {
-        nodes[i].selectionCursor = layout.offset(
-          x: input.x - nodes[i].rect.x, y: input.y - nodes[i].rect.y)
+      if let position = input.mousePosition {
+        if let layout = nodes[i].textLayout {
+          if !updateGroupSelection(x: position.x, y: position.y) {
+            nodes[i].selectionCursor = layout.offset(
+              x: position.x - nodes[i].region.x, y: position.y - nodes[i].region.y)
+          }
+        }
+        pointer(input.released ? .released : .dragged, input: input, to: i)
+      } else if input.released {
+        pointer(.released, input: input, to: i)
       }
-      pointer(input.released ? .released : .dragged, input: input, to: i)
     }
     var activated: Int?
     if input.released {
@@ -105,7 +119,7 @@ extension UIStorage {
       if event.key == .escape, event.phase == .pressed, selectedText != nil,
         let i = resolve(focused)
       {
-        nodes[i].selectionAnchor = nodes[i].selectionCursor
+        if !collapseGroupSelection() { nodes[i].selectionAnchor = nodes[i].selectionCursor }
         continue
       }
       if onKey?(event) == true { continue }
@@ -145,12 +159,15 @@ extension UIStorage {
     }
   }
 
-  func hitTest(x: Float, y: Float, scrollable: Bool = false) -> (node: Int?, scrollbar: Int?) {
+  func hitTest(at position: Coordinate?, scrollable: Bool = false) -> (node: Int?, scrollbar: Int?) {
+    guard let position else { return (nil, nil) }
+    let x = position.x
+    let y = position.y
     var hit: Int?
     var scrollbarHit: Int?
     for i in order where contains(i, x: x, y: y) {
       if let scrollbarHit, isDescendant(i, of: scrollbarHit) { continue }
-      if let bar = scrollbar(at: i), bar.hitRect.contains(x: x, y: y) {
+      if let bar = scrollbar(at: i), bar.hitRegion.contains(x: x, y: y) {
         scrollbarHit = i
         hit = nil
       } else if nodes[i].isInteractive || (scrollable && nodes[i].scrollable) {

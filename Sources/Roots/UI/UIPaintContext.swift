@@ -1,21 +1,21 @@
 public struct UIPaintContext: ~Copyable, ~Escapable {
   private var storage: MutableRef<UIStorage>
-  public private(set) var rect: Rect
-  public private(set) var clip: Rect
-  public private(set) var pointerPosition: SIMD2<Float>?
+  public private(set) var region: Region
+  public private(set) var clip: Region
+  public private(set) var mousePosition: Coordinate?
   public let focused: Bool
-  private var frameClip: Rect
+  private var frameClip: Region
   private var origin = SIMD2<Float>.zero
   private var scale: Float = 1
 
   @_lifetime(&storage)
-  init(storage: inout UIStorage, rect: Rect, clip: Rect?, focused: Bool) {
-    let effectiveClip = clip.map { $0.intersection(rect) } ?? rect
-    let pointer = storage.pointerPosition
-    self.rect = rect
+  init(storage: inout UIStorage, region: Region, clip: Region?, focused: Bool) {
+    let effectiveClip = clip.map { $0.intersection(region) } ?? region
+    let mousePosition = storage.mousePosition
+    self.region = region
     self.clip = effectiveClip
     self.frameClip = effectiveClip
-    self.pointerPosition = pointer.flatMap { effectiveClip.contains(x: $0.x, y: $0.y) ? $0 : nil }
+    self.mousePosition = mousePosition.flatMap { effectiveClip.contains(x: $0.x, y: $0.y) ? $0 : nil }
     self.focused = focused
     self.storage = MutableRef(&storage)
   }
@@ -26,72 +26,73 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
     precondition(x.isFinite && y.isFinite && scale > 0 && scale.isFinite)
     let previousOrigin = origin
     let previousScale = self.scale
-    let previousRect = rect
-    let previousPointer = pointerPosition
+    let previousRegion = region
+    let previousMousePosition = mousePosition
     let previousClip = clip
     origin += SIMD2(x, y) * self.scale
     self.scale *= scale
     precondition(origin.x.isFinite && origin.y.isFinite && self.scale > 0 && self.scale.isFinite)
-    pointerPosition = pointerPosition.map { ($0 - SIMD2(x, y)) / scale }
-    rect = Rect((rect.x - x) / scale, (rect.y - y) / scale, rect.width / scale, rect.height / scale)
-    clip = Rect((clip.x - x) / scale, (clip.y - y) / scale, clip.width / scale, clip.height / scale)
+    mousePosition = mousePosition.map { Coordinate(x: ($0.x - x) / scale, y: ($0.y - y) / scale) }
+    region = Region((region.x - x) / scale, (region.y - y) / scale, region.width / scale, region.height / scale)
+    clip = Region((clip.x - x) / scale, (clip.y - y) / scale, clip.width / scale, clip.height / scale)
     defer {
       origin = previousOrigin
       self.scale = previousScale
-      rect = previousRect
-      pointerPosition = previousPointer
+      region = previousRegion
+      mousePosition = previousMousePosition
       clip = previousClip
     }
     body(&self)
   }
 
-  public mutating func withClip(_ requested: Rect, _ body: (inout UIPaintContext) -> Void) {
+  public mutating func withClip(_ requested: Region, _ body: (inout UIPaintContext) -> Void) {
     let previousClip = clip
     let previousFrameClip = frameClip
-    let previousPointer = pointerPosition
+    let previousMousePosition = mousePosition
     let valid =
       requested.x.isFinite && requested.y.isFinite
       && requested.width.isFinite && requested.height.isFinite
-    clip = valid ? clip.intersection(requested) : Rect(0, 0, 0, 0)
-    frameClip = frameRect(clip).intersection(previousFrameClip)
-    pointerPosition = pointerPosition.flatMap { clip.contains(x: $0.x, y: $0.y) ? $0 : nil }
+    clip = valid ? clip.intersection(requested) : Region(0, 0, 0, 0)
+    frameClip = frameRegion(clip).intersection(previousFrameClip)
+    mousePosition = mousePosition.flatMap { clip.contains(x: $0.x, y: $0.y) ? $0 : nil }
     defer {
       clip = previousClip
       frameClip = previousFrameClip
-      pointerPosition = previousPointer
+      mousePosition = previousMousePosition
     }
     body(&self)
   }
 
-  public mutating func fillCircle(center: SIMD2<Float>, radius: Float, color: Color) {
+  public mutating func fillCircle(center: Coordinate, radius: Float, color: Color) {
     guard radius > 0 && radius.isFinite else { return }
     fillRect(
-      Rect(center.x - radius, center.y - radius, 2 * radius, 2 * radius), color: color,
+      Region(center.x - radius, center.y - radius, 2 * radius, 2 * radius), color: color,
       radius: radius)
   }
 
   public mutating func strokeCircle(
-    center: SIMD2<Float>, radius: Float, color: Color, width: Float = 1
+    center: Coordinate, radius: Float, color: Color, width: Float = 1
   ) {
     guard radius > 0 && radius.isFinite else { return }
     strokeRect(
-      Rect(center.x - radius, center.y - radius, 2 * radius, 2 * radius), color: color,
+      Region(center.x - radius, center.y - radius, 2 * radius, 2 * radius), color: color,
       radius: radius, width: width)
   }
 
-  public mutating func strokePolyline(_ points: [SIMD2<Float>], color: Color, width: Float = 1) {
+  public mutating func strokePolyline(_ points: [Coordinate], color: Color, width: Float = 1) {
     guard !points.isEmpty, points.count <= PolylineStroke.maximumPointCount, width > 0,
       width.isFinite
     else { return }
     guard
-      let stroke = PolylineStroke(points: points.map { origin + $0 * scale }, width: width * scale)
+      let stroke = PolylineStroke(
+        points: points.map { Coordinate(origin + $0.vector * scale) }, width: width * scale)
     else { return }
     storage.value.emit(DrawRect(polyline: stroke, color: color, clip: frameClip))
   }
 
-  private func frameRect(_ rect: Rect) -> Rect {
-    Rect(
-      origin.x + rect.x * scale, origin.y + rect.y * scale, rect.width * scale, rect.height * scale)
+  private func frameRegion(_ region: Region) -> Region {
+    Region(
+      origin.x + region.x * scale, origin.y + region.y * scale, region.width * scale, region.height * scale)
   }
 
   public mutating func draw(_ draw: DrawRect) {
@@ -100,51 +101,52 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
       guard draw.isValid else { return }
       guard
         let transformed = PolylineStroke(
-          points: stroke.points.map { origin + $0 * scale }, width: stroke.width * scale)
+          points: stroke.points.map { Coordinate(origin + $0.vector * scale) }, width: stroke.width * scale)
       else { return }
       draw = DrawRect(polyline: transformed, color: draw.color, clip: draw.clip)
     } else {
-      draw.rect = frameRect(draw.rect)
+      draw.region = frameRegion(draw.region)
     }
     draw.radius *= scale
     draw.strokeWidth *= scale
-    draw.clip = draw.clip.map { frameRect($0).intersection(frameClip) } ?? frameClip
+    draw.clip = draw.clip.map { frameRegion($0).intersection(frameClip) } ?? frameClip
     storage.value.emit(draw)
   }
 
-  public mutating func fillRect(_ rect: Rect, color: Color, radius: Float = 0) {
-    draw(DrawRect(rect, color, radius: radius))
+  public mutating func fillRect(_ region: Region, color: Color, radius: Float = 0) {
+    draw(DrawRect(region, color, radius: radius))
   }
 
-  public mutating func strokeRect(_ rect: Rect, color: Color, radius: Float = 0, width: Float = 1) {
+  public mutating func strokeRect(_ region: Region, color: Color, radius: Float = 0, width: Float = 1) {
     guard width > 0 && width.isFinite else { return }
-    draw(DrawRect(rect, color, radius: radius, strokeWidth: width))
+    draw(DrawRect(region, color, radius: radius, strokeWidth: width))
   }
 
   public mutating func strokeLine(
-    from start: SIMD2<Float>, to end: SIMD2<Float>, color: Color,
+    from start: Coordinate, to end: Coordinate, color: Color,
     width: Float = 1, cap: LineCap = .round
   ) {
     guard width > 0 && width.isFinite, start.x.isFinite, start.y.isFinite,
       end.x.isFinite, end.y.isFinite
     else { return }
-    let delta = end - start
+    let delta = end.vector - start.vector
     let length = (delta.x * delta.x + delta.y * delta.y).squareRoot()
     guard length.isFinite, length > 0 || cap == .round else { return }
     let axis = length > 0 ? delta / length : SIMD2<Float>(1, 0)
     let half = width / 2
     let extensionLength = cap == .round ? half : 0
-    let origin = start - axis * extensionLength - SIMD2(-axis.y, axis.x) * half
+    let origin = start.vector - axis * extensionLength - SIMD2(-axis.y, axis.x) * half
     draw(
       DrawRect(
-        Rect(origin.x, origin.y, length + 2 * extensionLength, width), color,
+        Region(origin.x, origin.y, length + 2 * extensionLength, width), color,
         radius: cap == .round ? half : 0, axis: axis))
   }
 
   @discardableResult
   public mutating func drawText(
-    _ text: String, x: Float, y: Float, font: MonospaceFont = MonospaceFont(), color: Color = .text
+    _ text: String, x: Float, y: Float, size: Float = 20, color: Color = .text
   ) -> Float {
+    let font = MonospaceFont(size: size)
     let end = storage.value.drawText(
       text, x: origin.x + x * scale, y: origin.y + y * scale,
       font: MonospaceFont(size: font.size * scale), color: color, clip: frameClip)

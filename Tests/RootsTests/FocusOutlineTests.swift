@@ -3,15 +3,17 @@ import Testing
 
 @Test @MainActor func focusedOutlineStaysInsideControlsAtScrollViewportEdges() {
   var host = UIHost()
-  let viewport = Rect(10, 20, 100, 80)
-  let target = Rect(10, 20, 100, 40)
+  let viewport = Region(10, 20, 100, 80)
+  let target = Region(10, 20, 100, 40)
   host.frame {
-    ScrollColumnBlock(key: 1, in: viewport, gap: 0) {
-      ElementBlock(key: 2, extent: 40, color: .panel) { painter in
-        painter.fillRect(painter.rect, color: .panel, radius: 7)
+    Scroll(key: 1, in: viewport) {
+      Column(gap: 0) {
+        Element(key: 2, extent: 40, color: .panel) { painter in
+          painter.fillRect(painter.region, color: .panel, radius: 7)
+        }
       }
     }
-    FocusBlock(key: 2)
+    Focus(key: 2)
   } present: { draws in
     var outlines = 0
     var backgroundIndex = -1
@@ -23,7 +25,7 @@ import Testing
         outlines += 1
         outlineIndex = index
         #expect(draw.strokeWidth == 2)
-        #expect(draw.rect == Rect(11, 21, 98, 38))
+        #expect(draw.region == Region(11, 21, 98, 38))
         #expect(draw.clip == viewport)
         let bounds = draw.bounds
         #expect(bounds.x >= target.x && bounds.y >= target.y)

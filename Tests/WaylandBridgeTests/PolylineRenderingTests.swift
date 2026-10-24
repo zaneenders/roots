@@ -13,14 +13,15 @@ extension NativeSessionTests {
     input.bufferScale = scale
     try renderer.setup(input: input)
     defer { renderer.cleanup() }
-    let points: [SIMD2<Float>] = [
-      .init(8, 8), .init(32, 28), .init(8, 28), .init(32, 8), .init(32, 8),
+    let points: [Coordinate] = [
+      Coordinate(x: 8, y: 8), Coordinate(x: 32, y: 28), Coordinate(x: 8, y: 28),
+      Coordinate(x: 32, y: 8), Coordinate(x: 32, y: 8)
     ]
     let stroke = try #require(PolylineStroke(points: points, width: 4))
     let draws = [
-      DrawRect(Rect(0, 0, 48, 40), Color(0, 0, 0)),
-      DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Rect(4, 4, 32, 28)),
-      DrawRect(Rect(40, 30, 4, 4), Color(1, 0, 0)),
+      DrawRect(Region(0, 0, 48, 40), Color(0, 0, 0)),
+      DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Region(4, 4, 32, 28)),
+      DrawRect(Region(40, 30, 4, 4), Color(1, 0, 0))
     ]
     try renderer.beginFrame(width: 48, height: 40, bufferScale: scale)
     renderer.withFrame { $0.render(draws.span) }
@@ -34,13 +35,14 @@ extension NativeSessionTests {
     let data = try Data(contentsOf: path)
     let pixels = Array(data.dropFirst(Data("P6\n\(width) \(height)\n255\n".utf8).count))
     let s = Float(scale)
-    let physicalStroke = try #require(PolylineStroke(points: points.map { $0 * s }, width: 4 * s))
+    let physicalStroke = try #require(
+      PolylineStroke(points: points.map { Coordinate(x: $0.x * s, y: $0.y * s) }, width: 4 * s))
     let physical = [
-      DrawRect(Rect(0, 0, Float(width), Float(height)), Color(0, 0, 0)),
+      DrawRect(Region(0, 0, Float(width), Float(height)), Color(0, 0, 0)),
       DrawRect(
         polyline: physicalStroke, color: Color(1, 1, 1, 0.5),
-        clip: Rect(4 * s, 4 * s, 32 * s, 28 * s)),
-      DrawRect(Rect(40 * s, 30 * s, 4 * s, 4 * s), Color(1, 0, 0)),
+        clip: Region(4 * s, 4 * s, 32 * s, 28 * s)),
+      DrawRect(Region(40 * s, 30 * s, 4 * s, 4 * s), Color(1, 0, 0))
     ]
     let cpu = CPURenderer(width: width, height: height)
     cpu.render(physical.span)
@@ -55,10 +57,10 @@ extension NativeSessionTests {
     try renderer.setup(input: .init(width: 32, height: 32))
     defer { renderer.cleanup() }
     let points = (0..<PolylineStroke.maximumPointCount).map { index in
-      SIMD2<Float>(Float(index % 16) + 4, Float(index / 16) + 4)
+      Coordinate(x: Float(index % 16) + 4, y: Float(index / 16) + 4)
     }
     let stroke = try #require(PolylineStroke(points: points, width: 2))
-    let dot = try #require(PolylineStroke(points: [.init(24, 24)], width: 4))
+    let dot = try #require(PolylineStroke(points: [Coordinate(x: 24, y: 24)], width: 4))
     try renderer.beginFrame(width: 32, height: 32)
     renderer.withFrame { frame in
       frame.render(

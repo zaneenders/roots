@@ -44,7 +44,7 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
       signature +=
         [
           "uint": "u", "object": "u", "new_id": "u", "int": "i", "fixed": "i", "string": "s",
-          "array": "a", "fd": "h",
+          "array": "a", "fd": "h"
         ][
           type] ?? "?"
     default: break
@@ -87,7 +87,7 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
   let (requests, registrations) = try objects.takeRequests()
   let positioner = try #require(registrations.first { $0.value == "xdg_positioner" }?.key)
   for (opcode, enumeration, value): (UInt32, String, String) in [
-    (3, "anchor", "bottom_right"), (4, "gravity", "bottom_left"),
+    (3, "anchor", "bottom_right"), (4, "gravity", "bottom_left")
   ] {
     let request = try #require(
       requests.first {
@@ -103,7 +103,7 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
   let schema = SchemaParser()
   for name in [
     "wayland", "xdg-shell", "wlr-layer-shell-unstable-v1", "linux-dmabuf-v1",
-    "idle-inhibit-unstable-v1",
+    "idle-inhibit-unstable-v1"
   ] {
     let url = try #require(
       Bundle.module.url(forResource: name, withExtension: "xml", subdirectory: "Protocols"))
@@ -114,22 +114,22 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
   let inputEnums: [String: [String: UInt32]] = [
     "wl_pointer.axis": [
       "vertical_scroll": WaylandPointerAxis.verticalScroll.rawValue,
-      "horizontal_scroll": WaylandPointerAxis.horizontalScroll.rawValue,
+      "horizontal_scroll": WaylandPointerAxis.horizontalScroll.rawValue
     ],
     "wl_pointer.axis_source": [
       "wheel": WaylandPointerAxisSource.wheel.rawValue,
       "finger": WaylandPointerAxisSource.finger.rawValue,
       "continuous": WaylandPointerAxisSource.continuous.rawValue,
-      "wheel_tilt": WaylandPointerAxisSource.wheelTilt.rawValue,
+      "wheel_tilt": WaylandPointerAxisSource.wheelTilt.rawValue
     ],
     "wl_pointer.button_state": [
       "released": WaylandPointerButtonState.released.rawValue,
-      "pressed": WaylandPointerButtonState.pressed.rawValue,
+      "pressed": WaylandPointerButtonState.pressed.rawValue
     ],
     "wl_keyboard.keymap_format": [
       "no_keymap": WaylandKeyboardKeymapFormat.noKeymap.rawValue,
-      "xkb_v1": WaylandKeyboardKeymapFormat.xkbV1.rawValue,
-    ],
+      "xkb_v1": WaylandKeyboardKeymapFormat.xkbV1.rawValue
+    ]
   ]
   for (name, values) in inputEnums { #expect(schema.enumValues[name] == values) }
   for (name, events) in WireSchema.events { #expect(schema.events[name] == events) }
