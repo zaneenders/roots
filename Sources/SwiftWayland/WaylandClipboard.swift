@@ -87,7 +87,9 @@ import SystemPackage
     else {
       return nil
     }
-    guard let pipe = try? FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking]) else { return nil }
+    // The source application may use blocking writes. NIO makes only our read
+    // end nonblocking when ClipboardIO takes ownership of it.
+    guard let pipe = try? FileDescriptor.pipe(options: .closeOnExec) else { return nil }
     let read = OwnedFD(taking: pipe.readEnd)
     let write = WireDescriptor(taking: pipe.writeEnd.rawValue)
     objects.request(selection, 1, [.string(mime), .fd(write)])
