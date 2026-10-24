@@ -78,11 +78,11 @@ struct GameControllerTests {
       return
     }
     controller.togglePause()
-    guard case .rebuild(let pointer) = controller.frameUpdate(after: input) else {
+    guard case .rebuild(let mousePosition) = controller.frameUpdate(after: input) else {
       Issue.record("A button action should rebuild the same frame")
       return
     }
-    #expect(pointer == SIMD2<Float>(30, 40))
+    #expect(mousePosition == Coordinate(x: 30, y: 40))
     controller.prepareFrame(input: &input, dt: 0)
     guard case .present = controller.frameUpdate(after: input) else {
       Issue.record("The rebuild flag should reset on the next frame")

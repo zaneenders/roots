@@ -57,11 +57,11 @@
   }
 
   package mutating func rebuild<Content: Block>(
-    pointer: SIMD2<Float>?, @BlockBuilder build: @MainActor () -> Content,
+    mousePosition: Coordinate?, @BlockBuilder build: @MainActor () -> Content,
     present: (borrowing UIDrawBatch) -> Void, track: ((() -> Void) -> Void)? = nil
   ) {
     lowerFrame(
-      input: pointer.map { Input(x: $0.x, y: $0.y) } ?? Input(), dt: 0, primaryShortcut: .control,
+      input: mousePosition.map { Input(x: $0.x, y: $0.y) } ?? Input(), dt: 0, primaryShortcut: .control,
       onKey: nil, onCopy: nil, dispatchInput: false,
       build: { frame in
         let content = build()

@@ -245,7 +245,7 @@ private final class FramePolicy {
   var finishes = 0
   var suppressInput = false
   var rebuild = false
-  var rebuildPointer: SIMD2<Float>?
+  var rebuildMousePosition: Coordinate?
   var needsAnimationFrame = false
   var buttonState: NodeState?
   var selectedText: String?
@@ -268,7 +268,7 @@ private final class FramePolicy {
   func frameUpdate(after input: Input) -> DesktopFrameUpdate {
     updates += 1
     onUpdate?()
-    return rebuild ? .rebuild(pointer: rebuildPointer) : .present
+    return rebuild ? .rebuild(mousePosition: rebuildMousePosition) : .present
   }
 
   func didFinishFrame(_ state: borrowing UIState) {
@@ -437,10 +437,25 @@ extension DesktopRuntimeTests {
 
 extension DesktopRuntimeTests {
   @Test(arguments: [false, true])
-  func rebuildDoesNotDispatchCapturedPointerGestures(keepsPointer: Bool) {
+  func rebuildUsesMousePositionForHover(keepsMousePosition: Bool) {
     let policy = FramePolicy()
     policy.rebuild = true
-    policy.rebuildPointer = keepsPointer ? .init(10, 10) : nil
+    policy.rebuildMousePosition = keepsMousePosition ? Coordinate(x: 10, y: 10) : nil
+    let runtime = DesktopRuntime(
+      content: { viewport in
+        Column(in: viewport.bounds) { Button(key: 1, "Hover", onClick: {}) }
+      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
+    defer { runtime.stop() }
+    runtime.frame(input: Input(), viewport: viewport, dt: 0, present: { _ in })
+    #expect(runtime.state(for: 1)?.hovered == keepsMousePosition)
+    #expect(runtime.state(for: 1)?.clicks == 0)
+  }
+
+  @Test(arguments: [false, true])
+  func rebuildDoesNotDispatchCapturedPointerGestures(keepsMousePosition: Bool) {
+    let policy = FramePolicy()
+    policy.rebuild = true
+    policy.rebuildMousePosition = keepsMousePosition ? Coordinate(x: 10, y: 10) : nil
     var events: [PointerEvent] = []
     let runtime = DesktopRuntime(
       content: { viewport in

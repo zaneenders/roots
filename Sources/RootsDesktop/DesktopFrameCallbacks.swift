@@ -2,7 +2,7 @@ import Roots
 
 public enum DesktopFrameUpdate {
   case present
-  case rebuild(pointer: SIMD2<Float>?)
+  case rebuild(mousePosition: Coordinate?)
 }
 
 @MainActor

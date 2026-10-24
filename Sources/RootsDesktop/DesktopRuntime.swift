@@ -102,9 +102,9 @@ final class DesktopRuntime<Content: Block> {
             update = frameCallbacks.update?(frameInput) ?? .present
             if case .present = update { present(draws) }
           }, track: invalidation.track)
-        if case .rebuild(let pointer) = update {
+        if case .rebuild(let mousePosition) = update {
           host.rebuild(
-            pointer: pointer,
+            mousePosition: mousePosition,
             build: { content(viewport) },
             present: present, track: invalidation.track)
         }

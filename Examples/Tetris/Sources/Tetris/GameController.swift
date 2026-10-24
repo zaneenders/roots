@@ -25,7 +25,7 @@ final class GameController {
   }
 
   func frameUpdate(after input: Input) -> DesktopFrameUpdate {
-    changedDuringInput ? .rebuild(pointer: .init(input.x, input.y)) : .present
+    changedDuringInput ? .rebuild(mousePosition: .init(x: input.x, y: input.y)) : .present
   }
 
   func togglePause() {

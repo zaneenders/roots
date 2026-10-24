@@ -175,7 +175,7 @@ struct DesktopWindowRenderingTests {
       .onFrameUpdate { input in
         events.append("update")
         #expect(input.x == 7)
-        return .rebuild(pointer: nil)
+        return .rebuild(mousePosition: nil)
       }
       .onFinishFrame { state in
         events.append("finish")
