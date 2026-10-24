@@ -110,6 +110,68 @@ private func sockets() throws -> [Int32] {
   await transport.close()
 }
 
+@Test(arguments: [16, 30_000])
+func nioTransportPreservesMixedBatchByteAndDescriptorOrder(payloadSize: Int) async throws {
+  let pair = try sockets()
+  let peer = WireDescriptor(taking: pair[1])
+  defer { peer.close() }
+  var size: Int32 = 4096
+  try #require(
+    unsafe setsockopt(pair[0], SOL_SOCKET, SO_SNDBUF, &size, socklen_t(MemoryLayout<Int32>.size))
+      == 0)
+  let (transport, _) = try await WaylandTransport.takingSocket(pair[0])
+  let expectedValues: [UInt8] = [11, 22]
+  var descriptors: [WireDescriptor] = []
+  defer { for descriptor in descriptors { descriptor.close() } }
+  for var value in expectedValues {
+    let pipe = try FileDescriptor.pipe(options: [.closeOnExec, .nonBlocking])
+    descriptors.append(WireDescriptor(taking: pipe.readEnd.rawValue))
+    let writer = WireDescriptor(taking: pipe.writeEnd.rawValue)
+    defer { writer.close() }
+    try #require(unsafe write(pipe.writeEnd.rawValue, &value, 1) == 1)
+  }
+  var packets: [WirePacket] = []
+  var expected = ByteBuffer()
+  for index in 0..<4 {
+    var arguments: [WireValue] = [
+      .uint(UInt32(index)), .string(String(repeating: "\(index)", count: payloadSize)),
+    ]
+    if index % 2 == 1 { arguments.append(.fd(descriptors[index / 2])) }
+    let packet = try WirePacket(object: 2, opcode: 0, arguments: arguments)
+    packets.append(packet)
+    expected.writeImmutableBuffer(packet.bytes)
+  }
+  try await transport.send(packets, objects: [:])
+  for descriptor in descriptors { descriptor.close() }
+  let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+  var received = ByteBuffer()
+  var values: [UInt8] = []
+  var bytes = [UInt8](repeating: 0, count: 65_536)
+  while received.readableBytes < expected.readableBytes && ContinuousClock.now < deadline {
+    var fds = [Int32](repeating: -1, count: 256)
+    var count = fds.count
+    let n = peer.borrow { unsafe cwl_receive($0, &bytes, bytes.count, &fds, &count) }
+    for fd in fds.prefix(count) {
+      let descriptor = WireDescriptor(taking: fd)
+      var value: UInt8 = 0
+      #expect(descriptor.borrow { unsafe read($0, &value, 1) } == 1)
+      values.append(value)
+      descriptor.close()
+    }
+    if n > 0 {
+      received.writeBytes(bytes.prefix(n))
+    } else if n < 0 && errno == EAGAIN {
+      try await Task.sleep(for: .milliseconds(1))
+    } else {
+      Issue.record("Unexpected receive result: \(n), errno: \(errno)")
+      break
+    }
+  }
+  await transport.close()
+  #expect(received == expected)
+  #expect(values == expectedValues)
+}
+
 @Test func nioTransportRejectsMultipleDescriptorsBeforeQueuingAnyPackets() async throws {
   let pair = try sockets()
   let peer = WireDescriptor(taking: pair[1])
