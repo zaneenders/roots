@@ -75,7 +75,7 @@ var targets: [Target] = [
 #if os(Linux)
 dependencies += [
   .package(
-    url: "https://github.com/zaneenders/swift-nio.git", branch: "shape-tree/unix-fd-messages"),
+    url: "https://github.com/zaneenders/swift-nio.git", branch: "zane-add-cmsghdr"),
   .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1")
 ]
 products += [

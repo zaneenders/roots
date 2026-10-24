@@ -1,4 +1,3 @@
-import Glibc
 import NIOCore
 import NIOPosix
 
@@ -31,7 +30,7 @@ actor WaylandTransport {
       bufferingPolicy: .bufferingOldest(1))
     let installed = loop.makePromise(of: NIOLoopBound<WireChannelHandler>.self)
     let bootstrap = ClientBootstrap(group: loop)
-      .channelOption(ChannelOptions.Types.ReceiveFileDescriptors(), value: true)
+      .channelOption(ChannelOptions.receiveFileDescriptors, value: true)
       .channelOption(ChannelOptions.autoRead, value: false)
       .channelOption(ChannelOptions.maxMessagesPerRead, value: 1)
       .connectTimeout(.seconds(5))
@@ -97,7 +96,7 @@ actor WaylandTransport {
 }
 
 private final class WireChannelHandler: ChannelInboundHandler {
-  typealias InboundIn = NIOUnixDomainSocketMessage<ByteBuffer>
+  typealias InboundIn = AddressedEnvelope<ByteBuffer>
   private var decoder = WireDecoder()
   private var context: ChannelHandlerContext?
   private var awaitingDelivery = false
@@ -117,8 +116,8 @@ private final class WireChannelHandler: ChannelInboundHandler {
   func channelRead(context: ChannelHandlerContext, data: NIOAny) {
     var message = unwrapInboundIn(data)
     do {
-      let fds = try message.descriptors.map {
-        WireDescriptor(taking: try $0.takeDescriptorOwnership())
+      let fds = (message.metadata?.receivedFileDescriptors ?? []).map {
+        WireDescriptor(taking: $0)
       }
       try decoder.append(&message.data, descriptors: fds)
       try deliverOne()
@@ -155,23 +154,26 @@ private final class WireChannelHandler: ChannelInboundHandler {
   func send(_ packets: [WirePacket], objects: [UInt32: String]) throws {
     register(objects)
     guard terminalError == nil else { return }
-    guard let context, context.channel.isActive else { throw WaylandError.connection }
+    guard let context, context.channel.isActive, let address = context.channel.remoteAddress else {
+      throw WaylandError.connection
+    }
     let total = packets.reduce(0) { $0 + $1.bytes.readableBytes }
     guard total + queuedBytes <= 4 * 1024 * 1024 else { throw WaylandError.dispatch }
-    queuedBytes += total
-    for packet in packets {
-      let fds = try packet.descriptors.map { fd in
-        let duplicate = try fd.borrow { raw -> Int32 in
-          let duplicate = fcntl(raw, F_DUPFD_CLOEXEC, 0)
-          guard duplicate >= 0 else { throw WaylandError.dispatch }
-          return duplicate
-        }
-        return NIOUnixDomainSocketDescriptor(takingOwnershipOf: duplicate)
+    let prepared = try packets.map { packet in
+      guard packet.descriptors.count <= 1 else { throw WaylandError.invalidConfiguration }
+      let descriptor = try packet.descriptors.first.map { fd in
+        try fd.borrow { try WireDescriptor.duplicate($0) }
       }
+      return (packet, descriptor)
+    }
+    queuedBytes += total
+    for (packet, descriptor) in prepared {
       let promise = context.eventLoop.makePromise(of: Void.self)
       let bound = NIOLoopBound(self, eventLoop: context.eventLoop)
       let count = packet.bytes.readableBytes
       promise.futureResult.whenComplete { result in
+        // NIO borrows metadata.fd until the write promise completes.
+        descriptor?.close()
         bound.value.queuedBytes -= count
         if case .failure(let error) = result, let context = bound.value.context,
           context.channel.isActive
@@ -179,8 +181,15 @@ private final class WireChannelHandler: ChannelInboundHandler {
           bound.value.errorCaught(context: context, error: error)
         }
       }
-      context.write(
-        NIOAny(NIOUnixDomainSocketMessage(data: packet.bytes, descriptors: fds)), promise: promise)
+      if let descriptor {
+        let metadata = AddressedEnvelope<ByteBuffer>.Metadata(
+          ecnState: .transportNotCapable, fd: descriptor.borrow { Int($0) })
+        context.write(
+          NIOAny(AddressedEnvelope(remoteAddress: address, data: packet.bytes, metadata: metadata)),
+          promise: promise)
+      } else {
+        context.write(NIOAny(packet.bytes), promise: promise)
+      }
     }
     if awaitingDelivery, !packets.isEmpty { context.read() }
     context.flush()
