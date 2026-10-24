@@ -61,7 +61,8 @@ public struct WaylandPopup<Content: Block> {
     guard configuration.width > 0, configuration.height > 0,
       configuration.anchorWidth > 0, configuration.anchorHeight > 0, session.isValid
     else { return false }
-    let runtime = session.makeRuntime(content: content)
+    let runtime = session.makeRuntime(
+      content: content, requestRedraw: { NativeWindow.requestPopupRedraw() })
     let close = session.close
     let presented = NativeWindow.presentPopup(
       configuration: configuration,

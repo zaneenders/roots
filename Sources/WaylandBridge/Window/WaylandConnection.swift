@@ -20,7 +20,7 @@ import SwiftWayland
   }
   var running: Bool { connection.running }
   var configured: Bool { connection.configured }
-  var canRender: Bool { connection.canRender }
+  var canRender: Bool { connection.canRender || connection.canRenderPopup }
 
   init(configuration: NativeWindowConfiguration) {
     self.configuration = configuration
@@ -98,6 +98,7 @@ import SwiftWayland
   func setIdleInhibited(_ enabled: Bool) -> Bool { connection.setIdleInhibited(enabled) }
 
   func requestRedraw() { connection.requestRedraw() }
+  func requestPopupRedraw() { connection.requestPopupRedraw() }
   func requestClose() { connection.requestClose() }
   func readClipboard() async -> String? { await connection.readClipboard() }
   func writeClipboard(_ text: String) -> Bool { connection.writeClipboard(text) }
@@ -134,30 +135,34 @@ import SwiftWayland
       dismissPopup()
       return
     }
-    guard let renderer = popupRenderer, let frame = popupFrame,
-      let snapshot = connection.popupInput, connection.popupConfigured
+    guard connection.canRenderPopup, let renderer = popupRenderer, let frame = popupFrame,
+      let snapshot = connection.popupInput
     else { return }
-    var input = NativeWindowInput(snapshot)
-    input.timeSeconds = timeSeconds
     do {
       if !popupRendererReady {
-        try renderer.setup(input: input, ownsDisplay: false)
+        try renderer.setup(input: NativeWindowInput(snapshot), ownsDisplay: false)
         renderer.enableDMABuf(connection: connection, popup: true)
         popupRendererReady = true
       }
       try renderer.makeCurrent()
       guard
         try renderer.preparePresentation(
-          width: input.width, height: input.height, bufferScale: input.bufferScale)
+          width: snapshot.width, height: snapshot.height, bufferScale: snapshot.bufferScale)
       else {
         try renderer.releaseCurrent()
         return
       }
-      _ = connection.takePopupInput()
+      guard let inputSnapshot = connection.takePopupInput() else {
+        try renderer.releaseCurrent()
+        return
+      }
+      var input = NativeWindowInput(inputSnapshot)
+      input.timeSeconds = timeSeconds
       try renderer.beginFrame(
         width: input.width, height: input.height, bufferScale: input.bufferScale, transparent: true)
       renderer.withFrame { frame(input, $0) }
       try renderer.endFrame(surfaceless: false)
+      try connection.endPopupFrame()
       try renderer.swapBuffers()
       try renderer.releaseCurrent()
       if input.keyEvents.contains(where: { $0.key == .escape && $0.phase == .pressed }) {

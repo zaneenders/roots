@@ -55,7 +55,7 @@ extension NativeSessionTests {
     if alreadyWaiting { host.requestPopupDismissal() }
     try await dispatch.value
     #expect(dismissals == 1 && host.connection.popupInput == nil)
-    #expect(host.canRender && host.running)
+    #expect(!host.canRender && host.running)
     host.dismissPopup()
     #expect(dismissals == 1)
   }
@@ -71,9 +71,17 @@ extension NativeSessionTests {
     try host.setupRenderer(surfaceless: false)
     var frameCount: Int32 = 0
     let started = ContinuousClock.now
-    _ = try NativeWindow.renderFrame(
-      host, surfaceless: false, started: started, frameCount: &frameCount, frame: { _, _ in })
-    try host.renderer.releaseCurrent()
+    while frameCount == 0 && host.running {
+      if host.canRender {
+        _ = try NativeWindow.renderFrame(
+          host, surfaceless: false, started: started, frameCount: &frameCount, frame: { _, _ in })
+        try host.renderer.releaseCurrent()
+      } else {
+        try await host.dispatchAsync()
+      }
+    }
+    #expect(frameCount == 1)
+    host.connection.waitForDMABufBuffer()
     var popupFrames = 0
     var timerRan = false
     var timer: Task<Void, Never>?
@@ -96,22 +104,24 @@ extension NativeSessionTests {
             timerRan = true
           }
         }
-        host.requestRedraw()
+        host.requestPopupRedraw()
       }, onDismiss: {})
     while host.running && popupFrames < 12 {
       if host.canRender {
+        host.connection.waitForDMABufBuffer()
         _ = try NativeWindow.renderFrame(
           host, surfaceless: false, started: started, frameCount: &frameCount, frame: { _, _ in })
         try host.renderer.releaseCurrent()
         if popupFrames > 0 {
-          #expect(!host.connection.frameReady)
-          #expect(host.connection.redrawRequested)
+          #expect(!host.connection.canRenderPopup)
+          #expect(!host.connection.canRender)
         }
       } else {
         try await host.dispatchAsync()
       }
     }
     #expect(popupFrames == 12)
+    #expect(frameCount == 1)
     #expect(timerRan)
   }
 

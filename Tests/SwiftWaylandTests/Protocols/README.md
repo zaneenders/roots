@@ -24,3 +24,31 @@ idle-inhibit v1   → visible-parent surface inhibition; disconnect releases it
 Objects keep tombstone metadata for queued events; client IDs are not reused until
 `wl_display.delete_id`. Server-created IDs are registered before decoding the next
 event. The dmabuf presenter uses `created`/`failed`, not `create_immed`.
+
+## Surface scheduling
+
+```text
+WaylandConnection
+├─ frame: SurfaceFrameState              (parent)
+└─ popup: WaylandPopup?
+   └─ frame: SurfaceFrameState            (popup)
+
+SurfaceFrameState.canRender
+  = configured && frameReady && redrawRequested && !waitingForBuffer
+
+parent: requestRedraw()      → beginFrame()     → endFrame()      → commit
+popup:  requestPopupRedraw() → takePopupInput() → endPopupFrame() → commit
+
+wl_callback.done      → originating SurfaceFrameState.complete(id)
+wl_buffer.release     → originating SurfaceFrameState.waitingForBuffer = false
+```
+
+`WaylandConnection.canRender` remains parent-only; `canRenderPopup` is independent.
+`dispatchAsync()` wakes for either surface or popup dismissal. Each `end*Frame()`
+queues `wl_surface.frame` before that surface's buffer commit. Popup dismissal
+retires its pending callback; buffer wakeups weakly reference the originating
+`SurfaceFrameState`, not a replacement popup.
+
+`NativeWindow.requestRedraw()` targets the parent;
+`NativeWindow.requestPopupRedraw()` targets the popup. `WaylandPopup` runtime
+invalidation uses the latter, including observation and animation frames.

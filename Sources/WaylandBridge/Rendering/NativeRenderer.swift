@@ -7,7 +7,6 @@ import SwiftWayland
   private var display: EGLDisplay?
   private var ownsDisplay = true
   private var dmabuf: DMABufPresenter?
-  private var presentsPopup = false
   private var context: EGLContext?
   private var surface: EGLSurface?
   private var program: GLuint = 0
@@ -147,8 +146,7 @@ import SwiftWayland
   }
 
   func enableDMABuf(connection: WaylandConnection, popup: Bool = false) {
-    dmabuf = DMABufPresenter(connection: connection)
-    presentsPopup = popup
+    dmabuf = DMABufPresenter(connection: connection, popup: popup)
   }
 
   func preparePresentation(width: Int32, height: Int32, bufferScale: Int32) throws -> Bool {
@@ -163,7 +161,7 @@ import SwiftWayland
 
   func swapBuffers() throws {
     if dmabuf != nil {
-      try dmabuf!.present(popup: presentsPopup)
+      try dmabuf!.present()
       return
     }
     guard unsafe eglSwapBuffers(display, surface) != 0 else {

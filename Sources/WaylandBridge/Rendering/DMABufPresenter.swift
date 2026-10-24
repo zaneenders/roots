@@ -4,10 +4,14 @@ import SwiftWayland
 
 @safe @MainActor struct DMABufPresenter: ~Copyable {
   private let connection: WaylandConnection
+  private let popup: Bool
   private var targets = InlineArray<3, DMABufTarget?> { _ in nil }
   private var selected: Int?
 
-  init(connection: WaylandConnection) { self.connection = connection }
+  init(connection: WaylandConnection, popup: Bool) {
+    self.connection = connection
+    self.popup = popup
+  }
 
   mutating func prepare(display: EGLDisplay, context: EGLContext, width: Int32, height: Int32)
     throws -> Bool
@@ -30,9 +34,10 @@ import SwiftWayland
       targets[index]?.close()
       targets[index] = nil
       targets[index] = try unsafe DMABufTarget.create(
-        display: display, context: context, connection: connection, width: width, height: height)
+        display: display, context: context, connection: connection, width: width, height: height,
+        popup: popup)
     }
-    connection.waitForDMABufBuffer()
+    connection.waitForDMABufBuffer(popup: popup)
     return false
   }
 
@@ -43,7 +48,7 @@ import SwiftWayland
     }
   }
 
-  mutating func present(popup: Bool) throws {
+  mutating func present() throws {
     guard let selected, let buffer = targets[selected]?.buffer else {
       throw NativeWindowError.dmabuf("No target selected for presentation.")
     }
@@ -77,11 +82,11 @@ import SwiftWayland
 
   static func create(
     display: EGLDisplay, context: EGLContext, connection: WaylandConnection, width: Int32,
-    height: Int32
+    height: Int32, popup: Bool
   ) throws -> DMABufTarget {
     var target = try unsafe DMABufTarget(
       display: display, context: context, width: width, height: height)
-    try unsafe target.allocate(context: context, connection: connection)
+    try unsafe target.allocate(context: context, connection: connection, popup: popup)
     return target
   }
 
@@ -90,7 +95,9 @@ import SwiftWayland
     return unsafe unsafeBitCast(address, to: T.self)
   }
 
-  private mutating func allocate(context: EGLContext, connection: WaylandConnection) throws {
+  private mutating func allocate(
+    context: EGLContext, connection: WaylandConnection, popup: Bool
+  ) throws {
     guard let extensions = unsafe eglQueryString(display, EGLint(EGL_EXTENSIONS)),
       unsafe String(cString: extensions).split(separator: " ").contains(
         "EGL_MESA_image_dma_buf_export")
@@ -148,7 +155,7 @@ import SwiftWayland
     do {
       imported = try connection.importDMABuf(
         width: width, height: height, format: UInt32(bitPattern: format), modifier: modifier,
-        planes: planes.span)
+        planes: planes.span, popup: popup)
     } catch {
       throw NativeWindowError.dmabuf(
         "Cannot import format 0x\(String(UInt32(bitPattern: format), radix: 16)), "

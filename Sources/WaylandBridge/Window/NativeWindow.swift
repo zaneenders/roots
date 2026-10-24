@@ -35,7 +35,11 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
 @MainActor public enum NativeWindow {
   private static var host: NativeHost?
 
+  /// Requests a parent-window frame without invalidating the popup.
   public static func requestRedraw() { host?.requestRedraw() }
+
+  /// Requests a popup frame without invalidating the parent window.
+  public static func requestPopupRedraw() { host?.requestPopupRedraw() }
 
   public static func requestClose() { host?.requestClose() }
 
@@ -182,25 +186,28 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
       let elapsed = started.duration(to: .now).components
       host.timeSeconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
-    try host.renderer.makeCurrent()
-    if !surfaceless, try !host.preparePresentation() { return false }
-    let input = host.beginFrame()
-    try host.renderer.beginFrame(
-      width: input.width, height: input.height, bufferScale: input.bufferScale,
-      transparent: host.configuration.topBar)
-    host.renderer.withFrame { frame(input, $0) }
-    try host.renderer.endFrame(surfaceless: surfaceless)
-    frameCount += 1
-    let lastFrame = host.configuration.maxFrames > 0 && frameCount >= host.configuration.maxFrames
-    if lastFrame, let path = host.configuration.screenshotPath {
-      try host.renderer.screenshot(to: path)
-    }
-    if !surfaceless {
-      host.renderPopup()
+    var lastFrame = false
+    if surfaceless || host.connection.canRender {
       try host.renderer.makeCurrent()
-      try host.endFrame(continuously: !lastFrame && host.configuration.maxFrames > 0)
-      try host.renderer.swapBuffers()
+      if try surfaceless || host.preparePresentation() {
+        let input = host.beginFrame()
+        try host.renderer.beginFrame(
+          width: input.width, height: input.height, bufferScale: input.bufferScale,
+          transparent: host.configuration.topBar)
+        host.renderer.withFrame { frame(input, $0) }
+        try host.renderer.endFrame(surfaceless: surfaceless)
+        frameCount += 1
+        lastFrame = host.configuration.maxFrames > 0 && frameCount >= host.configuration.maxFrames
+        if lastFrame, let path = host.configuration.screenshotPath {
+          try host.renderer.screenshot(to: path)
+        }
+        if !surfaceless {
+          try host.endFrame(continuously: !lastFrame && host.configuration.maxFrames > 0)
+          try host.renderer.swapBuffers()
+        }
+      }
     }
+    if !surfaceless { host.renderPopup() }
     return lastFrame || !host.running
   }
 

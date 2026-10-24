@@ -20,7 +20,7 @@ public struct WaylandPopupConfiguration: Sendable {
 
 @MainActor final class WaylandPopup {
   var input: WaylandInput
-  var configured = false
+  let frame = SurfaceFrameState()
   var pendingSize: SIMD2<Int32>?
   var dismissed = false
   let surface: UInt32
@@ -63,6 +63,7 @@ public struct WaylandPopupConfiguration: Sendable {
   func close() {
     guard !closed else { return }
     closed = true
+    frame.close(objects: objects)
     objects.request(popup, 0)
     objects.request(xdgSurface, 0)
     objects.request(surface, 0)

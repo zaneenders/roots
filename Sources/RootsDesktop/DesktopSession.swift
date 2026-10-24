@@ -27,12 +27,13 @@ struct DesktopSession {
   }
 
   func makeRuntime<Content: Block>(
-    content: @escaping @MainActor (Viewport) -> Content, offscreen: Bool = false
+    content: @escaping @MainActor (Viewport) -> Content, offscreen: Bool = false,
+    requestRedraw: @escaping @MainActor () -> Void = { DesktopSystem.requestRedraw() }
   ) -> DesktopRuntime<Content> {
     DesktopRuntime(
       content: content, primaryShortcut: DesktopSystem.primaryShortcut, onKey: keyHandler,
       onCopy: { if !offscreen { _ = DesktopSystem.writeClipboard($0) } },
-      requestRedraw: { if !offscreen { DesktopSystem.requestRedraw() } }, frameCallbacks: frameCallbacks,
+      requestRedraw: { if !offscreen { requestRedraw() } }, frameCallbacks: frameCallbacks,
       nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }

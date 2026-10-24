@@ -15,15 +15,16 @@ import NIOCore
   private var dispatching = false
   private var waiting: CheckedContinuation<Void, any Error>?
   private var waitID: UInt64 = 0
-  private var waitingForBuffer = false
+  private let frame = SurfaceFrameState()
   public let configuration: WaylandWindowConfiguration
   public internal(set) var input: WaylandInput
   public private(set) var running = true
-  public private(set) var configured = false
-  public private(set) var frameReady = true
-  public private(set) var redrawRequested = true
-  public var canRender: Bool {
-    running && configured && frameReady && redrawRequested && !waitingForBuffer
+  public var configured: Bool { frame.configured }
+  public var frameReady: Bool { lifecycle != .closed && frame.frameReady }
+  public var redrawRequested: Bool { frame.redrawRequested }
+  public var canRender: Bool { running && frame.canRender }
+  public var canRenderPopup: Bool {
+    running && popup?.dismissed == false && popup?.frame.canRender == true
   }
   private var registry: UInt32 = 0
   private var compositor: UInt32 = 0
@@ -52,7 +53,6 @@ import NIOCore
   private var pointerInPopup = false
   private var keyboardInPopup = false
   private var pointerSerial: UInt32?
-  private var frameCallback: UInt32 = 0
   private var callbacks: Set<UInt32> = []
   private lazy var clipboard = WaylandClipboard(objects: objects)
   private lazy var dmabuf = WaylandDMABuf(objects: objects)
@@ -294,12 +294,17 @@ import NIOCore
     dispatching = true
     defer { dispatching = false }
     if let terminalError { throw terminalError }
-    if canRender || !running { return }
+    if canRender || canRenderPopup || popupDismissed || !running { return }
     try await waitForEvent()
   }
   public func requestRedraw() {
     guard running else { return }
-    redrawRequested = true
+    frame.redrawRequested = true
+    signal()
+  }
+  public func requestPopupRedraw() {
+    guard running, let popup, !popup.dismissed else { return }
+    popup.frame.redrawRequested = true
     signal()
   }
   public func requestClose() {
@@ -333,10 +338,8 @@ import NIOCore
     case "wl_callback":
       objects.retire(id)
       callbacks.remove(id)
-      if frameCallback == id {
-        frameCallback = 0
-        frameReady = true
-      }
+      frame.complete(id)
+      popup?.frame.complete(id)
     case "xdg_wm_base": objects.request(id, 3, [.uint(a[0].word)])
     case "xdg_surface":
       guard id == xdgSurface || id == popup?.xdgSurface else { return }
@@ -347,16 +350,16 @@ import NIOCore
           if pendingSize.y > 0 { input.height = pendingSize.y }
           self.pendingSize = nil
         }
-        configured = true
+        frame.configured = true
       } else if let popup {
         if let size = popup.pendingSize {
           if size.x > 0 { popup.input.width = size.x }
           if size.y > 0 { popup.input.height = size.y }
           popup.pendingSize = nil
         }
-        popup.configured = true
+        popup.frame.configured = true
       }
-      requestRedraw()
+      if id == xdgSurface { requestRedraw() } else { requestPopupRedraw() }
     case "xdg_toplevel":
       if opcode == 0 {
         pendingSize = SIMD2(a[0].signed, a[1].signed)
@@ -471,7 +474,7 @@ import NIOCore
       pointerInput.leavePointer()
       pointerSerial = nil
       if popup != nil { requestPopupDismissal() }
-      requestRedraw()
+      if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
     }
     if capabilities & 2 != 0 {
       if keyboard == 0 { keyboard = objects.create(seat, 1, "wl_keyboard") }
@@ -481,7 +484,7 @@ import NIOCore
       clipboard.focused = false
       typing.leave(input: &keyboardInput)
       if popup != nil { requestPopupDismissal() }
-      requestRedraw()
+      if keyboardInPopup { requestPopupRedraw() } else { requestRedraw() }
     }
   }
   private func pointerEvent(_ opcode: UInt16, _ a: [WireValue]) {
@@ -510,7 +513,7 @@ import NIOCore
     case 7: pointerInput.axisStop(a[1].word, time: a[0].word)
     default: return
     }
-    requestRedraw()
+    if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
   }
   private func keyboardEvent(_ opcode: UInt16, _ a: [WireValue]) {
     switch opcode {
@@ -537,7 +540,7 @@ import NIOCore
       return
     default: return
     }
-    requestRedraw()
+    if keyboardInPopup { requestPopupRedraw() } else { requestRedraw() }
   }
   func configureLayer(width: UInt32, height: UInt32) {
     guard width <= UInt32(Int32.max), height <= UInt32(Int32.max) else {
@@ -552,7 +555,7 @@ import NIOCore
       objects.request(surface, 5, [.uint(region)])
       objects.request(region, 0)
     }
-    configured = true
+    frame.configured = true
     requestRedraw()
   }
   private func updateBufferScale() {
@@ -563,13 +566,14 @@ import NIOCore
     if let popup {
       popup.input.bufferScale = scale
       objects.request(popup.surface, 8, [.int(scale)])
+      requestPopupRedraw()
     }
     requestRedraw()
   }
 
   public func beginFrame() -> WaylandInput {
-    redrawRequested = false
-    if lifecycle != .closed { typing.repeatKeys(input: &keyboardInput) }
+    frame.redrawRequested = false
+    if lifecycle != .closed && !keyboardInPopup { typing.repeatKeys(input: &input) }
     let snapshot = input
     input.resetEdges()
     return snapshot
@@ -577,10 +581,9 @@ import NIOCore
   public func endFrame(continuously: Bool = false) throws {
     guard lifecycle == .connected else { throw WaylandError.connection }
     guard running else { return }
-    guard frameCallback == 0 else { throw WaylandError.connection }
-    frameCallback = objects.create(surface, 3, "wl_callback")
-    frameReady = false
-    redrawRequested = redrawRequested || continuously || typing.isRepeating
+    try frame.endFrame(
+      on: surface, objects: objects,
+      continuously: continuously || (!keyboardInPopup && typing.isRepeating))
   }
   public func presentPopup(
     configuration: WaylandPopupConfiguration, grab: Bool = true,
@@ -597,45 +600,58 @@ import NIOCore
       objects: objects,
       onDismiss: onDismiss)
     pointerSerial = nil
-    requestRedraw()
+    signal()
   }
   public func requestPopupDismissal() {
     popup?.dismissed = true
-    requestRedraw()
+    signal()
   }
   public func dismissPopup() {
     guard let child = popup else { return }
     popup = nil
-    waitingForBuffer = false
     pointerInPopup = false
     if keyboardInPopup { typing.leave(input: &child.input) }
     keyboardInPopup = false
     child.close()
-    requestRedraw()
+    signal()
   }
   public var popupInput: WaylandInput? { popup?.input }
-  public var popupConfigured: Bool { popup?.configured ?? false }
+  public var popupConfigured: Bool { popup?.frame.configured ?? false }
   public var popupDismissed: Bool { popup?.dismissed ?? false }
   public func takePopupInput() -> WaylandInput? {
-    guard let popup, popup.configured, !popup.dismissed else { return nil }
+    guard let popup, popup.frame.configured, !popup.dismissed else { return nil }
+    popup.frame.redrawRequested = false
+    if keyboardInPopup { typing.repeatKeys(input: &popup.input) }
     let snapshot = popup.input
     popup.input.resetEdges()
     return snapshot
   }
+  public func endPopupFrame(continuously: Bool = false) throws {
+    guard lifecycle == .connected else { throw WaylandError.connection }
+    guard running, let popup, !popup.dismissed else { return }
+    try popup.frame.endFrame(
+      on: popup.surface, objects: objects,
+      continuously: continuously || (keyboardInPopup && typing.isRepeating))
+  }
   public func importDMABuf(
     width: Int32, height: Int32, format: UInt32, modifier: UInt64,
-    planes: borrowing Span<WaylandDMABufPlane>
+    planes: borrowing Span<WaylandDMABufPlane>, popup: Bool = false
   ) throws -> WaylandDMABufBuffer {
     guard lifecycle == .connected, running else { throw WaylandError.connection }
+    guard let frame = popup ? self.popup?.frame : frame else { throw WaylandError.connection }
     return try dmabuf.importBuffer(
       width: width, height: height, format: format, modifier: modifier, planes: planes,
-      changed: { [weak self] in
-        guard let self, self.waitingForBuffer else { return }
-        self.waitingForBuffer = false
-        self.requestRedraw()
+      changed: { [weak self, weak frame] in
+        guard let frame, frame.waitingForBuffer else { return }
+        frame.waitingForBuffer = false
+        frame.redrawRequested = true
+        self?.signal()
       })
   }
-  public func waitForDMABufBuffer() { waitingForBuffer = true }
+  public func waitForDMABufBuffer(popup: Bool = false) {
+    let frame = popup ? self.popup?.frame : frame
+    frame?.waitingForBuffer = true
+  }
   public func presentDMABuf(_ buffer: WaylandDMABufBuffer, popup: Bool = false) throws {
     guard lifecycle == .connected, dmabuf.owns(buffer) else { throw WaylandError.connection }
     let target = popup ? self.popup?.surface ?? 0 : surface
@@ -675,8 +691,7 @@ import NIOCore
     guard lifecycle != .closed else { return }
     lifecycle = .closed
     running = false
-    configured = false
-    frameReady = false
+    frame.close(objects: objects)
     io?.cancel()
     writes?.finish()
     writes = nil
