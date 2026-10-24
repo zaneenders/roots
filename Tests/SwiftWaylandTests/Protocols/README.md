@@ -3,6 +3,8 @@
 - `wayland.xml`: [Wayland 1.26.0](https://github.com/wayland-mirror/wayland/blob/1.26.0/protocol/wayland.xml).
 - `idle-inhibit-unstable-v1.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/unstable/idle-inhibit/idle-inhibit-unstable-v1.xml).
 - `linux-dmabuf-v1.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/stable/linux-dmabuf/linux-dmabuf-v1.xml).
+- `fractional-scale-v1.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/staging/fractional-scale/fractional-scale-v1.xml).
+- `viewporter.xml`: [wayland-protocols 1.49](https://github.com/wayland-mirror/wayland-protocols/blob/1.49/stable/viewporter/viewporter.xml).
 - `xdg-shell.xml`: [wayland-protocols 1.45](https://github.com/wayland-mirror/wayland-protocols/blob/1.45/stable/xdg-shell/xdg-shell.xml).
 - `wlr-layer-shell-unstable-v1.xml`: [swaywm/wlr-protocols b010a03648b88d143236de193bddbfea0c08bc84](https://github.com/swaywm/wlr-protocols/blob/b010a03648b88d143236de193bddbfea0c08bc84/unstable/wlr-layer-shell-unstable-v1.xml).
 
@@ -16,6 +18,7 @@ against these pinned inputs. No scanner or generated C bindings are used.
 wl_compositor v3…6 → surfaces / transforms / integer buffer scale
 xdg_wm_base v1     → toplevel / child popup
 layer-shell v1    → passive top bar / child popup
+fractional-scale v1 + viewporter v1 → per-surface scale / logical destination
 wl_seat v4…5      → pointer / keyboard
 linux-dmabuf v3…4 → v3 announcements / v4 atomic device + format/modifier feedback
 idle-inhibit v1   → visible-parent surface inhibition; disconnect releases it
@@ -71,3 +74,20 @@ v3 announcements → surfaceless EGL texture → MESA export → async wl_buffer
 Feedback changes replace idle buffers; submitted buffers wait for release. Device
 changes recreate the renderer on the advertised GPU. Parent and popup share a
 `DMABufDevice` when their render nodes match. No `wl_shm` fallback is provided.
+
+## Surface scale
+
+```text
+WaylandInput.width / height                     (logical)
+    × fractionalScale120 / 120 → round(.toNearestOrAwayFromZero)
+BufferSize.width / height                       (pixels)
+    → wp_viewport.set_destination(width, height) (logical)
+
+fractionalScale120 != nil → bufferScale = 1; renderScale = fractionalScale120 / 120
+fractionalScale120 == nil → renderScale = Double(bufferScale)
+```
+
+`SurfaceScale` negotiates parent and popup independently. Both optional globals
+are required; otherwise `wl_surface.preferred_buffer_scale` / entered outputs
+supply the integer fallback. Clips use the actual rounded pixel-to-logical ratio
+on each axis; input coordinates remain logical.

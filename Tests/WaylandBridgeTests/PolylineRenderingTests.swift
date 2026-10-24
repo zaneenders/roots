@@ -6,11 +6,12 @@ import Testing
 @testable import WaylandBridge
 
 extension NativeSessionTests {
-  @Test(arguments: [Int32(1), 2, 3])
-  func joinedTranslucentStrokeMatchesCPUAndPreservesDrawOrder(scale: Int32) throws {
+  @Test(arguments: [UInt32(120), 150, 180, 210, 240, 360])
+  func joinedTranslucentStrokeMatchesCPUAndPreservesDrawOrder(scale120: UInt32) throws {
+    let scale = Double(scale120) / 120
     let renderer = NativeRenderer()
     var input = NativeWindowInput(width: 48, height: 40)
-    input.bufferScale = scale
+    input.fractionalScale120 = scale120
     try renderer.setup(input: input)
     defer { renderer.cleanup() }
     let points: [Coordinate] = [
@@ -23,15 +24,15 @@ extension NativeSessionTests {
       DrawRect(polyline: stroke, color: Color(1, 1, 1, 0.5), clip: Region(4, 4, 32, 28)),
       DrawRect(Region(40, 30, 4, 4), Color(1, 0, 0))
     ]
-    try renderer.beginFrame(width: 48, height: 40, bufferScale: scale)
+    try renderer.beginFrame(width: 48, height: 40, fractionalScale120: scale120)
     renderer.withFrame { $0.render(draws.span) }
     try renderer.endFrame(surfaceless: true)
     let path = FileManager.default.temporaryDirectory.appendingPathComponent(
       UUID().uuidString + ".ppm")
     defer { try? FileManager.default.removeItem(at: path) }
     try renderer.screenshot(to: path.path)
-    let width = 48 * Int(scale)
-    let height = 40 * Int(scale)
+    let width = Int(48 * scale)
+    let height = Int(40 * scale)
     let data = try Data(contentsOf: path)
     let pixels = Array(data.dropFirst(Data("P6\n\(width) \(height)\n255\n".utf8).count))
     let s = Float(scale)
@@ -49,7 +50,7 @@ extension NativeSessionTests {
     let maximumError = zip(pixels, cpu.pixels).map { abs(Int($0) - Int($1)) }.max() ?? 0
     #expect(pixels.count == cpu.pixels.count)
     #expect(maximumError <= 4)
-    let crossing = ((18 * Int(scale)) * width + 20 * Int(scale)) * 3
+    let crossing = ((Int(18 * scale)) * width + Int(20 * scale)) * 3
     #expect(abs(Int(pixels[crossing]) - 128) <= 1)
   }
   @Test func maximumPolylineUniformPayloadAndSinglePointRenderWithoutErrors() throws {

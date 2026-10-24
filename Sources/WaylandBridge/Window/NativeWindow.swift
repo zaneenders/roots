@@ -193,6 +193,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
         let input = host.beginFrame()
         try host.renderer.beginFrame(
           width: input.width, height: input.height, bufferScale: input.bufferScale,
+          fractionalScale120: input.fractionalScale120,
           transparent: host.configuration.topBar)
         host.renderer.withFrame { frame(input, $0) }
         try host.renderer.endFrame(surfaceless: surfaceless)
@@ -215,7 +216,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     let mode = surfaceless ? "EGL surfaceless" : "Wayland"
     nativeLog(
       "Rendered \(frameCount) \(mode) frames at \(host.input.width)x\(host.input.height), "
-        + "\(host.input.bufferScale)x buffer scale.")
+        + "\(host.input.renderScale)x buffer scale.")
   }
 }
 

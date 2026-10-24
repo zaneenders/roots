@@ -4,9 +4,11 @@ import Testing
 @testable import SwiftWayland
 @testable import WaylandBridge
 
-@Test func waylandInputAdapterPreservesCoordinatesEdgesAndOrderedKeyEvents() {
+@Test(arguments: [nil, UInt32(150), 180, 210])
+func waylandInputAdapterPreservesCoordinatesEdgesAndOrderedKeyEvents(fractionalScale120: UInt32?) {
   var source = WaylandInput(width: 120, height: 80)
-  source.bufferScale = 2
+  source.bufferScale = fractionalScale120 == nil ? 2 : 1
+  source.fractionalScale120 = fractionalScale120
   source.pointerX = 12.5
   source.pointerY = 24.5
   source.pointerInside = true
@@ -21,7 +23,9 @@ import Testing
   ]
   let input = NativeWindowInput(source)
   source.resetEdges()
-  #expect(input.width == 120 && input.height == 80 && input.bufferScale == 2)
+  #expect(input.width == 120 && input.height == 80 && input.bufferScale == source.bufferScale)
+  #expect(input.renderScale == fractionalScale120.map { Double($0) / 120 } ?? 2)
+  #expect(input.fractionalScale120 == fractionalScale120)
   #expect(input.pointerX == 12.5 && input.pointerY == 24.5 && input.pointerInside)
   #expect(input.primaryDown && input.primaryPressed && !input.primaryReleased)
   #expect(input.scrollY == 3 && input.scrollVelocityY == 50 && input.focusLost)

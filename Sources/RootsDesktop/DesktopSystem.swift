@@ -113,7 +113,7 @@ public enum DesktopSystem {
       input: input(snapshot),
       viewport: Viewport(
         size: .init(width: Float(snapshot.width), height: Float(snapshot.height)),
-        scale: Float(snapshot.bufferScale)),
+        scale: Float(snapshot.renderScale)),
       time: snapshot.timeSeconds, present: { renderer.render($0) })
   }
   #endif

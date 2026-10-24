@@ -47,7 +47,11 @@ import NIOCore
   private var pointer: UInt32 = 0
   private var keyboard: UInt32 = 0
   private var outputs: [UInt32: WaylandOutput] = [:]
-  private var preferredBufferScale: Int32?
+  private let scale = SurfaceScale()
+  private var fractionalManager: UInt32 = 0
+  private var fractionalManagerName: UInt32?
+  private var viewporter: UInt32 = 0
+  private var viewporterName: UInt32?
   private var typing = Keyboard()
   private var popup: WaylandPopup?
   private var pointerInPopup = false
@@ -123,6 +127,7 @@ import NIOCore
         throw WaylandError.missingGlobals
       }
       surface = objects.create(compositor, 0, "wl_surface")
+      setupSurfaceScales()
       dmabuf.watch(surface: surface)
       if configuration.topBar {
         guard layerShell != 0 else { throw WaylandError.missingGlobals }
@@ -384,17 +389,21 @@ import NIOCore
         requestPopupDismissal()
       }
     case "wl_surface":
-      if id == surface {
-        if opcode <= 1 {
-          for name in outputs.keys where outputs[name]?.id == a[0].word {
-            outputs[name]?.entered = opcode == 0
-          }
-          updateBufferScale()
-        } else if opcode == 2, a[0].signed > 0 {
-          preferredBufferScale = a[0].signed
-          updateBufferScale()
-        }
+      guard let scale = id == surface ? scale : (id == popup?.surface ? popup?.scale : nil)
+      else { return }
+      if opcode <= 1 {
+        if opcode == 0 { scale.outputs.insert(a[0].word) } else { scale.outputs.remove(a[0].word) }
+      } else if opcode == 2, a[0].signed > 0 {
+        scale.preferredBufferScale = a[0].signed
       }
+      updateBufferScale()
+    case "wp_fractional_scale_v1":
+      guard a[0].word > 0,
+        let scale = id == scale.fractional
+          ? scale : (id == popup?.scale.fractional ? popup?.scale : nil)
+      else { return }
+      scale.preferredFractionalScale = a[0].word
+      updateBufferScale()
     case "wl_output":
       if opcode == 3, a[0].signed > 0 {
         for name in outputs.keys where outputs[name]?.id == id {
@@ -422,6 +431,14 @@ import NIOCore
     case "wl_compositor" where compositor == 0:
       compositorVersion = min(version, 6)
       compositor = objects.bind(registry, name, interface, compositorVersion)
+    case "wp_fractional_scale_manager_v1" where fractionalManager == 0 && version >= 1:
+      fractionalManager = objects.bind(registry, name, interface, 1)
+      fractionalManagerName = name
+      setupSurfaceScales()
+    case "wp_viewporter" where viewporter == 0 && version >= 1:
+      viewporter = objects.bind(registry, name, interface, 1)
+      viewporterName = name
+      setupSurfaceScales()
     case "xdg_wm_base" where shell == 0: shell = objects.bind(registry, name, interface, 1)
     case "zwlr_layer_shell_v1" where configuration.topBar && layerShell == 0:
       layerShell = objects.bind(registry, name, interface, 1)
@@ -448,6 +465,16 @@ import NIOCore
     if seat != 0 { clipboard.attach(seat: seat) }
   }
   private func removeGlobal(_ name: UInt32) {
+    if fractionalManagerName == name {
+      objects.request(fractionalManager, 0)
+      fractionalManager = 0
+      fractionalManagerName = nil
+    }
+    if viewporterName == name {
+      objects.request(viewporter, 0)
+      viewporter = 0
+      viewporterName = nil
+    }
     if idleManagerName == name {
       _ = setIdleInhibited(false)
       objects.request(idleManager, 0)
@@ -456,6 +483,8 @@ import NIOCore
     }
     if let output = outputs.removeValue(forKey: name) {
       if output.version >= 3 { objects.request(output.id, 0) } else { objects.retire(output.id) }
+      scale.outputs.remove(output.id)
+      popup?.scale.outputs.remove(output.id)
       updateBufferScale()
     }
     if dmabufName == name {
@@ -568,17 +597,30 @@ import NIOCore
     frame.configured = true
     requestRedraw()
   }
-  private func updateBufferScale() {
-    let scale = preferredBufferScale ?? outputs.values.filter(\.entered).map(\.scale).max() ?? 1
-    guard scale != input.bufferScale, surface != 0 else { return }
-    input.bufferScale = scale
-    objects.request(surface, 8, [.int(scale)])
+  private func setupSurfaceScales() {
+    scale.setup(
+      surface: surface, manager: fractionalManager, viewporter: viewporter, objects: objects)
     if let popup {
-      popup.input.bufferScale = scale
-      objects.request(popup.surface, 8, [.int(scale)])
+      popup.scale.setup(
+        surface: popup.surface, manager: fractionalManager, viewporter: viewporter, objects: objects
+      )
+    }
+  }
+
+  private func updateBufferScale() {
+    func fallback(_ scale: SurfaceScale, otherwise: Int32 = 1) -> Int32 {
+      outputs.values.filter { scale.outputs.contains($0.id) }.map(\.scale).max() ?? otherwise
+    }
+    if scale.update(input: &input, surface: surface, fallback: fallback(scale), objects: objects) {
+      requestRedraw()
+    }
+    if let popup,
+      popup.scale.update(
+        input: &popup.input, surface: popup.surface,
+        fallback: fallback(popup.scale, otherwise: input.bufferScale), objects: objects)
+    {
       requestPopupRedraw()
     }
-    requestRedraw()
   }
 
   public func beginFrame() -> WaylandInput {
@@ -591,6 +633,7 @@ import NIOCore
   public func endFrame(continuously: Bool = false) throws {
     guard lifecycle == .connected else { throw WaylandError.connection }
     guard running else { return }
+    scale.prepare(width: input.width, height: input.height, objects: objects)
     try frame.endFrame(
       on: surface, objects: objects,
       continuously: continuously || (!keyboardInPopup && typing.isRepeating))
@@ -607,7 +650,7 @@ import NIOCore
     popup = WaylandPopup(
       configuration: configuration, scale: input.bufferScale, compositor: compositor, shell: shell,
       parent: xdgSurface, layerParent: layerSurface, seat: grab ? seat : 0, serial: pointerSerial,
-      objects: objects,
+      objects: objects, fractionalManager: fractionalManager, viewporter: viewporter,
       onDismiss: onDismiss)
     if let popup { dmabuf.watch(surface: popup.surface) }
     pointerSerial = nil
@@ -641,6 +684,7 @@ import NIOCore
   public func endPopupFrame(continuously: Bool = false) throws {
     guard lifecycle == .connected else { throw WaylandError.connection }
     guard running, let popup, !popup.dismissed else { return }
+    popup.scale.prepare(width: popup.input.width, height: popup.input.height, objects: objects)
     try popup.frame.endFrame(
       on: popup.surface, objects: objects,
       continuously: continuously || (keyboardInPopup && typing.isRepeating))
@@ -715,6 +759,9 @@ import NIOCore
     decoder = WireDecoder()
     dismissPopup()
     dmabuf.close()
+    scale.close(objects: objects)
+    objects.request(fractionalManager, 0)
+    objects.request(viewporter, 0)
     clipboard.close()
     let io = clipboard.io
     clipboardShutdown = Task { await io.shutdown() }

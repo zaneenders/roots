@@ -86,7 +86,8 @@ import SwiftWayland
     try renderer.updateDMABufDevice(input: input, connection: connection)
     return try renderer.preparePresentation(
       width: connection.input.width, height: connection.input.height,
-      bufferScale: connection.input.bufferScale)
+      bufferScale: connection.input.bufferScale,
+      fractionalScale120: connection.input.fractionalScale120)
   }
 
   func beginFrame() -> NativeWindowInput {
@@ -155,7 +156,8 @@ import SwiftWayland
       try renderer.makeCurrent()
       guard
         try renderer.preparePresentation(
-          width: snapshot.width, height: snapshot.height, bufferScale: snapshot.bufferScale)
+          width: snapshot.width, height: snapshot.height, bufferScale: snapshot.bufferScale,
+          fractionalScale120: snapshot.fractionalScale120)
       else {
         try renderer.releaseCurrent()
         return
@@ -167,7 +169,8 @@ import SwiftWayland
       var input = NativeWindowInput(inputSnapshot)
       input.timeSeconds = timeSeconds
       try renderer.beginFrame(
-        width: input.width, height: input.height, bufferScale: input.bufferScale, transparent: true)
+        width: input.width, height: input.height, bufferScale: input.bufferScale,
+        fractionalScale120: input.fractionalScale120, transparent: true)
       renderer.withFrame { frame(input, $0) }
       try renderer.endFrame(surfaceless: false)
       try connection.endPopupFrame()

@@ -104,7 +104,7 @@ private final class SchemaParser: NSObject, XMLParserDelegate {
   let schema = SchemaParser()
   for name in [
     "wayland", "xdg-shell", "wlr-layer-shell-unstable-v1", "linux-dmabuf-v1",
-    "idle-inhibit-unstable-v1"
+    "idle-inhibit-unstable-v1", "fractional-scale-v1", "viewporter"
   ] {
     let url = try #require(
       Bundle.module.url(forResource: name, withExtension: "xml", subdirectory: "Protocols"))

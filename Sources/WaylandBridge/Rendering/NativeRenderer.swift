@@ -22,7 +22,7 @@ import SwiftWayland
   private var clip: ScissorRect?
   private var width: Int32 = 0
   private var height: Int32 = 0
-  private var bufferScale: Int32 = 1
+  private var logicalSize = SIMD2<Int32>(1, 1)
   private var active = false
   private var frameBorrowed = false
   private var frameError: (any Error)?
@@ -60,7 +60,7 @@ import SwiftWayland
   private func renderPolyline(_ stroke: PolylineStroke, color: Color) {
     glUseProgram(polylineProgram)
     let b = stroke.bounds
-    glUniform2f(polylineLocations[0], Float(width / bufferScale), Float(height / bufferScale))
+    glUniform2f(polylineLocations[0], Float(logicalSize.x), Float(logicalSize.y))
     glUniform4f(polylineLocations[1], b.x, b.y, b.width, b.height)
     var packed: [Float] = []
     packed.reserveCapacity(stroke.points.count * 2)
@@ -77,7 +77,8 @@ import SwiftWayland
   }
 
   private func setClip(_ region: Region?) {
-    let next = region.map { ScissorRect($0, width: width, height: height, scale: Float(bufferScale)) }
+    let scale = SIMD2(Double(width) / Double(logicalSize.x), Double(height) / Double(logicalSize.y))
+    let next = region.map { ScissorRect($0, width: width, height: height, scale: scale) }
     guard next != clip else { return }
     flush()
     clip = next
@@ -118,15 +119,17 @@ import SwiftWayland
     }
   }
 
-  func beginFrame(width: Int32, height: Int32, bufferScale: Int32 = 1, transparent: Bool = false)
-    throws
-  {
+  func beginFrame(
+    width: Int32, height: Int32, bufferScale: Int32 = 1, fractionalScale120: UInt32? = nil,
+    transparent: Bool = false
+  ) throws {
     precondition(!frameBorrowed)
     frameError = nil
-    let pixels = try BufferSize(width: width, height: height, scale: bufferScale)
+    let pixels = try BufferSize(
+      width: width, height: height, scale: bufferScale, fractionalScale120: fractionalScale120)
     self.width = pixels.width
     self.height = pixels.height
-    self.bufferScale = bufferScale
+    logicalSize = SIMD2(width, height)
     glViewport(0, 0, pixels.width, pixels.height)
     glDisable(GLenum(GL_SCISSOR_TEST))
     clip = nil
@@ -175,9 +178,12 @@ import SwiftWayland
     dmabuf = DMABufPresenter(connection: connection, popup: popup)
   }
 
-  func preparePresentation(width: Int32, height: Int32, bufferScale: Int32) throws -> Bool {
+  func preparePresentation(
+    width: Int32, height: Int32, bufferScale: Int32, fractionalScale120: UInt32? = nil
+  ) throws -> Bool {
     guard dmabuf != nil else { return true }
-    let pixels = try BufferSize(width: width, height: height, scale: bufferScale)
+    let pixels = try BufferSize(
+      width: width, height: height, scale: bufferScale, fractionalScale120: fractionalScale120)
     guard let display = unsafe display, let context = unsafe context else {
       throw NativeWindowError.rendering
     }
@@ -201,7 +207,9 @@ import SwiftWayland
   ) throws {
     self.ownsDisplay = ownsDisplay
     self.device = device
-    let pixels = try BufferSize(width: input.width, height: input.height, scale: input.bufferScale)
+    let pixels = try BufferSize(
+      width: input.width, height: input.height, scale: input.bufferScale,
+      fractionalScale120: input.fractionalScale120)
     guard let entry = unsafe eglGetProcAddress("eglGetPlatformDisplayEXT") else {
       throw NativeWindowError.egl(eglGetError())
     }

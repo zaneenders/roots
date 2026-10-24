@@ -21,6 +21,7 @@ public struct WaylandPopupConfiguration: Sendable {
 @MainActor final class WaylandPopup {
   var input: WaylandInput
   let frame = SurfaceFrameState()
+  let scale = SurfaceScale()
   var pendingSize: SIMD2<Int32>?
   var dismissed = false
   let surface: UInt32
@@ -33,6 +34,7 @@ public struct WaylandPopupConfiguration: Sendable {
   init(
     configuration: WaylandPopupConfiguration, scale: Int32, compositor: UInt32, shell: UInt32,
     parent: UInt32, layerParent: UInt32, seat: UInt32, serial: UInt32?, objects: WaylandObjects,
+    fractionalManager: UInt32 = 0, viewporter: UInt32 = 0,
     onDismiss: @escaping @MainActor () -> Void
   ) {
     self.objects = objects
@@ -41,6 +43,8 @@ public struct WaylandPopupConfiguration: Sendable {
     input.bufferScale = scale
     surface = objects.create(compositor, 0, "wl_surface")
     objects.request(surface, 8, [.int(scale)])
+    self.scale.setup(
+      surface: surface, manager: fractionalManager, viewporter: viewporter, objects: objects)
     xdgSurface = objects.create(shell, 2, "xdg_surface", [.uint(surface)])
     let positioner = objects.create(shell, 1, "xdg_positioner")
     objects.request(positioner, 1, [.int(configuration.width), .int(configuration.height)])
@@ -66,6 +70,7 @@ public struct WaylandPopupConfiguration: Sendable {
     frame.close(objects: objects)
     objects.request(popup, 0)
     objects.request(xdgSurface, 0)
+    scale.close(objects: objects)
     objects.request(surface, 0)
     onDismiss()
   }

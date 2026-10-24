@@ -1,5 +1,7 @@
 enum WireSchema {
   static let destructors: [String: UInt16] = [
+    "wp_viewporter": 0, "wp_viewport": 0,
+    "wp_fractional_scale_manager_v1": 0, "wp_fractional_scale_v1": 0,
     "wl_compositor": 2, "wl_buffer": 0, "wl_data_offer": 2, "wl_data_source": 1,
     "wl_data_device": 2, "wl_data_device_manager": 2, "wl_surface": 0, "wl_seat": 3,
     "wl_pointer": 1, "wl_keyboard": 0, "wl_output": 0, "wl_region": 0,
@@ -9,6 +11,8 @@ enum WireSchema {
     "zwp_linux_dmabuf_feedback_v1": 0, "zwp_linux_dmabuf_v1": 0, "zwp_linux_buffer_params_v1": 0
   ]
   static let events: [String: [String]] = [
+    "wp_viewporter": [], "wp_viewport": [],
+    "wp_fractional_scale_manager_v1": [], "wp_fractional_scale_v1": ["u"],
     "wl_display": ["uus", "u"],
     "wl_registry": ["usu", "u"],
     "wl_callback": ["u"],
@@ -37,6 +41,8 @@ enum WireSchema {
     "zwp_linux_buffer_params_v1": ["u", ""]
   ]
   static let requests: [String: [String]] = [
+    "wp_viewporter": ["", "uu"], "wp_viewport": ["", "iiii", "ii"],
+    "wp_fractional_scale_manager_v1": ["", "uu"], "wp_fractional_scale_v1": [""],
     "wl_display": ["u", "u"],
     "wl_registry": ["usuu"],
     "wl_callback": [],
