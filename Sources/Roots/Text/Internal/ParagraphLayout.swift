@@ -38,7 +38,6 @@ struct ParagraphContent {
   }
 
   func layout(width: Float, color: Color) -> Layout {
-    // Segment after joining runs: a grapheme or CRLF can straddle a style boundary.
     var text = ""
     var ends: [Int] = []
     for run in runs {

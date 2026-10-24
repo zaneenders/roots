@@ -1,6 +1,5 @@
 public struct ScrollEvent: Sendable {
   public var deltaY: Float
-  /// Coordinates relative to the element's origin.
   public var position: Coordinate
   public var region: Region
 

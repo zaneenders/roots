@@ -8,7 +8,6 @@ struct MonospaceFont: Equatable, Sendable {
 
   var glyphWidth: Float { size }
   var glyphHeight: Float { size * 1.4 }
-  // The atlas baseline is row 68 minus 3 rows of padding, at a 60-pixel font size.
   var baseline: Float { size * (65 / 60) }
   var advance: Float { size * 0.6 }
   var lineHeight: Float { size * 1.6 }

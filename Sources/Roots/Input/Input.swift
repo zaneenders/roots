@@ -1,5 +1,4 @@
 public struct Input: Sendable {
-  /// Window-space logical coordinates, or nil when no mouse position is available.
   public var mousePosition: Coordinate?
   public var scrollX: Float, scrollY: Float
   public var scrollVelocityY: Float?

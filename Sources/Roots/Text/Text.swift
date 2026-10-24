@@ -99,7 +99,6 @@ struct PlainTextStyle {
 }
 
 extension MonospaceFont {
-  // The final atlas quad extends past its advance; intrinsic sizing must include it.
   func layoutWidth(of line: Substring) -> Float {
     guard let last = line.last else { return 0 }
     return width(of: line) + (Self.columnWidth(of: last) == 1 ? glyphWidth - advance : 0)

@@ -99,8 +99,6 @@ extension UIStorage {
 
   mutating func resolveLayouts() {
     if layouts.contains(where: { $0.node.map { nodes[$0].paragraph != nil } ?? false }) {
-      // Widths are independent of wrapped heights. Place once to resolve widths,
-      // then measure paragraphs and propagate their new heights bottom-up.
       placeLayouts(updateText: false)
       for index in layouts.indices.reversed() {
         if let node = layouts[index].node, let content = nodes[node].paragraph {
@@ -118,7 +116,6 @@ extension UIStorage {
   }
 
   private mutating func placeLayouts(updateText: Bool) {
-    // Parents precede children in the frame-local array, so placement needs no recursion.
     for index in layouts.indices {
       if let bounds = layouts[index].bounds { layouts[index].region = bounds }
       let element = layouts[index]
@@ -235,7 +232,6 @@ private func distribute(_ sizes: inout [Float], modes: [LayoutSize], available: 
     if case .fixed = modes[$0] { return false }
     return sizes[$0] > 0
   }
-  // Like Clay, level the smallest grow children (or largest shrink children) first.
   while !candidates.isEmpty && abs(remaining) > 0.001 {
     let extreme = candidates.map { sizes[$0] }.reduce(growing ? Float.infinity : 0, growing ? min : max)
     let active = candidates.filter { sizes[$0] == extreme }

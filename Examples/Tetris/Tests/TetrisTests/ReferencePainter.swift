@@ -3,7 +3,6 @@ import TetrisCore
 
 @testable import Tetris
 
-// Keep the original canvas renderer as a pixel-parity oracle for the block implementation.
 @MainActor
 enum ReferencePainter {
   static func draw(_ game: Game, into context: inout UIPaintContext, cellSize: Float) {

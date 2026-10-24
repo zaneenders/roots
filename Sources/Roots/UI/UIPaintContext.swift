@@ -2,7 +2,6 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   private var storage: MutableRef<UIStorage>
   public private(set) var region: Region
   public private(set) var clip: Region
-  /// Mouse coordinates in the current drawing space, or nil outside the effective clip.
   public private(set) var mousePosition: Coordinate?
   public let focused: Bool
   private var frameClip: Region

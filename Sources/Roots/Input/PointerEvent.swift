@@ -4,7 +4,6 @@ public struct PointerEvent: Sendable {
     case cancelled
   }
   public var phase: Phase
-  /// Coordinates relative to the element's origin. Cancellation uses the last available position.
   public var position: Coordinate
   public var region: Region
 
