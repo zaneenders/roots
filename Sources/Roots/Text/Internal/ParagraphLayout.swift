@@ -84,7 +84,7 @@ struct ParagraphContent {
       var whitespace: Int?
       while end < glyphs.count {
         let glyph = glyphs[end]
-        if glyph.character == "\n" || glyph.character == "\r\n" || glyph.character == "\r" { break }
+        if glyph.character.isTextLineBreak { break }
         let nextWidth = max(lineWidth, advance + glyph.width)
         if nextWidth > width, end > start { break }
         if glyph.character.isWhitespace { whitespace = end }
@@ -97,7 +97,7 @@ struct ParagraphContent {
         break
       }
       let next = glyphs[end].character
-      if next == "\n" || next == "\r\n" || next == "\r" {
+      if next.isTextLineBreak {
         append(start..<end, sourceStart: sourceStart, sourceEnd: end)
         start = end + 1
         sourceStart = start
@@ -109,7 +109,7 @@ struct ParagraphContent {
           resume = whitespace
         }
         while resume < glyphs.count, glyphs[resume].character.isWhitespace,
-          glyphs[resume].character != "\n", glyphs[resume].character != "\r\n", glyphs[resume].character != "\r"
+          !glyphs[resume].character.isTextLineBreak
         { resume += 1 }
         append(start..<end, sourceStart: sourceStart, sourceEnd: resume)
         start = resume
