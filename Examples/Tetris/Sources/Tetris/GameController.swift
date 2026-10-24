@@ -4,7 +4,7 @@ import RootsDesktop
 import TetrisCore
 
 @MainActor @Observable
-final class GameController: DesktopFrameDelegate {
+final class GameController {
   private(set) var game: Game
   @ObservationIgnored private var changedDuringInput = false
 

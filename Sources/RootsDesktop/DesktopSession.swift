@@ -7,7 +7,7 @@ struct DesktopSession {
   let scrollDeceleration: Float
   var start: (() -> Void)?
   var close: (() -> Void)?
-  var delegate: (any DesktopFrameDelegate)?
+  var frameCallbacks = DesktopFrameCallbacks()
   var keyHandler: ((KeyEvent) -> Bool)?
 
   var isValid: Bool {
@@ -32,7 +32,7 @@ struct DesktopSession {
     DesktopRuntime(
       content: content, primaryShortcut: DesktopSystem.primaryShortcut, onKey: keyHandler,
       onCopy: { if !offscreen { _ = DesktopSystem.writeClipboard($0) } },
-      requestRedraw: { if !offscreen { DesktopSystem.requestRedraw() } }, delegate: delegate,
+      requestRedraw: { if !offscreen { DesktopSystem.requestRedraw() } }, frameCallbacks: frameCallbacks,
       nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }

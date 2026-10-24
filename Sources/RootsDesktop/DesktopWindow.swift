@@ -37,9 +37,27 @@ public struct DesktopWindow<Content: Block>: Window {
     return window
   }
 
-  public func frameDelegate(_ delegate: any DesktopFrameDelegate) -> Self {
+  public func onPrepareFrame(_ action: @escaping @MainActor (inout Input, Float) -> Void) -> Self {
     var window = self
-    window.session.delegate = delegate
+    window.session.frameCallbacks.prepare = action
+    return window
+  }
+
+  public func onFrameUpdate(_ action: @escaping @MainActor (Input) -> DesktopFrameUpdate) -> Self {
+    var window = self
+    window.session.frameCallbacks.update = action
+    return window
+  }
+
+  public func onFinishFrame(_ action: @escaping @MainActor (borrowing UIState) -> Void) -> Self {
+    var window = self
+    window.session.frameCallbacks.finish = action
+    return window
+  }
+
+  public func animationFrames(while condition: @escaping @MainActor () -> Bool) -> Self {
+    var window = self
+    window.session.frameCallbacks.needsAnimationFrame = condition
     return window
   }
 

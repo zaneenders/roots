@@ -156,6 +156,43 @@ struct DesktopWindowRenderingTests {
     #expect(events == ["start", "close"])
   }
 
+  @Test func frameModifiersPreserveWindowValueSemanticsAndCallbackOrder() async throws {
+    var events: [String] = []
+    let original = DesktopWindow(
+      "Callbacks", size: .init(32, 32), maxFrames: 1, offscreen: true
+    ) { viewport in
+      events.append("build")
+      return Column(in: viewport.bounds) { Button(key: 1, "Action", onClick: {}) }
+    }
+    let configured =
+      original
+      .onPrepareFrame { _, _ in Issue.record("Replaced callback should not run") }
+      .onPrepareFrame { input, dt in
+        events.append("prepare")
+        input.x = 7
+        #expect(dt > 0)
+      }
+      .onFrameUpdate { input in
+        events.append("update")
+        #expect(input.x == 7)
+        return .rebuild(pointer: nil)
+      }
+      .onFinishFrame { state in
+        events.append("finish")
+        #expect(state.state(for: 1) != nil)
+      }
+      .animationFrames {
+        events.append("animation")
+        return false
+      }
+
+    try await original.run()
+    #expect(events == ["build"])
+    events.removeAll()
+    try await configured.run()
+    #expect(events == ["prepare", "build", "update", "build", "finish", "animation"])
+  }
+
   @Test func offscreenWindowRebuildsContentAndWritesScreenshot() async throws {
     let path = FileManager.default.temporaryDirectory.appendingPathComponent(
       "\(UUID().uuidString).ppm")

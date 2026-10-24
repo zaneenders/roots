@@ -21,17 +21,13 @@ struct WaylandPopupTests {
   }
 
   @Test func popupSessionUsesSharedRuntimeForKeysFocusAndFeedback() {
-    final class Delegate: DesktopFrameDelegate {
-      var frames = 0
-      func didFinishFrame(_ state: borrowing UIState) {
-        frames += 1
-        #expect(state.state(for: 1)?.focused == true)
-      }
-    }
-    let delegate = Delegate()
+    var frames = 0
     var keys = 0
     var session = DesktopSession(nodeCapacity: 16, scrollAcceleration: 0, scrollDeceleration: 8)
-    session.delegate = delegate
+    session.frameCallbacks.finish = { state in
+      frames += 1
+      #expect(state.state(for: 1)?.focused == true)
+    }
     session.keyHandler = { _ in
       keys += 1
       return true
@@ -48,7 +44,7 @@ struct WaylandPopupTests {
       input: Input(keyEvents: [KeyEvent(.enter)]), viewport: Viewport(size: .init(320, 320)),
       time: 0,
       present: { _ in })
-    #expect(keys == 1 && delegate.frames == 1)
+    #expect(keys == 1 && frames == 1)
   }
 }
 #endif

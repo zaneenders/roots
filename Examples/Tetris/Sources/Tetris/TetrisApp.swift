@@ -10,6 +10,8 @@ struct TetrisApp: RootsApp {
       GameBlock(controller: controller, bounds: viewport.bounds)
     }
     .onKey { controller.handleKey($0) }
-    .frameDelegate(controller)
+    .onPrepareFrame { controller.prepareFrame(input: &$0, dt: $1) }
+    .onFrameUpdate { controller.frameUpdate(after: $0) }
+    .animationFrames { controller.needsAnimationFrame }
   }
 }

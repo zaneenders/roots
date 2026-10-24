@@ -239,7 +239,7 @@ struct DesktopRuntimeTests {
 }
 
 @MainActor
-private final class FramePolicy: DesktopFrameDelegate {
+private final class FramePolicy {
   var prepares: [Float] = []
   var updates = 0
   var finishes = 0
@@ -251,6 +251,14 @@ private final class FramePolicy: DesktopFrameDelegate {
   var selectedText: String?
   var onUpdate: (() -> Void)?
   var onFinish: (() -> Void)?
+
+  var callbacks: DesktopFrameCallbacks {
+    .init(
+      prepare: { self.prepareFrame(input: &$0, dt: $1) },
+      update: { self.frameUpdate(after: $0) },
+      finish: { self.didFinishFrame($0) },
+      needsAnimationFrame: { self.needsAnimationFrame })
+  }
 
   func prepareFrame(input: inout Input, dt: Float) {
     prepares.append(dt)
@@ -291,7 +299,7 @@ extension DesktopRuntimeTests {
           }
         }
       }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: { requests += 1 },
-      delegate: policy)
+      frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     let renderer = CPURenderer(width: 100, height: 100)
     runtime.frame(input: Input(), viewport: viewport, time: 0, present: { renderer.render($0) })
@@ -321,7 +329,7 @@ extension DesktopRuntimeTests {
             .frame(width: .fill, height: .fixed(2000))
             .background(.panel)
         }
-      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy,
+      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks,
       scrollAcceleration: 1)
     defer { runtime.stop() }
     func scroll(at time: Double) {
@@ -358,7 +366,7 @@ extension DesktopRuntimeTests {
           }
           FocusBlock(key: 1)
         }
-      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy)
+      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     runtime.frame(input: Input(keyEvents: [KeyEvent(.enter)]), viewport: viewport, dt: 0.05) { _ in
       presentations += 1
@@ -373,7 +381,33 @@ extension DesktopRuntimeTests {
     #expect(runtime.state(for: 2) != nil)
   }
 
-  @Test func delegateCanFilterInputAndRequestSimulationFrames() {
+  @Test func animationConditionObservationsWakeAnIdleRuntime() async {
+    let model = Model()
+    var redraws = 0
+    let runtime = DesktopRuntime(
+      content: { _ in EmptyBlock() }, primaryShortcut: .control, onCopy: { _ in },
+      requestRedraw: { redraws += 1 },
+      frameCallbacks: .init(needsAnimationFrame: { model.clicks > 0 }))
+    defer { runtime.stop() }
+    runtime.frame(input: Input(), viewport: viewport, time: 0, present: { _ in })
+    #expect(redraws == 0)
+    #expect(!runtime.needsAnimationFrame)
+
+    model.clicks = 1
+    await Task { @MainActor in }.value
+    #expect(redraws == 1)
+    #expect(runtime.needsAnimationFrame)
+    runtime.frame(input: Input(), viewport: viewport, time: 1, present: { _ in })
+    #expect(redraws == 2)
+
+    model.clicks = 0
+    runtime.frame(input: Input(), viewport: viewport, time: 2, present: { _ in })
+    await Task { @MainActor in }.value
+    #expect(redraws == 2)
+    #expect(!runtime.needsAnimationFrame)
+  }
+
+  @Test func callbacksCanFilterInputAndRequestSimulationFrames() {
     let policy = FramePolicy()
     policy.suppressInput = true
     policy.needsAnimationFrame = true
@@ -385,7 +419,7 @@ extension DesktopRuntimeTests {
         keys += 1
         return true
       },
-      onCopy: { _ in }, requestRedraw: { redraws += 1 }, delegate: policy)
+      onCopy: { _ in }, requestRedraw: { redraws += 1 }, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     runtime.frame(
       input: Input(keyEvents: [KeyEvent(.enter)]), viewport: viewport, time: 0, present: { _ in })
@@ -413,7 +447,7 @@ extension DesktopRuntimeTests {
         Column(in: viewport.bounds) {
           Element(key: 1, extent: 80, onPointer: { events.append($0) }) { _ in }
         }
-      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy)
+      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     runtime.frame(
       input: Input(x: 10, y: 10, pressed: true), viewport: viewport, dt: 0.01, present: { _ in })
@@ -438,7 +472,7 @@ extension DesktopRuntimeTests {
         Column(in: viewport.bounds) {
           RichText(key: 1, lines: [TextLine([TextRun("ABCD")], x: 0, y: 0)], extent: 80)
         }
-      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, delegate: policy)
+      }, primaryShortcut: .control, onCopy: { _ in }, requestRedraw: {}, frameCallbacks: policy.callbacks)
     defer { runtime.stop() }
     runtime.frame(
       input: Input(x: 0, y: 10, pressed: true), viewport: viewport, dt: 0, present: { _ in })
