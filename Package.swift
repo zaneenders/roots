@@ -71,8 +71,7 @@ var targets: [Target] = [
 ]
 #if os(Linux)
 dependencies += [
-  .package(
-    url: "https://github.com/zaneenders/swift-nio.git", branch: "shape-tree/unix-fd-messages"),
+  .package(url: "https://github.com/apple/swift-nio.git", from: "2.104.0"),
   .package(url: "https://github.com/apple/swift-system.git", from: "1.8.1")
 ]
 products += [
@@ -83,10 +82,11 @@ targets += [
   .target(
     name: "SwiftWayland",
     dependencies: [
-      "CXKBCommon", .product(name: "NIOCore", package: "swift-nio"),
+      "CWaylandTransport", "CXKBCommon", .product(name: "NIOCore", package: "swift-nio"),
       .product(name: "NIOPosix", package: "swift-nio"),
       .product(name: "SystemPackage", package: "swift-system")
     ], swiftSettings: swiftSettings),
+  .target(name: "CWaylandTransport"),
   .systemLibrary(name: "CXKBCommon", pkgConfig: "xkbcommon"),
   .target(
     name: "CWaylandTestSupport", path: "Tests/CWaylandTestSupport", publicHeadersPath: "include"),
