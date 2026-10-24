@@ -1,19 +1,14 @@
-import Glibc
 import NIOCore
 import NIOPosix
+import SystemPackage
 
 struct OwnedFD: ~Copyable, Sendable {
-  private var value: Int32
+  private(set) var descriptor: SystemPackage.FileDescriptor?
 
-  init(taking value: Int32) { self.value = value }
-  var rawValue: Int32 { value }
-  mutating func relinquish() { value = -1 }
-  consuming func close() {
-    let descriptor = value
-    value = -1
-    if descriptor >= 0 { _ = Glibc.close(descriptor) }
-  }
-  deinit { if value >= 0 { _ = Glibc.close(value) } }
+  init(taking descriptor: SystemPackage.FileDescriptor) { self.descriptor = descriptor }
+  mutating func relinquish() { descriptor = nil }
+  consuming func close() { try? descriptor.take()?.close() }
+  deinit { try? descriptor?.close() }
 }
 
 actor ClipboardIO {
@@ -93,9 +88,8 @@ actor ClipboardIO {
     guard !closed else { throw Failure.closed }
     if bytes != nil, limit > Self.maximumBytes { throw Failure.tooLarge }
     guard limit >= 0, limit <= Self.maximumBytes else { throw Failure.invalidLimit }
-    var info = stat()
-    guard let raw = owned?.rawValue, raw >= 0, unsafe fstat(raw, &info) == 0,
-      info.st_mode & S_IFMT == S_IFIFO || info.st_mode & S_IFMT == S_IFSOCK
+    guard let descriptor = owned?.descriptor, let info = try? descriptor.stat(),
+      info.type == .fifo || info.type == .socket
     else { throw Failure.invalidDescriptor }
     guard limit <= maximumBufferedBytes - reservedBytes,
       let slot = pending.indices.first(where: { pending[$0] == nil })
@@ -128,7 +122,7 @@ actor ClipboardIO {
   }
 
   private func start(_ slot: Int, id: UInt64, bytes: [UInt8]?) {
-    guard let descriptor = pending[slot]?.descriptor?.rawValue else {
+    guard let descriptor = pending[slot]?.descriptor?.descriptor else {
       return
     }
     // No fallible channel options precede the initializer. Once called, NIO owns the FD,
@@ -143,8 +137,8 @@ actor ClipboardIO {
     }
     let connected =
       bytes == nil
-      ? bootstrap.takingOwnershipOfDescriptor(input: descriptor)
-      : bootstrap.takingOwnershipOfDescriptor(output: descriptor)
+      ? bootstrap.takingOwnershipOfDescriptor(input: descriptor.rawValue)
+      : bootstrap.takingOwnershipOfDescriptor(output: descriptor.rawValue)
     connected.whenComplete { result in
       self.assumeIsolated { owner in
         switch result {

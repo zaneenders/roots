@@ -52,13 +52,15 @@ import Testing
     Issue.record("Missing clipboard reader")
     return
   }
+  let descriptorValue = reader.descriptor
+  let readDescriptor = try #require(descriptorValue)
   let (requests, _) = try objects.takeRequests()
   let descriptor = try #require(requests.first?.descriptors.first)
   #expect(descriptor.borrow { fcntl($0, F_GETFD) & FD_CLOEXEC != 0 })
-  #expect(fcntl(reader.rawValue, F_GETFD) & FD_CLOEXEC != 0)
-  #expect(fcntl(reader.rawValue, F_GETFL) & O_NONBLOCK != 0)
+  #expect(fcntl(readDescriptor.rawValue, F_GETFD) & FD_CLOEXEC != 0)
+  #expect(fcntl(readDescriptor.rawValue, F_GETFL) & O_NONBLOCK != 0)
   descriptor.close()
-  #expect(fcntl(reader.rawValue, F_GETFD) >= 0)
+  #expect(fcntl(readDescriptor.rawValue, F_GETFD) >= 0)
   clipboard.close()
 }
 
@@ -76,7 +78,7 @@ import Testing
     ))
   clipboard.event(.init(object: source, opcode: 2, arguments: []))
   clipboard.close()
-  let bytes = try await ClipboardIO().read(from: OwnedFD(taking: pipe.readEnd.rawValue))
+  let bytes = try await ClipboardIO().read(from: OwnedFD(taking: pipe.readEnd))
   #expect(String(bytes: bytes, encoding: .utf8) == text)
 }
 
