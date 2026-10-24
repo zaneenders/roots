@@ -26,7 +26,10 @@ struct SelectionGroupTests {
   @Test func draggingAcrossTextAndParagraphPaintsAndCopiesTheWholeRange() {
     var host = UIHost()
     var copied: String?
-    for input in [Input(x: 6, y: 5, pressed: true), Input(x: 12, y: 53, released: true)] {
+    for input in [
+      Input(mousePosition: .init(x: 6, y: 5), pressed: true),
+      Input(mousePosition: .init(x: 12, y: 53), released: true)
+    ] {
       host.frame(input: input, build: { content() }, present: { _ in })
     }
     #expect(host.selectedText == "irst\nsecond line\nth")
@@ -43,8 +46,12 @@ struct SelectionGroupTests {
 
   @Test func reverseDragUsesDocumentOrder() {
     var host = UIHost()
-    host.frame(input: Input(x: 12, y: 53, pressed: true), build: { content() }, present: { _ in })
-    host.frame(input: Input(x: 6, y: 5, released: true), build: { content() }, present: { _ in })
+    host.frame(
+      input: Input(mousePosition: .init(x: 12, y: 53), pressed: true), build: { content() },
+      present: { _ in })
+    host.frame(
+      input: Input(mousePosition: .init(x: 6, y: 5), released: true), build: { content() },
+      present: { _ in })
     #expect(host.selectedText == "irst\nsecond line\nth")
   }
 
@@ -66,7 +73,9 @@ struct SelectionGroupTests {
 
   @Test func keyboardExtensionCrossesNodeBoundariesAndEscapeClearsEverything() {
     var host = UIHost()
-    host.frame(input: Input(x: 30, y: 5, pressed: true, released: true), build: { content() }, present: { _ in })
+    host.frame(
+      input: Input(mousePosition: .init(x: 30, y: 5), pressed: true, released: true),
+      build: { content() }, present: { _ in })
     host.frame(
       input: Input(keyEvents: [
         KeyEvent(.right, modifiers: .shift), KeyEvent(.right, modifiers: .shift)
@@ -134,8 +143,12 @@ struct SelectionGroupTests {
         FocusBlock(key: 1)
       }, present: { _ in })
     #expect(host.selectedText == "first\nlast")
-    host.frame(input: Input(x: 10, y: 25, pressed: true), build: { build() }, present: { _ in })
-    host.frame(input: Input(x: 10, y: 25, released: true), build: { build() }, present: { _ in })
+    host.frame(
+      input: Input(mousePosition: .init(x: 10, y: 25), pressed: true), build: { build() },
+      present: { _ in })
+    host.frame(
+      input: Input(mousePosition: .init(x: 10, y: 25), released: true), build: { build() },
+      present: { _ in })
     #expect(clicks == 1)
     #expect(host.selectedText == nil)
   }
@@ -151,9 +164,13 @@ struct SelectionGroupTests {
         }.selectionGroup(key: 100)
       }
     }
-    host.frame(input: Input(x: 0, y: 5, pressed: true), build: { build() }, present: { _ in })
+    host.frame(
+      input: Input(mousePosition: .init(x: 0, y: 5), pressed: true), build: { build() },
+      present: { _ in })
     for _ in 0..<5 {
-      host.frame(input: Input(x: 24, y: 80), dt: 0.1, build: { build() }, present: { _ in })
+      host.frame(
+        input: Input(mousePosition: .init(x: 24, y: 80)), dt: 0.1, build: { build() },
+        present: { _ in })
     }
     #expect(host.state(for: 50)!.scrollOffset > 0)
     #expect(host.selectedText?.contains("row3") == true)

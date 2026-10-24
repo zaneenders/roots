@@ -43,7 +43,6 @@ public struct Game: Sendable {
     if fits(moved) { self.active = moved }
   }
 
-  /// Simple wall/floor nudges, intentionally not the full guideline SRS kick table.
   public mutating func rotate(clockwise: Bool = true) {
     guard status == .playing, var rotated = active else { return }
     rotated.rotation = (rotated.rotation + (clockwise ? 1 : 3)) % 4
@@ -79,7 +78,6 @@ public struct Game: Sendable {
 
   public mutating func advance(by seconds: Double) {
     guard status == .playing, seconds.isFinite, seconds > 0 else { return }
-    // Discard long stalls instead of letting an unfocused/debugged app drop many pieces.
     elapsed += min(seconds, 1)
     while elapsed >= gravityInterval, status == .playing, let active {
       elapsed -= gravityInterval

@@ -1,13 +1,11 @@
 public struct ScrollEvent: Sendable {
   public var deltaY: Float
-  public var x: Float
-  public var y: Float
+  public var position: Coordinate
   public var region: Region
 
-  public init(deltaY: Float, x: Float, y: Float, region: Region) {
+  public init(deltaY: Float, position: Coordinate, region: Region) {
     self.deltaY = deltaY
-    self.x = x
-    self.y = y
+    self.position = position
     self.region = region
   }
 }

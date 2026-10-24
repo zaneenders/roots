@@ -10,13 +10,7 @@ struct MacOSInputState {
 
   mutating func pointer(x: Float, y: Float, inside: Bool) {
     pointerInside = inside
-    if inside || primaryDown {
-      input.x = x
-      input.y = y
-    } else {
-      input.x = -1
-      input.y = -1
-    }
+    input.mousePosition = inside || primaryDown ? Coordinate(x: x, y: y) : nil
   }
 
   mutating func button(down: Bool) {
@@ -78,8 +72,7 @@ struct MacOSInputState {
     input.scrollY = 0
     input.keyEvents.removeAll(keepingCapacity: true)
     if !pointerInside && !primaryDown {
-      input.x = -1
-      input.y = -1
+      input.mousePosition = nil
     }
   }
 
@@ -97,8 +90,7 @@ struct MacOSInputState {
     input.released = primaryDown
     primaryDown = false
     pointerInside = false
-    input.x = -1
-    input.y = -1
+    input.mousePosition = nil
     input.scrollX = 0
     input.scrollY = 0
   }

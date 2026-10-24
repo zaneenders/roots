@@ -26,9 +26,27 @@ public struct WaylandPopup<Content: Block> {
     return popup
   }
 
-  public func frameDelegate(_ delegate: any DesktopFrameDelegate) -> Self {
+  public func onPrepareFrame(_ action: @escaping @MainActor (inout Input, Float) -> Void) -> Self {
     var popup = self
-    popup.session.delegate = delegate
+    popup.session.frameCallbacks.prepare = action
+    return popup
+  }
+
+  public func onFrameUpdate(_ action: @escaping @MainActor (Input) -> DesktopFrameUpdate) -> Self {
+    var popup = self
+    popup.session.frameCallbacks.update = action
+    return popup
+  }
+
+  public func onFinishFrame(_ action: @escaping @MainActor (borrowing UIState) -> Void) -> Self {
+    var popup = self
+    popup.session.frameCallbacks.finish = action
+    return popup
+  }
+
+  public func animationFrames(while condition: @escaping @MainActor () -> Bool) -> Self {
+    var popup = self
+    popup.session.frameCallbacks.needsAnimationFrame = condition
     return popup
   }
 

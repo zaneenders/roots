@@ -143,7 +143,7 @@ struct WaylandBarTests {
       signal.finish()
     }
     let renderer = CPURenderer(width: 100, height: 58)
-    let viewport = Viewport(size: .init(100, 58), scale: 2)
+    let viewport = Viewport(size: .init(width: 100, height: 58), scale: 2)
     runtime.frame(input: Input(), viewport: viewport, time: 0, present: { renderer.render($0) })
     model.red = 1
     #expect(await iterator.next() != nil)
@@ -178,7 +178,7 @@ struct WaylandBarRenderingTests {
     .run()
     #expect(frames == 2 && events == ["start", "close"])
     frames = 0
-    try await DesktopWindow("After bar", size: .init(100, 100), maxFrames: 1) { _ in
+    try await DesktopWindow("After bar", width: 100, height: 100, maxFrames: 1) { _ in
       frames += 1
       return EmptyBlock()
     }.run()

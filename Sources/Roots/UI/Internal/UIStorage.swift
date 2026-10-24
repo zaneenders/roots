@@ -36,7 +36,8 @@ struct UIStorage: ~Copyable {
   let drawCapacity: Int?
   var pendingScrollbars = UniqueArray<Int>()
   var draws = UniqueArray<DrawRect>()
-  var pointerPosition: SIMD2<Float>?
+  var mousePosition: Coordinate?
+  var lastMousePosition: Coordinate?
   var droppedDraws = 0
   var needsAnimationFrame = false
 

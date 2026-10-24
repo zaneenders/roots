@@ -75,7 +75,6 @@ public struct ZStack<Content: Block>: Block {
   }
 }
 
-/// Equal-sized cells in row-major order. Nested containers occupy one cell.
 public struct Grid<Content: Block>: Block {
   public typealias Body = Never
   let region: Region?

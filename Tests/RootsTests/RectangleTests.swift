@@ -120,7 +120,7 @@ struct RectangleTests {
     var clicks = 0
     host.frame(
       input: Input(
-        x: 20, y: 20, pressed: true, released: true, keyEvents: [KeyEvent(.tab)]),
+        mousePosition: .init(x: 20, y: 20), pressed: true, released: true, keyEvents: [KeyEvent(.tab)]),
       dt: 0,
       build: {
         ZStack(in: Region(0, 0, 100, 40)) {

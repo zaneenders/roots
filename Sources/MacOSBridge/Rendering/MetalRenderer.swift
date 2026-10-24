@@ -226,7 +226,7 @@ private struct MetalFrameSlot: ~Copyable {
         var width = stroke.width
         var color = SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a)
         unsafe encoder.setVertexBytes(&bounds, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
-        stroke.points.withUnsafeBytes { bytes in
+        stroke.points.map(\.vector).withUnsafeBytes { bytes in
           unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
         }
         unsafe encoder.setFragmentBytes(&count, length: MemoryLayout<UInt32>.stride, index: 1)

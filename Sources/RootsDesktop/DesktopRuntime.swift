@@ -45,25 +45,26 @@ private final class FrameInvalidation {
 @MainActor
 final class DesktopRuntime<Content: Block> {
   private var host: UIHost
-  private let delegate: (any DesktopFrameDelegate)?
+  private let frameCallbacks: DesktopFrameCallbacks
   private let content: @MainActor (Viewport) -> Content
   private let primaryShortcut: KeyModifiers
   private let onKey: ((KeyEvent) -> Bool)?
   private let onCopy: (String) -> Void
   private let invalidation: FrameInvalidation
   private var lastTime: Double?
-  private var pointer = SIMD2<Float>(-1, -1)
+  private var mousePosition: Coordinate?
 
   init(
     content: @escaping @MainActor (Viewport) -> Content, primaryShortcut: KeyModifiers,
     onKey: ((KeyEvent) -> Bool)? = nil, onCopy: @escaping (String) -> Void,
-    requestRedraw: @escaping @MainActor () -> Void, delegate: (any DesktopFrameDelegate)? = nil,
+    requestRedraw: @escaping @MainActor () -> Void,
+    frameCallbacks: DesktopFrameCallbacks = .init(),
     nodeCapacity: Int = 128, scrollAcceleration: Float = 0, scrollDeceleration: Float = 8
   ) {
     host = UIHost(
       nodeCapacity: nodeCapacity, drawCapacity: nil, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
-    self.delegate = delegate
+    self.frameCallbacks = frameCallbacks
     self.content = content
     self.primaryShortcut = primaryShortcut
     self.onKey = onKey
@@ -90,7 +91,7 @@ final class DesktopRuntime<Content: Block> {
     invalidation.beginFrame()
     invalidation.track {
       var frameInput = input
-      invalidation.track { delegate?.prepareFrame(input: &frameInput, dt: dt) }
+      invalidation.track { frameCallbacks.prepare?(&frameInput, dt) }
       var update = DesktopFrameUpdate.present
       invalidation.track {
         host.trackedFrame(
@@ -98,23 +99,22 @@ final class DesktopRuntime<Content: Block> {
           onKey: onKey, onCopy: onCopy,
           build: { content(viewport) },
           present: { draws in
-            update = delegate?.frameUpdate(after: frameInput) ?? .present
+            update = frameCallbacks.update?(frameInput) ?? .present
             if case .present = update { present(draws) }
           }, track: invalidation.track)
-        if case .rebuild(let pointer) = update {
+        if case .rebuild(let mousePosition) = update {
           host.rebuild(
-            pointer: pointer,
+            mousePosition: mousePosition,
             build: { content(viewport) },
             present: present, track: invalidation.track)
         }
       }
-      host.withState { delegate?.didFinishFrame($0) }
+      host.withState { frameCallbacks.finish?($0) }
       if needsAnimationFrame { invalidation.request() }
     }
-    let nextPointer = SIMD2<Float>(input.x, input.y)
-    let pointerMoved = nextPointer != pointer
-    pointer = nextPointer
-    if pointerMoved || input.pressed || input.released || input.focusLost
+    let mouseMoved = input.mousePosition != mousePosition
+    mousePosition = input.mousePosition
+    if mouseMoved || input.pressed || input.released || input.focusLost
       || !input.keyEvents.isEmpty
       || input.scrollX != 0 || input.scrollY != 0 || input.scrollVelocityY != nil
     {
@@ -124,7 +124,7 @@ final class DesktopRuntime<Content: Block> {
 
   var droppedDraws: Int { host.droppedDraws }
   var needsAnimationFrame: Bool {
-    host.needsAnimationFrame || delegate?.needsAnimationFrame == true
+    host.needsAnimationFrame || frameCallbacks.needsAnimationFrame?() == true
   }
 
   func stop() { invalidation.stop() }

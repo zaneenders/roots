@@ -18,9 +18,11 @@ private func requiredHandle(
 @Test func stateFollowsKeyAcrossReorder() throws {
   var ui = UIStore()
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true), build: { row(&$0, [1, 2]) }, present: { _ in })
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true), build: { row(&$0, [1, 2]) },
+    present: { _ in })
   ui.frame(
-    input: Input(x: 10, y: 10, released: true), build: { row(&$0, [1, 2]) }, present: { _ in })
+    input: Input(mousePosition: .init(x: 10, y: 10), released: true), build: { row(&$0, [1, 2]) },
+    present: { _ in })
   let first = try requiredHandle(ui, for: 1)
   let second = try requiredHandle(ui, for: 2)
   #expect(ui.state(for: first)?.clicks == 1)
@@ -79,10 +81,11 @@ private func requiredHandle(
   var first = 0
   var second = 0
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true), build: { row(&$0, [1], action: { first += 1 }) },
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true),
+    build: { row(&$0, [1], action: { first += 1 }) },
     present: { _ in })
   ui.frame(
-    input: Input(x: 10, y: 10, released: true),
+    input: Input(mousePosition: .init(x: 10, y: 10), released: true),
     build: { row(&$0, [1], action: clearAction ? nil : { second += 1 }) }, present: { _ in })
   #expect(first == 0)
   #expect(second == (clearAction ? 0 : 1))
@@ -94,11 +97,11 @@ private func requiredHandle(
   var ui = UIStore()
   var clicks = 0
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true),
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true),
     build: { row(&$0, [1, 2], action: { clicks += 1 }) }, present: { _ in }
   )
   ui.frame(
-    input: Input(x: 10, y: 10, released: true),
+    input: Input(mousePosition: .init(x: 10, y: 10), released: true),
     build: { row(&$0, [2, 1], action: { clicks += 1 }) }, present: { _ in }
   )
   #expect(clicks == 0)
@@ -114,17 +117,19 @@ private func requiredHandle(
   var ui = UIStore()
   var clicks = 0
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true), build: { row(&$0, [1], action: { clicks += 1 }) },
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true),
+    build: { row(&$0, [1], action: { clicks += 1 }) },
     present: { _ in })
   ui.frame(build: { _ in }, present: { _ in })
   ui.frame(
-    input: Input(x: 10, y: 10, released: true), build: { row(&$0, [2], action: { clicks += 1 }) },
+    input: Input(mousePosition: .init(x: 10, y: 10), released: true),
+    build: { row(&$0, [2], action: { clicks += 1 }) },
     present: { _ in })
   let replacement = try requiredHandle(ui, for: 2)
   #expect(clicks == 0)
   #expect(ui.state(for: replacement)?.clicks == 0)
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true, released: true),
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true, released: true),
     build: { row(&$0, [2], action: { clicks += 1 }) }, present: { _ in })
   #expect(clicks == 1)
   #expect(ui.state(for: replacement)?.clicks == 1)
@@ -173,12 +178,15 @@ private func requiredHandle(
   var ui = UIStore()
   var clicks = 0
   ui.frame(
-    input: Input(x: 10, y: 10, pressed: true), build: { row(&$0, [1], action: { clicks += 1 }) },
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true),
+    build: { row(&$0, [1], action: { clicks += 1 }) },
     present: { _ in })
   let handle = try requiredHandle(ui, for: 1)
   #expect(ui.state(for: handle)?.focused == true)
   ui.frame(
-    input: Input(x: 10, y: 10, released: true, keyEvents: [KeyEvent(.tab), KeyEvent(.enter)]),
+    input: Input(
+      mousePosition: .init(x: 10, y: 10), released: true,
+      keyEvents: [KeyEvent(.tab), KeyEvent(.enter)]),
     build: { frame in
       frame.beginRow(in: Region(0, 0, 1000, 40))
       frame.label(key: 1, "", extent: 80)

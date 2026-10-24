@@ -67,16 +67,16 @@ public struct DrawRect: Sendable {
   public var edgePadding: Float { glyphUV == nil ? 1 : 0 }
 
   @inlinable
-  public func position(at local: SIMD2<Float>) -> SIMD2<Float> {
-    if axis == SIMD2(1, 0) { return SIMD2(region.x, region.y) + local }
-    return SIMD2(region.x, region.y) + axis * local.x + SIMD2(-axis.y, axis.x) * local.y
+  public func position(at local: Coordinate) -> Coordinate {
+    if axis == SIMD2(1, 0) { return Coordinate(x: region.x + local.x, y: region.y + local.y) }
+    return Coordinate(SIMD2(region.x, region.y) + axis * local.x + SIMD2(-axis.y, axis.x) * local.y)
   }
 
   @inlinable
-  public func localPosition(at point: SIMD2<Float>) -> SIMD2<Float> {
-    let delta = point - SIMD2(region.x, region.y)
-    if axis == SIMD2(1, 0) { return delta }
-    return SIMD2(delta.x * axis.x + delta.y * axis.y, -delta.x * axis.y + delta.y * axis.x)
+  public func localPosition(at point: Coordinate) -> Coordinate {
+    let delta = point.vector - SIMD2(region.x, region.y)
+    if axis == SIMD2(1, 0) { return Coordinate(delta) }
+    return Coordinate(x: delta.x * axis.x + delta.y * axis.y, y: -delta.x * axis.y + delta.y * axis.x)
   }
 
   @inlinable
@@ -87,7 +87,7 @@ public struct DrawRect: Sendable {
       return Region(
         region.x - padding, region.y - padding, region.width + 2 * padding, region.height + 2 * padding)
     }
-    let origin = position(at: SIMD2(-padding, -padding))
+    let origin = position(at: .init(x: -padding, y: -padding))
     let dx = axis * (region.width + 2 * padding)
     let dy = SIMD2(-axis.y, axis.x) * (region.height + 2 * padding)
     return Region(

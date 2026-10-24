@@ -32,10 +32,11 @@ import Testing
       RowBlock(in: Region(0, 0, 40, 32)) {
         Canvas(key: 1, extent: 40) { context in
           context.fillRect(context.region, color: Color(0, 0, 0))
-          context.strokeLine(from: .init(8, 8), to: .init(24, 8), color: Color(1, 1, 1), width: 4)
+          context.strokeLine(from: .init(x: 8, y: 8), to: .init(x: 24, y: 8), color: Color(1, 1, 1), width: 4)
           context.strokeLine(
-            from: .init(8, 20), to: .init(24, 20), color: Color(1, 1, 1), width: 4, cap: .butt)
-          context.strokeLine(from: .init(30, 4), to: .init(35, 28), color: Color(1, 1, 1), width: 1)
+            from: .init(x: 8, y: 20), to: .init(x: 24, y: 20), color: Color(1, 1, 1), width: 4, cap: .butt)
+          context.strokeLine(
+            from: .init(x: 30, y: 4), to: .init(x: 35, y: 28), color: Color(1, 1, 1), width: 1)
         }
       }
     }, present: { renderer.render($0) })

@@ -30,7 +30,7 @@ private struct TestApp: RootsApp {
 
 private struct ExampleApp: RootsApp {
   var window: some Window {
-    DesktopWindow("Example", size: .init(1180, 820)) { viewport in
+    DesktopWindow("Example", width: 1180, height: 820) { viewport in
       Column(in: viewport.bounds) {
         Text("Hello")
           .size(20)
@@ -94,17 +94,18 @@ struct DesktopWindowTests {
   }
 
   @Test func viewportUsesLogicalBounds() {
-    let viewport = Viewport(size: .init(200, 100), scale: 2)
+    let viewport = Viewport(size: .init(width: 200, height: 100), scale: 2)
     #expect(viewport.bounds == Region(0, 0, 200, 100))
     #expect(viewport.scale == 2)
   }
 
   @Test func invalidConfigurationFailsBeforeBuildingContent() async {
     var builds = 0
-    for size: SIMD2<Float> in [
-      .init(0, 10), .init(-1, 10), .init(.nan, 10), .init(10, .infinity), .init(8193, 10)
+    for size: Size in [
+      Size(width: 0, height: 10), Size(width: -1, height: 10), Size(width: .nan, height: 10),
+      Size(width: 10, height: .infinity), Size(width: 8193, height: 10)
     ] {
-      let window = DesktopWindow("Invalid", size: size) { _ in
+      let window = DesktopWindow("Invalid", width: size.width, height: size.height) { _ in
         builds += 1
         return EmptyBlock()
       }
@@ -146,7 +147,7 @@ struct DesktopWindowRenderingTests {
     var events: [String] = []
     await #expect(throws: (any Error).self) {
       try await DesktopWindow(
-        "Failed screenshot", size: .init(32, 32), maxFrames: 1,
+        "Failed screenshot", width: 32, height: 32, maxFrames: 1,
         screenshotPath: directory.path, offscreen: true
       ) { _ in EmptyBlock() }
       .onStart { events.append("start") }
@@ -156,6 +157,43 @@ struct DesktopWindowRenderingTests {
     #expect(events == ["start", "close"])
   }
 
+  @Test func frameModifiersPreserveWindowValueSemanticsAndCallbackOrder() async throws {
+    var events: [String] = []
+    let original = DesktopWindow(
+      "Callbacks", width: 32, height: 32, maxFrames: 1, offscreen: true
+    ) { viewport in
+      events.append("build")
+      return Column(in: viewport.bounds) { Button(key: 1, "Action", onClick: {}) }
+    }
+    let configured =
+      original
+      .onPrepareFrame { _, _ in Issue.record("Replaced callback should not run") }
+      .onPrepareFrame { input, dt in
+        events.append("prepare")
+        input.mousePosition = Coordinate(x: 7, y: -1)
+        #expect(dt > 0)
+      }
+      .onFrameUpdate { input in
+        events.append("update")
+        #expect(input.mousePosition == Coordinate(x: 7, y: -1))
+        return .rebuild(mousePosition: nil)
+      }
+      .onFinishFrame { state in
+        events.append("finish")
+        #expect(state.state(for: 1) != nil)
+      }
+      .animationFrames {
+        events.append("animation")
+        return false
+      }
+
+    try await original.run()
+    #expect(events == ["build"])
+    events.removeAll()
+    try await configured.run()
+    #expect(events == ["prepare", "build", "update", "build", "finish", "animation"])
+  }
+
   @Test func offscreenWindowRebuildsContentAndWritesScreenshot() async throws {
     let path = FileManager.default.temporaryDirectory.appendingPathComponent(
       "\(UUID().uuidString).ppm")
@@ -163,7 +201,7 @@ struct DesktopWindowRenderingTests {
     var frames = 0
     var events: [String] = []
     try await DesktopWindow(
-      "Offscreen", size: .init(64, 48), maxFrames: 3, screenshotPath: path.path, offscreen: true
+      "Offscreen", width: 64, height: 48, maxFrames: 3, screenshotPath: path.path, offscreen: true
     ) {
       viewport in
       #expect(events == ["start"])

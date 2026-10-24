@@ -149,7 +149,10 @@ struct ParagraphTests {
   @Test func defaultParagraphDoesNotInterceptPointerInput() {
     var host = UIHost()
     var clicks = 0
-    for input in [Input(x: 5, y: 5, pressed: true), Input(x: 5, y: 5, released: true)] {
+    for input in [
+      Input(mousePosition: .init(x: 5, y: 5), pressed: true),
+      Input(mousePosition: .init(x: 5, y: 5), released: true)
+    ] {
       host.frame(
         input: input,
         build: {
@@ -210,8 +213,8 @@ struct ParagraphTests {
           }
         }, present: { _ in })
     }
-    render(Input(x: 0, y: 5, pressed: true))
-    render(Input(x: 12, y: 21, released: true))
+    render(Input(mousePosition: .init(x: 0, y: 5), pressed: true))
+    render(Input(mousePosition: .init(x: 12, y: 21), released: true))
     #expect(host.selectedText == "hello wo")
     render(Input(keyEvents: [KeyEvent(.character("c"), modifiers: .control)]))
     #expect(copied == "hello wo")

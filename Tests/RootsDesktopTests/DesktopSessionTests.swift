@@ -20,7 +20,8 @@ struct DesktopSessionTests {
           #expect(events == ["start"])
           events.append("present")
           runtime.frame(
-            input: Input(), viewport: Viewport(size: .init(100, 26)), time: 0, present: { _ in })
+            input: Input(), viewport: Viewport(size: .init(width: 100, height: 26)), time: 0,
+            present: { _ in })
           await Task.yield()
           if fails { throw SessionFailure.backend }
         })
@@ -31,17 +32,19 @@ struct DesktopSessionTests {
     #expect(events == ["start", "present", "close"])
   }
 
-  @Test func sharedSessionForwardsFramePolicyAndKeyboardInterception() async throws {
-    final class Delegate: DesktopFrameDelegate {
-      var prepared = 0
-      var finished = 0
-      func prepareFrame(input: inout Input, dt: Float) { prepared += 1 }
-      func didFinishFrame(_ state: borrowing UIState) { finished += 1 }
-    }
-    let delegate = Delegate()
+  @Test func sharedSessionForwardsFrameCallbacksAndKeyboardInterception() async throws {
+    var prepared = 0
+    var updated = 0
+    var finished = 0
     var intercepted = 0
     var session = DesktopSession(nodeCapacity: 16, scrollAcceleration: 0, scrollDeceleration: 8)
-    session.delegate = delegate
+    session.frameCallbacks.prepare = { _, _ in prepared += 1 }
+    session.frameCallbacks.update = { _ in
+      updated += 1
+      return .present
+    }
+    session.frameCallbacks.finish = { _ in finished += 1 }
+    session.frameCallbacks.needsAnimationFrame = { true }
     session.keyHandler = { _ in
       intercepted += 1
       return true
@@ -50,10 +53,12 @@ struct DesktopSessionTests {
       content: { _ in EmptyBlock() }, offscreen: true,
       present: { runtime in
         runtime.frame(
-          input: Input(keyEvents: [KeyEvent(.enter)]), viewport: Viewport(size: .init(100, 26)),
+          input: Input(keyEvents: [KeyEvent(.enter)]),
+          viewport: Viewport(size: .init(width: 100, height: 26)),
           time: 0,
           present: { _ in })
+        #expect(runtime.needsAnimationFrame)
       })
-    #expect(delegate.prepared == 1 && delegate.finished == 1 && intercepted == 1)
+    #expect(prepared == 1 && updated == 1 && finished == 1 && intercepted == 1)
   }
 }

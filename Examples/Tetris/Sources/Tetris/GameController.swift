@@ -4,7 +4,7 @@ import RootsDesktop
 import TetrisCore
 
 @MainActor @Observable
-final class GameController: DesktopFrameDelegate {
+final class GameController {
   private(set) var game: Game
   @ObservationIgnored private var changedDuringInput = false
 
@@ -25,7 +25,7 @@ final class GameController: DesktopFrameDelegate {
   }
 
   func frameUpdate(after input: Input) -> DesktopFrameUpdate {
-    changedDuringInput ? .rebuild(pointer: .init(input.x, input.y)) : .present
+    changedDuringInput ? .rebuild(mousePosition: input.mousePosition) : .present
   }
 
   func togglePause() {

@@ -12,7 +12,7 @@ private func idleButton(_ frame: inout UIFrame) {
   var ui = UIStore()
   ui.frame(build: idleButton, present: { _ in })
   #expect(ui.needsAnimationFrame == false)
-  let hover = Input(x: 10, y: 10)
+  let hover = Input(mousePosition: .init(x: 10, y: 10))
   ui.frame(input: hover, build: idleButton, present: { _ in })
   #expect(ui.needsAnimationFrame == true)
   for _ in 0..<90 { ui.frame(input: hover, build: idleButton, present: { _ in }) }
@@ -20,8 +20,12 @@ private func idleButton(_ frame: inout UIFrame) {
   let handle = try #require(declared)
   #expect(ui.state(for: handle)?.hoverAnimation == 1)
   #expect(ui.needsAnimationFrame == false)
-  ui.frame(input: Input(x: 10, y: 10, pressed: true), build: idleButton, present: { _ in })
-  ui.frame(input: Input(x: 10, y: 10, released: true), build: idleButton, present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 10, y: 10), pressed: true), build: idleButton,
+    present: { _ in })
+  ui.frame(
+    input: Input(mousePosition: .init(x: 10, y: 10), released: true), build: idleButton,
+    present: { _ in })
   #expect(ui.needsAnimationFrame == true)
   #expect(ui.state(for: handle)?.clicks == 1)
   for _ in 0..<90 { ui.frame(build: idleButton, present: { _ in }) }
@@ -36,7 +40,7 @@ private func idleButton(_ frame: inout UIFrame) {
     frame.label(key: 2, "Content", extent: 2000)
     frame.end()
   }
-  let fling = Input(x: 10, y: 10, scrollY: 10, scrollVelocityY: 160)
+  let fling = Input(mousePosition: .init(x: 10, y: 10), scrollY: 10, scrollVelocityY: 160)
   ui.frame(input: fling, build: build, present: { _ in })
   #expect(ui.needsAnimationFrame == true)
   for _ in 0..<120 { ui.frame(build: build, present: { _ in }) }

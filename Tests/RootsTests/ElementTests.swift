@@ -247,11 +247,11 @@ import Testing
     frame.focus(focused)
     frame.end()
   }
-  ui.frame(input: Input(x: 30, y: 55, scrollY: 12.5), build: build, present: { _ in })
+  ui.frame(input: Input(mousePosition: .init(x: 30, y: 55), scrollY: 12.5), build: build, present: { _ in })
   #expect(received.count == 1)
   #expect(received.first?.deltaY == 12.5)
   #expect(received.first?.region == Region(10, 50, 100, 90))
-  #expect(received.first?.x == 20 && received.first?.y == 5)
+  #expect(received.first?.position.x == 20 && received.first?.position.y == 5)
   #expect(phases == ["scroll", "paint"])
   let viewportHandle = ui.handle(for: 100)
   let viewport = try #require(viewportHandle)
@@ -263,19 +263,21 @@ import Testing
   #expect(ui.state(for: first)?.focused == true)
   #expect(ui.state(for: second)?.focused == false)
   for input in [
-    Input(x: 30, y: 90, scrollY: 10), Input(x: 30, y: 55, scrollY: .nan),
-    Input(x: 30, y: 55, scrollY: .infinity), Input(x: 30, y: 55, scrollX: 10)
+    Input(mousePosition: .init(x: 30, y: 90), scrollY: 10),
+    Input(mousePosition: .init(x: 30, y: 55), scrollY: .nan),
+    Input(mousePosition: .init(x: 30, y: 55), scrollY: .infinity),
+    Input(mousePosition: .init(x: 30, y: 55), scrollX: 10)
   ] {
     ui.frame(input: input, build: build, present: { _ in })
   }
   #expect(received.count == 1)
   phases = []
   ui.frame(
-    input: Input(x: 30, y: 55, scrollY: 10, keyEvents: [KeyEvent(.down)]),
+    input: Input(mousePosition: .init(x: 30, y: 55), scrollY: 10, keyEvents: [KeyEvent(.down)]),
     build: build, present: { _ in })
   #expect(phases == ["scroll", "key", "paint"])
   handlesScroll = false
-  ui.frame(input: Input(x: 30, y: 55, scrollY: 10), build: build, present: { _ in })
+  ui.frame(input: Input(mousePosition: .init(x: 30, y: 55), scrollY: 10), build: build, present: { _ in })
   #expect(received.count == 2)
   #expect(ui.state(for: viewport)?.scrollOffset == 10)
 }
@@ -290,12 +292,14 @@ import Testing
     frame.end()
   }
   ui.frame(
-    input: Input(x: 20, y: 60, scrollY: 10, scrollVelocityY: 160), build: build, present: { _ in })
+    input: Input(mousePosition: .init(x: 20, y: 60), scrollY: 10, scrollVelocityY: 160),
+    build: build, present: { _ in })
   let viewportHandle = ui.handle(for: 100)
   let viewport = try #require(viewportHandle)
   #expect(ui.state(for: viewport)?.scrollOffset == 10)
   ui.frame(
-    input: Input(x: 20, y: 10, scrollY: 5, scrollVelocityY: 160), build: build, present: { _ in })
+    input: Input(mousePosition: .init(x: 20, y: 10), scrollY: 5, scrollVelocityY: 160),
+    build: build, present: { _ in })
   ui.frame(build: build, present: { _ in })
   #expect(distances == [5])
   #expect(ui.state(for: viewport)?.scrollOffset == 10)
@@ -332,15 +336,15 @@ import Testing
     }
   }
   ui.frame(
-    input: Input(x: 20, y: 20, pressed: true, keyEvents: [KeyEvent(.enter)]),
+    input: Input(mousePosition: .init(x: 20, y: 20), pressed: true, keyEvents: [KeyEvent(.enter)]),
     build: build, present: present)
   let overlayHandle = ui.handle(for: 2)
   let requiredOverlay = try #require(overlayHandle)
   #expect(ui.state(for: requiredOverlay)?.focused == false)
-  ui.frame(input: Input(x: 400, y: 210, released: true), build: build, present: present)
+  ui.frame(input: Input(mousePosition: .init(x: 400, y: 210), released: true), build: build, present: present)
   #expect(pointers.map(\.phase) == [.pressed, .released])
   ui.frame(
-    input: Input(x: 20, y: 20, scrollY: 10, keyEvents: [KeyEvent(.tab)]), build: build,
+    input: Input(mousePosition: .init(x: 20, y: 20), scrollY: 10, keyEvents: [KeyEvent(.tab)]), build: build,
     present: present)
   let firstHandle = ui.handle(for: 1)
   let requiredFirst = try #require(firstHandle)

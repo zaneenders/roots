@@ -82,7 +82,8 @@ import Testing
 
 @Test @MainActor func polylinesKeepOwnedPointsAndSeparateAdjacentInstanceRuns() throws {
   var state = MetalFrameState()
-  let stroke = try #require(PolylineStroke(points: [.init(2, 2), .init(8, 8)], width: 2))
+  let stroke = try #require(
+    PolylineStroke(points: [Coordinate(x: 2, y: 2), Coordinate(x: 8, y: 8)], width: 2))
   var draws = [
     DrawRect(Region(0, 0, 10, 10), .text),
     DrawRect(polyline: stroke, color: .accent),
@@ -92,7 +93,7 @@ import Testing
   state.withFrame { $0.render(draws.span) }
   draws.removeAll()
   #expect(state.vertices.count == 2 && state.runs.count == 3)
-  #expect(state.runs[1].polyline?.polyline?.points == [.init(2, 2), .init(8, 8)])
+  #expect(state.runs[1].polyline?.polyline?.points == [Coordinate(x: 2, y: 2), Coordinate(x: 8, y: 8)])
   #expect(state.runs[2].firstVertex == 1)
 }
 

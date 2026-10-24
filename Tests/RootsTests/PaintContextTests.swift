@@ -50,16 +50,16 @@ import Testing
     build: { frame in
       frame.beginRow(in: Region(0, 0, 100, 100))
       frame.canvas(key: 1, extent: 100) { context in
-        context.strokeLine(from: .init(20, 20), to: .init(26, 28), color: .accent, width: 2)
+        context.strokeLine(from: .init(x: 20, y: 20), to: .init(x: 26, y: 28), color: .accent, width: 2)
         context.strokeLine(
-          from: .init(20, 20), to: .init(26, 28), color: .accent, width: 2, cap: .butt)
-        context.strokeLine(from: .init(40, 40), to: .init(40, 40), color: .accent, width: 4)
-        context.strokeLine(from: .init(40, 40), to: .init(40, 40), color: .accent, cap: .butt)
+          from: .init(x: 20, y: 20), to: .init(x: 26, y: 28), color: .accent, width: 2, cap: .butt)
+        context.strokeLine(from: .init(x: 40, y: 40), to: .init(x: 40, y: 40), color: .accent, width: 4)
+        context.strokeLine(from: .init(x: 40, y: 40), to: .init(x: 40, y: 40), color: .accent, cap: .butt)
         for width: Float in [0, -1, .nan, .infinity] {
-          context.strokeLine(from: .zero, to: .init(2, 2), color: .accent, width: width)
+          context.strokeLine(from: .zero, to: .init(x: 2, y: 2), color: .accent, width: width)
           context.strokeRect(Region(1, 1, 4, 4), color: .accent, width: width)
         }
-        context.strokeLine(from: .init(.nan, 0), to: .zero, color: .accent)
+        context.strokeLine(from: .init(x: .nan, y: 0), to: .zero, color: .accent)
       }
       frame.end()
     },
@@ -82,7 +82,7 @@ import Testing
     build: { frame in
       frame.beginRow(in: Region(0, 0, 30, 30))
       frame.canvas(key: 1, extent: 30) { context in
-        context.strokeLine(from: .init(40, 15), to: .init(-10, 15), color: .accent, width: 2)
+        context.strokeLine(from: .init(x: 40, y: 15), to: .init(x: -10, y: 15), color: .accent, width: 2)
       }
       frame.end()
     },

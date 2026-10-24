@@ -7,7 +7,7 @@ public enum DesktopWindowError: Error, Equatable {
 @MainActor
 public struct DesktopWindow<Content: Block>: Window {
   let title: String
-  let size: SIMD2<Float>
+  let size: Size
   let maxFrames: Int32
   let screenshotPath: String?
   let offscreen: Bool
@@ -15,13 +15,13 @@ public struct DesktopWindow<Content: Block>: Window {
   private var session: DesktopSession
 
   public init(
-    _ title: String, size: SIMD2<Float> = .init(900, 660), maxFrames: Int32 = 0,
+    _ title: String, width: Float = 900, height: Float = 660, maxFrames: Int32 = 0,
     screenshotPath: String? = nil, offscreen: Bool = false,
     nodeCapacity: Int = 128, scrollAcceleration: Float = 0, scrollDeceleration: Float = 8,
     @BlockBuilder content: @escaping @MainActor (Viewport) -> Content
   ) {
     self.title = title
-    self.size = size
+    self.size = Size(width: width, height: height)
     self.maxFrames = maxFrames
     self.screenshotPath = screenshotPath
     self.offscreen = offscreen
@@ -37,9 +37,27 @@ public struct DesktopWindow<Content: Block>: Window {
     return window
   }
 
-  public func frameDelegate(_ delegate: any DesktopFrameDelegate) -> Self {
+  public func onPrepareFrame(_ action: @escaping @MainActor (inout Input, Float) -> Void) -> Self {
     var window = self
-    window.session.delegate = delegate
+    window.session.frameCallbacks.prepare = action
+    return window
+  }
+
+  public func onFrameUpdate(_ action: @escaping @MainActor (Input) -> DesktopFrameUpdate) -> Self {
+    var window = self
+    window.session.frameCallbacks.update = action
+    return window
+  }
+
+  public func onFinishFrame(_ action: @escaping @MainActor (borrowing UIState) -> Void) -> Self {
+    var window = self
+    window.session.frameCallbacks.finish = action
+    return window
+  }
+
+  public func animationFrames(while condition: @escaping @MainActor () -> Bool) -> Self {
+    var window = self
+    window.session.frameCallbacks.needsAnimationFrame = condition
     return window
   }
 
@@ -64,8 +82,8 @@ public struct DesktopWindow<Content: Block>: Window {
   }
 
   func validate() throws {
-    guard size.x.isFinite, size.y.isFinite, size.x > 0, size.y > 0,
-      size.x <= 8192, size.y <= 8192, maxFrames >= (offscreen ? 1 : 0),
+    guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0,
+      size.width <= 8192, size.height <= 8192, maxFrames >= (offscreen ? 1 : 0),
       session.isValid,
       screenshotPath == nil || maxFrames > 0
     else { throw DesktopWindowError.invalidConfiguration }

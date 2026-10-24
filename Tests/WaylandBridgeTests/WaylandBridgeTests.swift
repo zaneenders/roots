@@ -144,7 +144,9 @@ extension NativeSessionTests {
     input.pointerFrame()
   }
   if !coalesced {
-    ui.frame(input: Input(x: 10, y: 10, scrollY: input.scrollY), build: build, present: { _ in })
+    ui.frame(
+      input: Input(mousePosition: .init(x: 10, y: 10), scrollY: input.scrollY), build: build,
+      present: { _ in })
     input.resetEdges()
   }
   input.axis(0, value: 0, time: 120)
@@ -152,7 +154,9 @@ extension NativeSessionTests {
   input.axisStop(0, time: 120)
   input.pointerFrame()
   ui.frame(
-    input: Input(x: 10, y: 10, scrollY: input.scrollY, scrollVelocityY: input.scrollVelocityY),
+    input: Input(
+      mousePosition: .init(x: 10, y: 10), scrollY: input.scrollY,
+      scrollVelocityY: input.scrollVelocityY),
     build: build, present: { _ in })
   let list: UInt64 = 100
   #expect(ui.state(for: list)?.scrollOffset == 10)

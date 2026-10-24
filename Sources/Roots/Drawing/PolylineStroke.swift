@@ -1,18 +1,18 @@
 public final class PolylineStroke: Sendable {
   public static let maximumPointCount = 128
-  public let points: [SIMD2<Float>]
+  public let points: [Coordinate]
   public let width: Float
   public let bounds: Region
 
-  public init?(points: [SIMD2<Float>], width: Float) {
+  public init?(points: [Coordinate], width: Float) {
     guard !points.isEmpty, points.count <= Self.maximumPointCount, width > 0, width.isFinite,
       points.allSatisfy({ $0.x.isFinite && $0.y.isFinite })
     else { return nil }
     var low = points[0]
     var high = points[0]
     for point in points {
-      low = SIMD2(min(low.x, point.x), min(low.y, point.y))
-      high = SIMD2(max(high.x, point.x), max(high.y, point.y))
+      low = Coordinate(x: min(low.x, point.x), y: min(low.y, point.y))
+      high = Coordinate(x: max(high.x, point.x), y: max(high.y, point.y))
     }
     let padding = width / 2 + 1
     let bounds = Region(
@@ -28,12 +28,12 @@ public final class PolylineStroke: Sendable {
     self.bounds = bounds
   }
 
-  public func distance(to point: SIMD2<Float>) -> Float {
+  public func distance(to point: Coordinate) -> Float {
     var minimum: Float = .greatestFiniteMagnitude
     var start = points[0]
     for end in points {
-      let segment = end - start
-      let delta = point - start
+      let segment = end.vector - start.vector
+      let delta = point.vector - start.vector
       let squaredLength = segment.x * segment.x + segment.y * segment.y
       let t =
         squaredLength > 0

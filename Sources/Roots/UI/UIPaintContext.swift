@@ -2,7 +2,7 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   private var storage: MutableRef<UIStorage>
   public private(set) var region: Region
   public private(set) var clip: Region
-  public private(set) var pointerPosition: SIMD2<Float>?
+  public private(set) var mousePosition: Coordinate?
   public let focused: Bool
   private var frameClip: Region
   private var origin = SIMD2<Float>.zero
@@ -11,11 +11,11 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   @_lifetime(&storage)
   init(storage: inout UIStorage, region: Region, clip: Region?, focused: Bool) {
     let effectiveClip = clip.map { $0.intersection(region) } ?? region
-    let pointer = storage.pointerPosition
+    let mousePosition = storage.mousePosition
     self.region = region
     self.clip = effectiveClip
     self.frameClip = effectiveClip
-    self.pointerPosition = pointer.flatMap { effectiveClip.contains(x: $0.x, y: $0.y) ? $0 : nil }
+    self.mousePosition = mousePosition.flatMap { effectiveClip.contains(x: $0.x, y: $0.y) ? $0 : nil }
     self.focused = focused
     self.storage = MutableRef(&storage)
   }
@@ -27,19 +27,19 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
     let previousOrigin = origin
     let previousScale = self.scale
     let previousRegion = region
-    let previousPointer = pointerPosition
+    let previousMousePosition = mousePosition
     let previousClip = clip
     origin += SIMD2(x, y) * self.scale
     self.scale *= scale
     precondition(origin.x.isFinite && origin.y.isFinite && self.scale > 0 && self.scale.isFinite)
-    pointerPosition = pointerPosition.map { ($0 - SIMD2(x, y)) / scale }
+    mousePosition = mousePosition.map { Coordinate(x: ($0.x - x) / scale, y: ($0.y - y) / scale) }
     region = Region((region.x - x) / scale, (region.y - y) / scale, region.width / scale, region.height / scale)
     clip = Region((clip.x - x) / scale, (clip.y - y) / scale, clip.width / scale, clip.height / scale)
     defer {
       origin = previousOrigin
       self.scale = previousScale
       region = previousRegion
-      pointerPosition = previousPointer
+      mousePosition = previousMousePosition
       clip = previousClip
     }
     body(&self)
@@ -48,22 +48,22 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   public mutating func withClip(_ requested: Region, _ body: (inout UIPaintContext) -> Void) {
     let previousClip = clip
     let previousFrameClip = frameClip
-    let previousPointer = pointerPosition
+    let previousMousePosition = mousePosition
     let valid =
       requested.x.isFinite && requested.y.isFinite
       && requested.width.isFinite && requested.height.isFinite
     clip = valid ? clip.intersection(requested) : Region(0, 0, 0, 0)
     frameClip = frameRegion(clip).intersection(previousFrameClip)
-    pointerPosition = pointerPosition.flatMap { clip.contains(x: $0.x, y: $0.y) ? $0 : nil }
+    mousePosition = mousePosition.flatMap { clip.contains(x: $0.x, y: $0.y) ? $0 : nil }
     defer {
       clip = previousClip
       frameClip = previousFrameClip
-      pointerPosition = previousPointer
+      mousePosition = previousMousePosition
     }
     body(&self)
   }
 
-  public mutating func fillCircle(center: SIMD2<Float>, radius: Float, color: Color) {
+  public mutating func fillCircle(center: Coordinate, radius: Float, color: Color) {
     guard radius > 0 && radius.isFinite else { return }
     fillRect(
       Region(center.x - radius, center.y - radius, 2 * radius, 2 * radius), color: color,
@@ -71,7 +71,7 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   }
 
   public mutating func strokeCircle(
-    center: SIMD2<Float>, radius: Float, color: Color, width: Float = 1
+    center: Coordinate, radius: Float, color: Color, width: Float = 1
   ) {
     guard radius > 0 && radius.isFinite else { return }
     strokeRect(
@@ -79,12 +79,13 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
       radius: radius, width: width)
   }
 
-  public mutating func strokePolyline(_ points: [SIMD2<Float>], color: Color, width: Float = 1) {
+  public mutating func strokePolyline(_ points: [Coordinate], color: Color, width: Float = 1) {
     guard !points.isEmpty, points.count <= PolylineStroke.maximumPointCount, width > 0,
       width.isFinite
     else { return }
     guard
-      let stroke = PolylineStroke(points: points.map { origin + $0 * scale }, width: width * scale)
+      let stroke = PolylineStroke(
+        points: points.map { Coordinate(origin + $0.vector * scale) }, width: width * scale)
     else { return }
     storage.value.emit(DrawRect(polyline: stroke, color: color, clip: frameClip))
   }
@@ -100,7 +101,7 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
       guard draw.isValid else { return }
       guard
         let transformed = PolylineStroke(
-          points: stroke.points.map { origin + $0 * scale }, width: stroke.width * scale)
+          points: stroke.points.map { Coordinate(origin + $0.vector * scale) }, width: stroke.width * scale)
       else { return }
       draw = DrawRect(polyline: transformed, color: draw.color, clip: draw.clip)
     } else {
@@ -122,19 +123,19 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   }
 
   public mutating func strokeLine(
-    from start: SIMD2<Float>, to end: SIMD2<Float>, color: Color,
+    from start: Coordinate, to end: Coordinate, color: Color,
     width: Float = 1, cap: LineCap = .round
   ) {
     guard width > 0 && width.isFinite, start.x.isFinite, start.y.isFinite,
       end.x.isFinite, end.y.isFinite
     else { return }
-    let delta = end - start
+    let delta = end.vector - start.vector
     let length = (delta.x * delta.x + delta.y * delta.y).squareRoot()
     guard length.isFinite, length > 0 || cap == .round else { return }
     let axis = length > 0 ? delta / length : SIMD2<Float>(1, 0)
     let half = width / 2
     let extensionLength = cap == .round ? half : 0
-    let origin = start - axis * extensionLength - SIMD2(-axis.y, axis.x) * half
+    let origin = start.vector - axis * extensionLength - SIMD2(-axis.y, axis.x) * half
     draw(
       DrawRect(
         Region(origin.x, origin.y, length + 2 * extensionLength, width), color,

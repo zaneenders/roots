@@ -33,9 +33,27 @@ public struct WaylandBar<Content: Block>: Window {
       scrollDeceleration: scrollDeceleration)
   }
 
-  public func frameDelegate(_ delegate: any DesktopFrameDelegate) -> Self {
+  public func onPrepareFrame(_ action: @escaping @MainActor (inout Input, Float) -> Void) -> Self {
     var bar = self
-    bar.session.delegate = delegate
+    bar.session.frameCallbacks.prepare = action
+    return bar
+  }
+
+  public func onFrameUpdate(_ action: @escaping @MainActor (Input) -> DesktopFrameUpdate) -> Self {
+    var bar = self
+    bar.session.frameCallbacks.update = action
+    return bar
+  }
+
+  public func onFinishFrame(_ action: @escaping @MainActor (borrowing UIState) -> Void) -> Self {
+    var bar = self
+    bar.session.frameCallbacks.finish = action
+    return bar
+  }
+
+  public func animationFrames(while condition: @escaping @MainActor () -> Bool) -> Self {
+    var bar = self
+    bar.session.frameCallbacks.needsAnimationFrame = condition
     return bar
   }
 

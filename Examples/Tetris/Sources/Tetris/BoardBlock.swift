@@ -84,7 +84,6 @@ private struct CellGrid<Content: Block>: Block {
   var body: some Block {
     Grid(columns: columns, gap: 0) {
       ForEach(0..<(columns * rows)) { index in
-        // Empty cells must still occupy a grid slot in sparse piece layers.
         ZStack {
           content(Cell(index % columns, index / columns))
         }
