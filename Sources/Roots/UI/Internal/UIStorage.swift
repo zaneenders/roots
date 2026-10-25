@@ -34,7 +34,7 @@ struct UIStorage: ~Copyable {
   var scrollInputMultiplier: Float = 1
   let drawCapacity: Int?
   var pendingScrollbars = UniqueArray<Int>()
-  var draws = UniqueArray<DrawRect>()
+  var draws = UniqueArray<DrawCommand>()
   var mousePosition: Coordinate?
   var lastMousePosition: Coordinate?
   var droppedDraws = 0

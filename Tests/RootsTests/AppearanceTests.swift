@@ -16,10 +16,10 @@ struct AppearanceTests {
       },
       present: { batch in
         #expect(batch.count == 3)
-        #expect(batch[0].region == Region(10, 20, 100, 24))
-        #expect(batch[0].color == .panel)
-        #expect(batch[0].glyphUV == nil)
-        #expect(batch[1].glyphUV != nil)
+        #expect(batch[0].rectangle.region == Region(10, 20, 100, 24))
+        #expect(batch[0].rectangle.color == .panel)
+        #expect(batch[0].rectangle.glyphUV == nil)
+        #expect(batch[1].rectangle.glyphUV != nil)
       })
     #expect(host.state(for: 1)?.region == Region(15, 25, 10, 14))
     #expect(host.state(for: 2)?.region == Region(10, 44, 10, 14))
@@ -36,7 +36,7 @@ struct AppearanceTests {
         }
       },
       present: { batch in
-        #expect(batch[1].region == Region(0, 20, 10, 14))
+        #expect(batch[1].rectangle.region == Region(0, 20, 10, 14))
       })
     #expect(host.state(for: 1)?.region == Region(0, 0, 100, 20))
     #expect(host.state(for: 2)?.region == Region(0, 34, 10, 14))
@@ -53,8 +53,8 @@ struct AppearanceTests {
       },
       present: { batch in
         #expect(batch.count == 4)
-        #expect(batch[0].region == Region(5, 5, 10, 14))
-        #expect(batch[2].region == Region(0, 24, 20, 24))
+        #expect(batch[0].rectangle.region == Region(5, 5, 10, 14))
+        #expect(batch[2].rectangle.region == Region(0, 24, 20, 24))
       })
   }
 
@@ -69,8 +69,8 @@ struct AppearanceTests {
       },
       present: { batch in
         #expect(batch.count == 3)
-        #expect(batch[0].region == Region(10, 20, 100, 80))
-        #expect(batch[2].region == Region(120, 20, 50, 30))
+        #expect(batch[0].rectangle.region == Region(10, 20, 100, 80))
+        #expect(batch[2].rectangle.region == Region(120, 20, 50, 30))
       })
   }
 
@@ -88,10 +88,10 @@ struct AppearanceTests {
       },
       present: { batch in
         #expect(batch.count == 5)
-        #expect(batch[0].region == Region(0, 0, 18, 36))
-        #expect(batch[0].color == .panel)
-        #expect(batch[1].region == Region(4, 4, 10, 14))
-        #expect(batch[1].color == .accent)
+        #expect(batch[0].rectangle.region == Region(0, 0, 18, 36))
+        #expect(batch[0].rectangle.color == .panel)
+        #expect(batch[1].rectangle.region == Region(4, 4, 10, 14))
+        #expect(batch[1].rectangle.color == .accent)
       })
     #expect(host.state(for: 1)?.region == Region(0, 38, 10, 14))
   }
@@ -116,8 +116,8 @@ struct AppearanceTests {
           ScrollTo(10, in: 1)
         },
         present: { batch in
-          #expect(batch[0].region == Region(0, -10, 100, 46))
-          #expect(batch[0].clip == Region(0, 0, 100, 20))
+          #expect(batch[0].rectangle.region == Region(0, -10, 100, 46))
+          #expect(batch[0].rectangle.clip == Region(0, 0, 100, 20))
         })
     }
     #expect(clicks == 1)
@@ -140,7 +140,7 @@ struct AppearanceTests {
       },
       present: { batch in
         var glyphColors: [Color] = []
-        for draw in batch where draw.glyphUV != nil { glyphColors.append(draw.color) }
+        for draw in batch.rectangles where draw.glyphUV != nil { glyphColors.append(draw.color) }
         #expect(glyphColors == [.accent, .panel, .text, .panel, .text])
       })
   }
@@ -156,10 +156,10 @@ struct AppearanceTests {
       },
       present: { batch in
         #expect(batch.count == 4)
-        #expect(batch[0].color == .panel)
-        #expect(batch[1].color == .accent)
-        #expect(batch[2].color == .panel)
-        #expect(batch[3].color == .accent)
+        #expect(batch[0].rectangle.color == .panel)
+        #expect(batch[1].rectangle.color == .accent)
+        #expect(batch[2].rectangle.color == .panel)
+        #expect(batch[3].rectangle.color == .accent)
       })
   }
 
@@ -186,7 +186,7 @@ struct AppearanceTests {
       },
       present: { batch in
         var glyphColors: [Color] = []
-        for draw in batch {
+        for draw in batch.rectangles {
           if draw.glyphUV != nil { glyphColors.append(draw.color) } else { #expect(draw.color == .panel) }
         }
         #expect(glyphColors == [.accent, .accent, .accent])
@@ -208,7 +208,7 @@ struct AppearanceTests {
         },
         present: { batch in
           #expect(batch.count == (styled ? 2 : 1))
-          #expect(batch[batch.count - 1].color == (styled ? .accent : .text))
+          #expect(batch[batch.count - 1].rectangle.color == (styled ? .accent : .text))
         })
       #expect(host.liveCount == (styled ? 2 : 1))
     }

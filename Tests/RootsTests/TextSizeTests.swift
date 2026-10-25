@@ -13,7 +13,7 @@ struct TextSizeTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[1].region == Region(12, 13, 10, 14))
+        #expect(batch[1].rectangle.region == Region(12, 13, 10, 14))
       })
   }
 
@@ -32,7 +32,7 @@ struct TextSizeTests {
         },
         present: { batch in
           #expect(batch.count == 2)
-          #expect(batch[1].region == Region(0, 0, size, size * 1.4))
+          #expect(batch[1].rectangle.region == Region(0, 0, size, size * 1.4))
         })
     }
   }
@@ -52,8 +52,8 @@ struct TextSizeTests {
       },
       present: { batch in
         #expect(batch.count == 3)
-        #expect(batch[1].region == Region(0, 0, 20, 28))
-        #expect(batch[2].region == Region(0, 30, 17.5, 24.5))
+        #expect(batch[1].rectangle.region == Region(0, 0, 20, 28))
+        #expect(batch[2].rectangle.region == Region(0, 30, 17.5, 24.5))
       })
     #expect(defaultEnd == 12)
     #expect(fractionalEnd == 10.5)

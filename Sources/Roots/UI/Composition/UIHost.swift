@@ -53,6 +53,10 @@
       }, present: present, inputElapsed: inputElapsed, track: track)
   }
 
+  package func present(_ body: (borrowing UIDrawBatch) -> Void) {
+    store.present(body)
+  }
+
   public func withState(_ body: (borrowing UIState) -> Void) {
     body(UIState(host: self))
   }

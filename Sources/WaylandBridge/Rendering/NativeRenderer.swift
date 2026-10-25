@@ -15,6 +15,9 @@ import SwiftWayland
   private var polylineLocations: [GLint] = []
   private var vertexBuffer: GLuint = 0
   private var readbackBuffer: GLuint = 0
+  private var images: [ObjectIdentifier: ImageTextures] = [:]
+  private var usedImages: Set<ObjectIdentifier> = []
+  private var imageLocations: [GLint] = []
   private var fontTexture: GLuint = 0
   private var emojiTexture: GLuint = 0
   private var resolutionLocation: GLint = -1
@@ -37,24 +40,52 @@ import SwiftWayland
     body(frame)
   }
 
-  func render(_ draws: borrowing Span<DrawRect>) {
+  func render(_ commands: borrowing UIDrawBatch) {
     guard active, frameError == nil else { return }
-    for draw in draws {
-      if let stroke = draw.polyline {
+    for command in commands {
+      switch command {
+      case .rectangle(let draw):
+        renderRectangle(draw)
+      case .image(let image):
         flush()
+        guard frameError == nil, let draw = image.resolve() else { continue }
         setClip(draw.clip)
-        guard frameError == nil, draw.isValid else { continue }
-        renderPolyline(stroke, color: draw.color)
-        continue
+        let id = ObjectIdentifier(draw.source)
+        usedImages.insert(id)
+        let textures = images[id] ?? ImageTextures()
+        images[id] = textures
+        do { try textures.bind(draw.frame) } catch { frameError = error; return }
+        for (index, row) in [draw.frame.red, draw.frame.green, draw.frame.blue, draw.frame.chromaTransform].enumerated() {
+          glUniform4f(imageLocations[index], row.x, row.y, row.z, row.w)
+        }
+        let mode: Float = draw.frame.format == .rgba8 ? 3 : (draw.frame.format == .nv12 ? 5 : 4)
+        batch.append(draw.rectangle, textured: mode)
+        flush()
       }
-      setClip(draw.clip)
-      guard frameError == nil else { return }
-      guard RectangleBatch.accepts(draw) else { continue }
-      if batch.count == RectangleBatch.capacity { flush() }
-      guard frameError == nil else { return }
-      batch.append(draw)
     }
     flush()
+  }
+
+  func render(_ draws: borrowing Span<DrawRect>) {
+    guard active, frameError == nil else { return }
+    for draw in draws { renderRectangle(draw) }
+    flush()
+  }
+
+  private func renderRectangle(_ draw: DrawRect) {
+    guard active, frameError == nil else { return }
+    if let stroke = draw.polyline {
+      flush()
+      setClip(draw.clip)
+      guard frameError == nil, draw.isValid else { return }
+      renderPolyline(stroke, color: draw.color)
+      return
+    }
+    setClip(draw.clip)
+    guard frameError == nil, RectangleBatch.accepts(draw) else { return }
+    if batch.count == RectangleBatch.capacity { flush() }
+    guard frameError == nil else { return }
+    batch.append(draw)
   }
 
   private func renderPolyline(_ stroke: PolylineStroke, color: Color) {
@@ -125,6 +156,7 @@ import SwiftWayland
   ) throws {
     precondition(!frameBorrowed)
     frameError = nil
+    usedImages.removeAll(keepingCapacity: true)
     let pixels = try BufferSize(
       width: width, height: height, scale: bufferScale, fractionalScale120: fractionalScale120)
     self.width = pixels.width
@@ -144,6 +176,9 @@ import SwiftWayland
     precondition(!frameBorrowed)
     flush()
     active = false
+    for id in images.keys.filter({ !usedImages.contains($0) }) {
+      images.removeValue(forKey: id)?.close()
+    }
     if let frameError { throw frameError }
     if surfaceless { glFinish() }
     guard glGetError() == GL_NO_ERROR else { throw NativeWindowError.rendering }
@@ -299,6 +334,12 @@ import SwiftWayland
     unsafe glGenBuffers(1, &vertexBuffer)
     glBindBuffer(GLenum(GL_ARRAY_BUFFER), vertexBuffer)
     glUseProgram(program)
+    for (index, name) in ["imageY", "imageU", "imageV"].enumerated() {
+      name.withCString { glUniform1i(unsafe glGetUniformLocation(program, $0), GLint(index + 2)) }
+    }
+    imageLocations = ["imageRed", "imageGreen", "imageBlue", "chromaTransform"].map { name in
+      name.withCString { unsafe glGetUniformLocation(program, $0) }
+    }
     let lengths: [GLint] = [2, 2, 4, 1, 4, 1, 1, 2]
     let offsets = [0, 2, 4, 8, 9, 13, 14, 15]
     for index in 0..<lengths.count {
@@ -511,6 +552,8 @@ import SwiftWayland
       if unsafe context != nil, (try? makeCurrent()) != nil {
         if program != 0 { glDeleteProgram(program) }
         if polylineProgram != 0 { glDeleteProgram(polylineProgram) }
+        for image in images.values { image.close() }
+        images.removeAll()
         if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
         if emojiTexture != 0 { unsafe glDeleteTextures(1, &emojiTexture) }
         if vertexBuffer != 0 { unsafe glDeleteBuffers(1, &vertexBuffer) }

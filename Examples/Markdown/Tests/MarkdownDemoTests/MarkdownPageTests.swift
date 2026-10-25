@@ -13,8 +13,11 @@ struct MarkdownPageTests {
         build: { MarkdownPage(bounds: Region(0, 0, width, 1080)) },
         present: { batch in
           #expect(batch.count > 100)
-          #expect(batch[0].region == Region(0, 0, width, 1080))
-          #expect(batch[0].color == Ink.page)
+          guard case .rectangle(let background) = batch[0] else {
+            Issue.record("Expected page background"); return
+          }
+          #expect(background.region == Region(0, 0, width, 1080))
+          #expect(background.color == Ink.page)
         })
       let introduction = try #require(host.state(for: 3)?.region)
       let code = try #require(host.state(for: 20)?.region)

@@ -10,7 +10,16 @@ extension UIStorage {
       droppedDraws += 1
       return
     }
-    draws.append(draw)
+    draws.append(.rectangle(draw))
+  }
+
+  mutating func emit(_ draw: ImageDraw) {
+    guard draw.isValid else { return }
+    if let drawCapacity, draws.count >= drawCapacity {
+      droppedDraws += 1
+      return
+    }
+    draws.append(.image(draw))
   }
 
   private mutating func paintScrollbar(at i: Int) {

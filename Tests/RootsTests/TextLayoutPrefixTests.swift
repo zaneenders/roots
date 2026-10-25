@@ -35,13 +35,13 @@ struct TextLayoutPrefixTests {
     reference.drawText(text, x: 12, y: 0, font: font, color: .text, clip: node.region)
     var glyphs: [DrawRect] = []
     var backgrounds: [DrawRect] = []
-    for draw in painted.draws {
+    for case .rectangle(let draw) in painted.draws {
       if draw.glyphUV != nil { glyphs.append(draw) } else { backgrounds.append(draw) }
     }
     #expect(glyphs.count == 2)
     #expect(glyphs.count == reference.draws.count)
     for (index, glyph) in glyphs.prefix(reference.draws.count).enumerated() {
-      let expected = reference.draws[index]
+      let expected = reference.draws[index].rectangle
       #expect(glyph.region == expected.region)
       #expect(glyph.glyphUV == expected.glyphUV)
       #expect(glyph.colorGlyph == expected.colorGlyph)
@@ -169,7 +169,7 @@ struct TextLayoutPrefixTests {
         keyEvents: [KeyEvent(.character("c"), modifiers: .control)]),
       onCopy: { copies.append($0) }, build: build,
       present: { draws in
-        for draw in draws where draw.color == Color(0.28, 0.24, 0.42) && draw.glyphUV == nil {
+        for draw in draws.rectangles where draw.color == Color(0.28, 0.24, 0.42) && draw.glyphUV == nil {
           highlights.append(draw.region)
         }
       })

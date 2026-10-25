@@ -42,7 +42,7 @@ struct LineBreakTests {
           }
         },
         present: { batch in
-          for draw in batch where draw.glyphUV != nil { glyphs.append(draw.region) }
+          for draw in batch.rectangles where draw.glyphUV != nil { glyphs.append(draw.region) }
         })
       if mode == 0 { expected = glyphs }
       #expect(glyphs == expected)
@@ -90,7 +90,7 @@ struct LineBreakTests {
           frame.end()
         },
         present: { batch in
-          for draw in batch where draw.glyphUV != nil { glyphs.append(draw.region) }
+          for draw in batch.rectangles where draw.glyphUV != nil { glyphs.append(draw.region) }
         })
       if mode == 0 { expected = glyphs }
       #expect(glyphs == expected)

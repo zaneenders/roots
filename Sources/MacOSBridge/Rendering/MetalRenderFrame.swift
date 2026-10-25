@@ -9,7 +9,7 @@ import Roots
   }
 
   public mutating func render(_ batch: borrowing UIDrawBatch) {
-    state.value.render(batch.draws)
+    state.value.render(batch)
   }
 
   package mutating func render(_ draws: borrowing Span<DrawRect>) {

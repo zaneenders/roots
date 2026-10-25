@@ -1,21 +1,21 @@
 public struct UIDrawBatch: ~Copyable, ~Escapable, Iterable {
-  package let draws: Span<DrawRect>
+  public let commands: Span<DrawCommand>
 
   @_lifetime(copy draws)
-  init(_ draws: Span<DrawRect>) {
-    self.draws = draws
+  public init(_ draws: Span<DrawCommand>) {
+    self.commands = draws
   }
 
-  public var count: Int { draws.count }
-  public var isEmpty: Bool { draws.isEmpty }
-  public var underestimatedCount: Int { draws.count }
+  public var count: Int { commands.count }
+  public var isEmpty: Bool { commands.isEmpty }
+  public var underestimatedCount: Int { commands.count }
 
-  public subscript(index: Int) -> DrawRect {
-    _read { yield draws[index] }
+  public subscript(index: Int) -> DrawCommand {
+    _read { yield commands[index] }
   }
 
   @_lifetime(borrow self)
-  public func makeBorrowingIterator() -> Span<DrawRect>.BorrowingIterator {
-    draws.makeBorrowingIterator()
+  public func makeBorrowingIterator() -> Span<DrawCommand>.BorrowingIterator {
+    commands.makeBorrowingIterator()
   }
 }

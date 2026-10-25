@@ -38,7 +38,7 @@ struct SelectionGroupTests {
       onCopy: { copied = $0 }, build: { content() },
       present: { batch in
         var selections = 0
-        for draw in batch where draw.color == Color(0.28, 0.24, 0.42) { selections += 1 }
+        for draw in batch.rectangles where draw.color == Color(0.28, 0.24, 0.42) { selections += 1 }
         #expect(selections == 3)
       })
     #expect(copied == "irst\nsecond line\nth")
@@ -84,7 +84,7 @@ struct SelectionGroupTests {
     host.frame(
       input: Input(keyEvents: [KeyEvent(.escape)]), build: { content() },
       present: { batch in
-        for draw in batch { #expect(draw.color != Color(0.28, 0.24, 0.42)) }
+        for draw in batch.rectangles { #expect(draw.color != Color(0.28, 0.24, 0.42)) }
       })
     #expect(host.selectedText == nil)
   }

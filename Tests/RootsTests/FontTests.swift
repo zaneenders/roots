@@ -187,8 +187,8 @@ private func bundledAtlasData() throws -> Data {
   let end = storage.drawText(String(character), x: 0, y: 0, font: font, color: .text, clip: nil)
   #expect(end == font.advance)
   #expect(storage.draws.count == 1)
-  #expect(storage.draws[0].glyphUV == uv)
-  #expect(!storage.draws[0].colorGlyph)
+  #expect(storage.draws[0].rectangle.glyphUV == uv)
+  #expect(!storage.draws[0].rectangle.colorGlyph)
   #expect(messages.withLock { $0.isEmpty })
 }
 
@@ -254,10 +254,10 @@ private func bundledAtlasData() throws -> Data {
   let end = storage.drawText("Aé🙂\nx", x: 2, y: 3, font: font, color: .text, clip: nil)
   #expect(end == 2 + font.advance)
   #expect(storage.draws.count == 4)
-  #expect(storage.draws[0].region == Region(2, 3, 17.5, 24.5))
-  #expect(storage.draws[2].colorGlyph == true)
-  #expect(storage.draws[2].glyphUV == EmojiAtlas.shared.glyphUV("🙂"))
-  #expect(storage.draws[3].region.y == 3 + font.lineHeight)
+  #expect(storage.draws[0].rectangle.region == Region(2, 3, 17.5, 24.5))
+  #expect(storage.draws[2].rectangle.colorGlyph == true)
+  #expect(storage.draws[2].rectangle.glyphUV == EmojiAtlas.shared.glyphUV("🙂"))
+  #expect(storage.draws[3].rectangle.region.y == 3 + font.lineHeight)
 }
 
 @Test func explicitFontRefreshesLabelGeometry() {
@@ -273,9 +273,9 @@ private func bundledAtlasData() throws -> Data {
       present: { draws in
         #expect(draws.count == 3)
         #expect(
-          draws[1].region == Region(12, (100 - font.height(of: "A\nA")) / 2, size, font.glyphHeight))
-        #expect(draws[2].region.y == draws[1].region.y + font.lineHeight)
-        #expect(draws[1].glyphUV == draws[2].glyphUV)
+          draws[1].rectangle.region == Region(12, (100 - font.height(of: "A\nA")) / 2, size, font.glyphHeight))
+        #expect(draws[2].rectangle.region.y == draws[1].rectangle.region.y + font.lineHeight)
+        #expect(draws[1].rectangle.glyphUV == draws[2].rectangle.glyphUV)
       })
   }
 }
@@ -407,7 +407,7 @@ func invalidFontSizesAreRejected(size: Float) async {
       },
       present: { draws in
         var glyphs: [Region] = []
-        for draw in draws where draw.glyphUV != nil {
+        for draw in draws.rectangles where draw.glyphUV != nil {
           glyphs.append(draw.region)
           #expect(draw.region.width == font.glyphWidth)
           if overflow == .truncateTail {

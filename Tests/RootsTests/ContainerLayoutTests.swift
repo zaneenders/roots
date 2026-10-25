@@ -55,7 +55,7 @@ struct ContainerLayoutTests {
       },
       present: { batch in
         var glyphs: [DrawRect] = []
-        for draw in batch { glyphs.append(draw) }
+        for draw in batch.rectangles { glyphs.append(draw) }
         #expect(glyphs.first?.region.x == 13)
         #expect(glyphs[1].region.x == 36)
       })
@@ -101,7 +101,7 @@ struct ContainerLayoutTests {
         },
         present: { batch in
           var draws: [DrawRect] = []
-          for draw in batch { draws.append(draw) }
+          for draw in batch.rectangles { draws.append(draw) }
           #expect(draws[0].color == .accent)
           #expect(draws.last?.glyphUV != nil)
           #expect(draws.last?.region == Region(45, 43, 10, 14))
@@ -122,7 +122,7 @@ struct ContainerLayoutTests {
       },
       present: { batch in
         var draws: [DrawRect] = []
-        for draw in batch { draws.append(draw) }
+        for draw in batch.rectangles { draws.append(draw) }
         #expect(draws.count == 3)
         #expect(draws[0].region == Region(52, 45, 10, 14))
         #expect(draws[1].region == Region(58, 45, 10, 14))
@@ -159,7 +159,7 @@ struct ContainerLayoutTests {
       },
       present: { batch in
         var lastClip: Region?
-        for draw in batch { lastClip = draw.clip }
+        for draw in batch.rectangles { lastClip = draw.clip }
         #expect(lastClip == Region(0, 6, 10, 14))
       })
     #expect(host.state(for: 10)?.scrollOffset == 10)
@@ -215,7 +215,7 @@ struct ContainerLayoutTests {
       },
       present: { batch in
         var glyph: DrawRect?
-        for draw in batch where draw.glyphUV != nil { glyph = draw }
+        for draw in batch.rectangles where draw.glyphUV != nil { glyph = draw }
         #expect(glyph?.region == Region(45, 33, 10, 14))
       })
     #expect(host.state(for: 1)?.region == Region(45, 33, 10, 14))

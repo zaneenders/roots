@@ -67,7 +67,7 @@ struct MandelbrotTests {
       host.frame(
         build: { MandelbrotPage(bounds: bounds) },
         present: { batch in
-          for draw in batch where draw.glyphUV == nil && draw.radius == 0 {
+          for case .rectangle(let draw) in batch where draw.glyphUV == nil && draw.radius == 0 {
             imageDraws.append(draw)
           }
         })

@@ -24,9 +24,9 @@ struct ParagraphTests {
         }
       },
       present: { batch in
-        #expect(batch[0].region == Region(0, 0, 10, 14))
-        #expect(batch[5].region == Region(0, 16, 10, 14))
-        #expect(batch[5].color == .accent)
+        #expect(batch[0].rectangle.region == Region(0, 0, 10, 14))
+        #expect(batch[5].rectangle.region == Region(0, 16, 10, 14))
+        #expect(batch[5].rectangle.color == .accent)
       })
     #expect(host.state(for: 1)?.region == Region(0, 0, 34, 30))
     #expect(host.state(for: 2)?.region == Region(0, 33, 34, 10))
@@ -45,8 +45,8 @@ struct ParagraphTests {
         }
       },
       present: { batch in
-        #expect(batch[2].region == Region(0, 16, 10, 14))
-        #expect(batch[2].color == .accent)
+        #expect(batch[2].rectangle.region == Region(0, 16, 10, 14))
+        #expect(batch[2].rectangle.color == .accent)
       })
     #expect(host.state(for: 1)?.region.height == 30)
   }
@@ -97,10 +97,10 @@ struct ParagraphTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(abs(batch[0].region.y + MonospaceFont(size: 10).baseline - MonospaceFont(size: 20).baseline) < 0.001)
-        #expect(batch[1].region.y == 0)
-        #expect(batch[0].color == .accent)
-        #expect(batch[1].color == .panel)
+        #expect(abs(batch[0].rectangle.region.y + MonospaceFont(size: 10).baseline - MonospaceFont(size: 20).baseline) < 0.001)
+        #expect(batch[1].rectangle.region.y == 0)
+        #expect(batch[0].rectangle.color == .accent)
+        #expect(batch[1].rectangle.color == .panel)
       })
     #expect(host.state(for: 1)?.region.height == 28)
   }
@@ -141,8 +141,8 @@ struct ParagraphTests {
         ScrollTo(20, in: 10)
       },
       present: { batch in
-        #expect(batch[0].region == Region(0, -20, 44, 40))
-        #expect(batch[0].clip == Region(0, 0, 44, 20))
+        #expect(batch[0].rectangle.region == Region(0, -20, 44, 40))
+        #expect(batch[0].rectangle.clip == Region(0, 0, 44, 20))
       })
     #expect(host.state(for: 1)?.region == Region(5, -15, 34, 30))
     #expect(host.state(for: 10)?.scrollOffset == 20)
@@ -195,9 +195,9 @@ struct ParagraphTests {
         }
       },
       present: { batch in
-        #expect(batch[0].region.x == 6)
-        #expect(batch[5].region.x == 30)
-        #expect(batch[5].region.y == 16)
+        #expect(batch[0].rectangle.region.x == 6)
+        #expect(batch[5].rectangle.region.x == 30)
+        #expect(batch[5].rectangle.region.y == 16)
       })
   }
   @Test func pointerSelectionCrossesRunsAndSoftWraps() {
@@ -313,7 +313,7 @@ struct ParagraphTests {
       present: { batch in
         var backgrounds: [DrawRect] = []
         var glyphs: [DrawRect] = []
-        for draw in batch {
+        for draw in batch.rectangles {
           if draw.glyphUV == nil { backgrounds.append(draw) } else { glyphs.append(draw) }
         }
         #expect(backgrounds.count == 3)
@@ -352,9 +352,9 @@ struct ParagraphTests {
         }
       },
       present: { batch in
-        #expect(batch[2].region == Region(18, 0, 10, 14))
-        #expect(batch[3].region == Region(24, 0, 10, 14))
-        #expect(batch[4].region == Region(0, 16, 10, 14))
+        #expect(batch[2].rectangle.region == Region(18, 0, 10, 14))
+        #expect(batch[3].rectangle.region == Region(24, 0, 10, 14))
+        #expect(batch[4].rectangle.region == Region(0, 16, 10, 14))
       })
     #expect(host.state(for: 1)?.region.height == 30)
   }

@@ -211,12 +211,12 @@ private func requiredHandle(
       #expect(draws.count == 2)
       let expected = [Region(10, 20, 30, 16), Region(22, 21, 10, 14)]
       guard draws.count == expected.count else { return }
-      for i in expected.indices { #expect(draws[i].region == expected[i]) }
-      #expect(draws[0].color == Color(1, 0, 0))
-      #expect(draws[0].radius == 7)
+      for i in expected.indices { #expect(draws[i].rectangle.region == expected[i]) }
+      #expect(draws[0].rectangle.color == Color(1, 0, 0))
+      #expect(draws[0].rectangle.radius == 7)
       for i in 1..<draws.count {
-        #expect(draws[i].color == .text)
-        #expect(draws[i].radius == 0)
+        #expect(draws[i].rectangle.color == .text)
+        #expect(draws[i].rectangle.radius == 0)
       }
     })
   ui.frame(
@@ -228,10 +228,10 @@ private func requiredHandle(
     present: { draws in
       #expect(draws.count == 2)
       guard draws.count == 2 else { return }
-      #expect(draws[0].region == Region(50, 60, 40, 20))
-      #expect(draws[0].color == Color(0, 1, 0))
-      #expect(draws[1].region == Region(62, 56, 20, 28))
-      #expect(draws[1].glyphUV == FontAtlas.shared.glyphUV("."))
+      #expect(draws[0].rectangle.region == Region(50, 60, 40, 20))
+      #expect(draws[0].rectangle.color == Color(0, 1, 0))
+      #expect(draws[1].rectangle.region == Region(62, 56, 20, 28))
+      #expect(draws[1].rectangle.glyphUV == FontAtlas.shared.glyphUV("."))
     })
   ui.frame(build: { row(&$0, [1]) }, present: { #expect($0.count == 1) })
 }
@@ -244,7 +244,7 @@ private func requiredHandle(
       present: { draws in
         #expect(draws.count == min(capacity, 2))
         for i in 0..<draws.count {
-          #expect(draws[i].region == Region(Float(i) * 80, 0, 80, 40))
+          #expect(draws[i].rectangle.region == Region(Float(i) * 80, 0, 80, 40))
         }
       })
     #expect(ui.droppedDraws == max(0, 2 - capacity))

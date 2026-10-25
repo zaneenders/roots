@@ -113,6 +113,14 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
     storage.value.emit(draw)
   }
 
+  public mutating func drawImage(
+    _ source: ImageSource, in region: Region, contentMode: ImageContentMode = .fit,
+    opacity: Float = 1
+  ) {
+    storage.value.emit(ImageDraw(
+      source, in: frameRegion(region), clip: frameClip, opacity: opacity, contentMode: contentMode))
+  }
+
   public mutating func fillRect(_ region: Region, color: Color, radius: Float = 0) {
     draw(DrawRect(region, color, radius: radius))
   }

@@ -28,7 +28,7 @@ import Testing
     },
     present: { span in
       var draws: [DrawRect] = []
-      for draw in span { draws.append(draw) }
+      for draw in span.rectangles { draws.append(draw) }
       let stroke = draws.first { $0.strokeWidth > 0 }
       #expect(stroke?.region == Region(12, 24, 20, 16))
       #expect(stroke?.radius == 4)
@@ -65,7 +65,7 @@ import Testing
     },
     present: { span in
       var draws: [DrawRect] = []
-      for draw in span { draws.append(draw) }
+      for draw in span.rectangles { draws.append(draw) }
       let lines = draws.filter { $0.color == .accent }
       #expect(lines.count == 3)
       #expect(lines[0].axis == SIMD2<Float>(0.6, 0.8))
@@ -88,7 +88,7 @@ import Testing
     },
     present: { span in
       var draws: [DrawRect] = []
-      for draw in span { draws.append(draw) }
+      for draw in span.rectangles { draws.append(draw) }
       #expect(draws.filter { $0.color == .accent }.count == 1)
     })
 }

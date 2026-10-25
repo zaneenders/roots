@@ -38,7 +38,7 @@ extension NativeSessionTests {
       },
       present: { draws in
         renderer.withFrame { $0.render(draws) }
-        for draw in draws {
+        for case .rectangle(let draw) in draws {
           var physical = draw
           let s = Float(scale)
           physical.region = Region(

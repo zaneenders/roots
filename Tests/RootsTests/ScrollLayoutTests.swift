@@ -21,7 +21,7 @@ struct ScrollLayoutTests {
       },
       present: { batch in
         var clips: [Region?] = []
-        for draw in batch where draw.color == .accent { clips.append(draw.clip) }
+        for draw in batch.rectangles where draw.color == .accent { clips.append(draw.clip) }
         #expect(clips == [
           Region(10, 20, 48, 6), Region(62, 20, 48, 6),
           Region(10, 30, 48, 20), Region(62, 30, 48, 20)

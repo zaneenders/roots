@@ -17,7 +17,7 @@ func clippedTextMatchesFilteringUnclippedDraws(size: Float) {
     Region(-3.25, -5.25, 0.5, 0.5)
   ] {
     var expected: [DrawRect] = []
-    for draw in reference.draws where !clip.intersection(draw.region).isEmpty {
+    for case .rectangle(let draw) in reference.draws where !clip.intersection(draw.region).isEmpty {
       var draw = draw
       draw.clip = clip
       expected.append(draw)
@@ -29,11 +29,11 @@ func clippedTextMatchesFilteringUnclippedDraws(size: Float) {
       #expect(clipped.draws.count == min(capacity, expected.count))
       #expect(clipped.droppedDraws == max(0, expected.count - capacity))
       for index in 0..<clipped.draws.count {
-        #expect(clipped.draws[index].region == expected[index].region)
-        #expect(clipped.draws[index].color == expected[index].color)
-        #expect(clipped.draws[index].radius == expected[index].radius)
-        #expect(clipped.draws[index].clip == expected[index].clip)
-        #expect(clipped.draws[index].glyphUV == expected[index].glyphUV)
+        #expect(clipped.draws[index].rectangle.region == expected[index].region)
+        #expect(clipped.draws[index].rectangle.color == expected[index].color)
+        #expect(clipped.draws[index].rectangle.radius == expected[index].radius)
+        #expect(clipped.draws[index].rectangle.clip == expected[index].clip)
+        #expect(clipped.draws[index].rectangle.glyphUV == expected[index].glyphUV)
       }
     }
   }
