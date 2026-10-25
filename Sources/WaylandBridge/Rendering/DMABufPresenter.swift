@@ -36,7 +36,7 @@ import SwiftWayland
     for index in targets.indices {
       if targets[index]?.buffer.state == .available,
         targets[index]?.width == width && targets[index]?.height == height,
-        (targets[index]?.preferences == feedback || !canImport)
+        targets[index]?.preferences == feedback || !canImport
       {
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), targets[index]?.framebuffer ?? 0)
         selected = index
@@ -174,13 +174,7 @@ import SwiftWayland
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
     glTexStorage2D(GLenum(GL_TEXTURE_2D), 1, GLenum(GL_RGBA8), width, height)
-    unsafe glGenFramebuffers(1, &framebuffer)
-    glBindFramebuffer(GLenum(GL_FRAMEBUFFER), framebuffer)
-    glFramebufferTexture2D(
-      GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0), GLenum(GL_TEXTURE_2D), texture, 0)
-    guard glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER)) == GL_FRAMEBUFFER_COMPLETE,
-      glGetError() == GL_NO_ERROR
-    else { throw NativeWindowError.rendering }
+    try attachFramebuffer()
     unsafe image = createImage(
       display, context, EGLenum(EGL_GL_TEXTURE_2D_KHR),
       UnsafeMutableRawPointer(bitPattern: UInt(texture)),
@@ -262,7 +256,7 @@ import SwiftWayland
     defer { for plane in planes { _ = Glibc.close(plane.descriptor) } }
     var attributes: [EGLint] = [
       EGL_WIDTH, width, EGL_HEIGHT, height, EGL_LINUX_DRM_FOURCC_EXT,
-      Int32(bitPattern: format.format),
+      Int32(bitPattern: format.format)
     ]
     let planeKeys: [(EGLint, EGLint, EGLint, EGLint, EGLint)] = [
       (
@@ -280,7 +274,7 @@ import SwiftWayland
       (
         EGL_DMA_BUF_PLANE3_FD_EXT, EGL_DMA_BUF_PLANE3_OFFSET_EXT, EGL_DMA_BUF_PLANE3_PITCH_EXT,
         EGL_DMA_BUF_PLANE3_MODIFIER_LO_EXT, EGL_DMA_BUF_PLANE3_MODIFIER_HI_EXT
-      ),
+      )
     ]
     for index in 0..<count {
       let fd = unsafe gbm_bo_get_fd_for_plane(allocation, index)
@@ -296,7 +290,7 @@ import SwiftWayland
       if !implicit {
         attributes += [
           keys.3, Int32(truncatingIfNeeded: format.modifier),
-          keys.4, Int32(truncatingIfNeeded: format.modifier >> 32),
+          keys.4, Int32(truncatingIfNeeded: format.modifier >> 32)
         ]
       }
     }
@@ -311,6 +305,16 @@ import SwiftWayland
     unsafe glGenTextures(1, &texture)
     glBindTexture(GLenum(GL_TEXTURE_2D), texture)
     unsafe bindImage(GLenum(GL_TEXTURE_2D), image)
+    try attachFramebuffer()
+    self.format = format
+    imported = try connection.importDMABuf(
+      width: width, height: height, format: format.format, modifier: format.modifier,
+      planes: planes.span, popup: popup)
+    synchronizationDescriptors = planes.map(\.descriptor)
+    planes = []
+  }
+
+  private mutating func attachFramebuffer() throws {
     unsafe glGenFramebuffers(1, &framebuffer)
     glBindFramebuffer(GLenum(GL_FRAMEBUFFER), framebuffer)
     glFramebufferTexture2D(
@@ -318,12 +322,6 @@ import SwiftWayland
     guard glCheckFramebufferStatus(GLenum(GL_FRAMEBUFFER)) == GL_FRAMEBUFFER_COMPLETE,
       glGetError() == GL_NO_ERROR
     else { throw NativeWindowError.rendering }
-    self.format = format
-    imported = try connection.importDMABuf(
-      width: width, height: height, format: format.format, modifier: format.modifier,
-      planes: planes.span, popup: popup)
-    synchronizationDescriptors = planes.map(\.descriptor)
-    planes = []
   }
 
   @discardableResult

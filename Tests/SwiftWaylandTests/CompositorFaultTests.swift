@@ -17,7 +17,7 @@ import Testing
 
 @Test(arguments: [
   Set(["zwp_linux_dmabuf_v1"]), Set(["wl_seat"]),
-  Set(["zwp_linux_dmabuf_v1", "wl_seat", "zwp_idle_inhibit_manager_v1"]),
+  Set(["zwp_linux_dmabuf_v1", "wl_seat", "zwp_idle_inhibit_manager_v1"])
 ])
 @MainActor func compositorWithoutOptionalGlobalsStillConfigures(omitted: Set<String>) async throws {
   let (connection, initialPeer, _) = try await connectedPeer(omittingGlobals: omitted)
@@ -50,12 +50,7 @@ import Testing
   defer { connection.cleanup() }
   var peer = initialPeer
   _ = try await configurePopup(connection, &peer)
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 160)]
-  let rejected = try connection.importDMABuf(
-    width: 40, height: 30, format: 0x3432_5241, modifier: 0, planes: planes.span, popup: popup)
+  let rejected = try importTestBuffer(connection, width: 40, height: 30, popup: popup)
   let params = rejected.params
   connection.waitForDMABufBuffer()
   connection.waitForDMABufBuffer(popup: true)
@@ -67,8 +62,7 @@ import Testing
   rejected.close()
   rejected.close()
 
-  let retry = try connection.importDMABuf(
-    width: 40, height: 30, format: 0x3432_5241, modifier: 0, planes: planes.span, popup: popup)
+  let retry = try importTestBuffer(connection, width: 40, height: 30, popup: popup)
   connection.waitForDMABufBuffer(popup: popup)
   try peer.send(retry.params, 0, [.uint(0xff00_0000)])
   try await roundtrip(&peer)
@@ -96,7 +90,7 @@ import Testing
     (old.popup, 0, [.int(0), .int(0), .int(250), .int(200)]),
     (old.xdg, 0, [.uint(90)]), (old.popup, 1, []),
     (peer.toplevel, 0, [.int(180), .int(120), .array(ByteBuffer())]),
-    (peer.xdgSurface, 0, [.uint(91)]),
+    (peer.xdgSurface, 0, [.uint(91)])
   ] {
     burst.writeImmutableBuffer(
       try WirePacket(object: object, opcode: opcode, arguments: arguments).bytes)

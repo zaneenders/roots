@@ -1,58 +1,14 @@
-import Foundation
-import Glibc
 import NIOCore
 import Testing
 
 @testable import SwiftWayland
 
-func deviceBytes(_ device: UInt64) -> WireValue {
-  var bytes = ByteBuffer()
-  bytes.writeInteger(dev_t(device), endianness: .host)
-  return .array(bytes)
-}
-
-func tableEvent(
-  _ pairs: [WaylandDMABufFormat], id: UInt32, size: UInt32? = nil
-) throws -> (WireMessage, Int32) {
-  var bytes = ByteBuffer()
-  for pair in pairs {
-    bytes.writeInteger(pair.format, endianness: .host)
-    bytes.writeInteger(UInt32(0), endianness: .host)
-    bytes.writeInteger(pair.modifier, endianness: .host)
-  }
-  let path = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-  try Data(bytes.readableBytesView).write(to: path)
-  defer { try? FileManager.default.removeItem(at: path) }
-  let fd = unsafe open(path.path, O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  return (
-    .init(
-      object: id, opcode: 1,
-      arguments: [
-        .fd(WireDescriptor(taking: fd)), .uint(size ?? UInt32(bytes.readableBytes)),
-      ]), fd
-  )
-}
-
-func trancheEvents(
-  device: UInt64, indices: [UInt16], flags: UInt32 = 0, id: UInt32
-) -> [WireMessage] {
-  var bytes = ByteBuffer()
-  for index in indices { bytes.writeInteger(index, endianness: .host) }
-  return [
-    .init(object: id, opcode: 4, arguments: [deviceBytes(device)]),
-    .init(object: id, opcode: 6, arguments: [.uint(flags)]),
-    .init(object: id, opcode: 5, arguments: [.array(bytes)]),
-    .init(object: id, opcode: 3, arguments: []),
-  ]
-}
-
 @Test @MainActor func feedbackPublishesAtomicallyAndReusesTableAcrossUpdates() throws {
   let feedback = DMABufFeedback(id: 2)
   let pairs: [WaylandDMABufFormat] = [
-    .init(format: 0x3432_5241, modifier: 9), .init(format: 0x3432_4241, modifier: 0),
+    .init(format: 0x3432_5241, modifier: 9), .init(format: 0x3432_4241, modifier: 0)
   ]
-  let (table, _) = try tableEvent(pairs, id: 2)
+  let table = try tableEvent(pairs, id: 2)
   #expect(try !feedback.event(table))
   guard case .fd(let owner) = table.arguments[0] else {
     Issue.record("Missing table FD")
@@ -87,7 +43,7 @@ func trancheEvents(
 @Test(arguments: [UInt32(0), 15, 17, 32, 1_048_592])
 @MainActor func feedbackRejectsInvalidTableSizesAndClosesFD(size: UInt32) throws {
   let feedback = DMABufFeedback(id: 2)
-  let (table, _) = try tableEvent([.init(format: 1, modifier: 2)], id: 2, size: size)
+  let table = try tableEvent([.init(format: 1, modifier: 2)], id: 2, size: size)
   #expect(throws: WaylandError.dispatch) { try feedback.event(table) }
   guard case .fd(let owner) = table.arguments[0] else {
     Issue.record("Missing table FD")
@@ -99,7 +55,7 @@ func trancheEvents(
 
 @Test @MainActor func feedbackRejectsInvalidIndicesDevicesAndIncompleteTranches() throws {
   let feedback = DMABufFeedback(id: 2)
-  let (table, _) = try tableEvent([.init(format: 1, modifier: 0)], id: 2)
+  let table = try tableEvent([.init(format: 1, modifier: 0)], id: 2)
   _ = try feedback.event(table)
   #expect(throws: WaylandError.dispatch) {
     try feedback.event(.init(object: 2, opcode: 2, arguments: [.array(ByteBuffer(bytes: [1]))]))
@@ -134,7 +90,7 @@ func trancheEvents(
   #expect(requests.count == 2)
   let ids = requests.map { $0.bytes.getInteger(at: 8, endianness: .host, as: UInt32.self)! }
   for (index, id) in ids.enumerated() {
-    let (table, _) = try tableEvent([.init(format: 1, modifier: UInt64(index))], id: id)
+    let table = try tableEvent([.init(format: 1, modifier: UInt64(index))], id: id)
     _ = try dmabuf.feedbackEvent(table)
     _ = try dmabuf.feedbackEvent(.init(object: id, opcode: 2, arguments: [deviceBytes(123)]))
     for event in trancheEvents(device: 123, indices: [0], id: id) {
@@ -145,17 +101,11 @@ func trancheEvents(
   }
   #expect(dmabuf.preferences()?.supports(format: 1, modifier: 0) == true)
   #expect(dmabuf.preferences(surface: 42)?.supports(format: 1, modifier: 1) == true)
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 16)]
   #expect(throws: WaylandError.missingGlobals) {
-    try dmabuf.importBuffer(
-      width: 4, height: 4, format: 1, modifier: 0, planes: planes.span, surface: 42, changed: {})
+    try importTestBuffer(dmabuf, surface: 42)
   }
   #expect(try objects.takeRequests().isEmpty)
-  let buffer = try dmabuf.importBuffer(
-    width: 4, height: 4, format: 1, modifier: 1, planes: planes.span, surface: 42, changed: {})
+  let buffer = try importTestBuffer(dmabuf, modifier: 1, surface: 42)
   #expect(buffer.state == .importing)
   dmabuf.event(.init(object: buffer.params, opcode: 1, arguments: []))
   #expect(buffer.state == .failed)
@@ -189,7 +139,7 @@ func trancheEvents(
   let feedback = DMABufFeedback(id: 2)
   for modifier: UInt64 in [0, 42] {
     let before = feedback.current
-    let (table, _) = try tableEvent([.init(format: 1, modifier: modifier)], id: 2)
+    let table = try tableEvent([.init(format: 1, modifier: modifier)], id: 2)
     _ = try feedback.event(table)
     _ = try feedback.event(.init(object: 2, opcode: 2, arguments: [deviceBytes(123)]))
     for event in trancheEvents(device: 123, indices: [0], id: 2) {
@@ -199,4 +149,28 @@ func trancheEvents(
     _ = try feedback.event(.init(object: 2, opcode: 0, arguments: []))
     #expect(feedback.current?.tranches[0].formats == [.init(format: 1, modifier: modifier)])
   }
+}
+
+@Test @MainActor func connectionNegotiatesV4FeedbackBeforeReturningAndWatchesPopup() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer(dmabufVersion: 4)
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  #expect(connection.dmabufPreferences?.mainDevice == 123)
+  #expect(connection.dmabufPreferences?.supports(format: 0x3432_5241, modifier: 0) == true)
+  try connection.presentPopup(
+    configuration: .init(x: 0, y: 0, anchorWidth: 10, anchorHeight: 10, width: 40, height: 30),
+    grab: false)
+  let requests = try await drain(connection, &peer)
+  let watch = try #require(requests.first { $0.id == peer.dmabuf && $0.opcode == 3 })
+  let feedback: UInt32 = try #require(
+    watch.body.getInteger(at: watch.body.readerIndex, endianness: .host))
+  try peer.sendFeedback(feedback, device: 456)
+  for _ in 0..<100 where connection.popupDMABufPreferences?.mainDevice != 456 {
+    try await Task.sleep(for: .milliseconds(1))
+  }
+  #expect(connection.popupDMABufPreferences?.mainDevice == 456)
+  #expect(connection.dmabufPreferences?.mainDevice == 123)
+  connection.dismissPopup()
+  let destroyed = try await drain(connection, &peer)
+  #expect(destroyed.contains { $0.id == feedback && $0.opcode == 0 })
 }

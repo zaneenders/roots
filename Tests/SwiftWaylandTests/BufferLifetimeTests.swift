@@ -1,4 +1,3 @@
-import Glibc
 import NIOCore
 import Testing
 
@@ -10,13 +9,8 @@ import Testing
   dmabuf.factory = objects.allocate("zwp_linux_dmabuf_v1", version: 3)
   dmabuf.modifier(format: 1, high: 0, low: 0)
   let surface = objects.allocate("wl_surface", version: 3)
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 16)]
   var changes = 0
-  let buffer = try dmabuf.importBuffer(
-    width: 4, height: 4, format: 1, modifier: 0, planes: planes.span, changed: { changes += 1 })
+  let buffer = try importTestBuffer(dmabuf, changed: { changes += 1 })
   let id: UInt32 = 0xff00_0000
   dmabuf.event(.init(object: buffer.params, opcode: 0, arguments: [.uint(id)]))
   try buffer.present(on: surface)
@@ -25,8 +19,7 @@ import Testing
   buffer.close()
   #expect(buffer.state == .closed && buffer.id == id && objects.isLive(id))
   #expect(try objects.takeRequests().isEmpty)
-  let next = try dmabuf.importBuffer(
-    width: 4, height: 4, format: 1, modifier: 0, planes: planes.span, changed: {})
+  let next = try importTestBuffer(dmabuf)
   #expect(dmabuf.owns(buffer))
   _ = try objects.takeRequests()
   dmabuf.event(.init(object: id, opcode: 0, arguments: []))
@@ -46,13 +39,8 @@ func bufferCleanupKeepsSubmittedBuffersUntilRelease(alreadyClosed: Bool) throws 
   dmabuf.factory = objects.allocate("zwp_linux_dmabuf_v1", version: 3)
   dmabuf.modifier(format: 1, high: 0, low: 0)
   let surface = objects.allocate("wl_surface", version: 3)
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 16)]
   var changes = 0
-  let buffer = try dmabuf.importBuffer(
-    width: 4, height: 4, format: 1, modifier: 0, planes: planes.span, changed: { changes += 1 })
+  let buffer = try importTestBuffer(dmabuf, changed: { changes += 1 })
   let id: UInt32 = 0xff00_0000
   dmabuf.event(.init(object: buffer.params, opcode: 0, arguments: [.uint(id)]))
   try buffer.present(on: surface)
@@ -85,12 +73,7 @@ func removedDMABufGlobalStillDestroysExplicitlyClosedBuffersOnRelease(version: U
   let (connection, initialPeer, _) = try await connectedPeer(dmabufVersion: version)
   defer { connection.cleanup() }
   var peer = initialPeer
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 400)]
-  let buffer = try connection.importDMABuf(
-    width: 100, height: 80, format: 0x3432_5241, modifier: 0, planes: planes.span)
+  let buffer = try importTestBuffer(connection)
   let id: UInt32 = 0xff00_0000
   try connection.receive(.init(object: buffer.params, opcode: 0, arguments: [.uint(id)]))
   try connection.presentDMABuf(buffer)
@@ -125,16 +108,10 @@ func removedDMABufFactoryKeepsAvailableSubmittedAndImportingBuffersUsable(
   } else {
     xdgSurface = peer.xdgSurface
   }
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 160)]
   var buffers: [WaylandDMABufBuffer] = []
   for _ in 0..<3 {
     buffers.append(
-      try connection.importDMABuf(
-        width: 40, height: 30, format: 0x3432_5241, modifier: 0,
-        planes: planes.span, popup: popup))
+      try importTestBuffer(connection, width: 40, height: 30, popup: popup))
   }
   for index in 0..<2 {
     try connection.receive(
@@ -157,9 +134,7 @@ func removedDMABufFactoryKeepsAvailableSubmittedAndImportingBuffersUsable(
       buffers.contains { $0.id == request.id || $0.params == request.id }
     })
   #expect(throws: WaylandError.missingGlobals) {
-    try connection.importDMABuf(
-      width: 40, height: 30, format: 0x3432_5241, modifier: 0,
-      planes: planes.span, popup: popup)
+    try importTestBuffer(connection, width: 40, height: 30, popup: popup)
   }
 
   // A new configure may fit an existing allocation even while imports are unavailable.
@@ -227,7 +202,7 @@ func replacementDMABufFactoryRequiresFreshFeedbackAndWakesBothSurfaces(
           watch.body.getInteger(at: watch.body.readerIndex + 4, endianness: .host))
       }
       let device: UInt64 = surface == popup.surface ? 888 : 777
-      let (table, _) = try tableEvent([.init(format: 0x3432_5241, modifier: 1)], id: id)
+      let table = try tableEvent([.init(format: 0x3432_5241, modifier: 1)], id: id)
       try connection.receive(table)
       try connection.receive(.init(object: id, opcode: 2, arguments: [deviceBytes(device)]))
       for event in trancheEvents(device: device, indices: [0], id: id) {
@@ -243,20 +218,48 @@ func replacementDMABufFactoryRequiresFreshFeedbackAndWakesBothSurfaces(
   }
   #expect(connection.canImportDMABuf() && connection.canImportDMABuf(popup: true))
   #expect(connection.canRender && connection.canRenderPopup)
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 160)]
   for popup in [false, true] {
     #expect(throws: WaylandError.missingGlobals) {
-      try connection.importDMABuf(
-        width: 40, height: 30, format: 0x3432_5241, modifier: 0,
-        planes: planes.span, popup: popup)
+      try importTestBuffer(connection, width: 40, height: 30, popup: popup)
     }
-    let buffer = try connection.importDMABuf(
-      width: 40, height: 30, format: 0x3432_5241, modifier: 1,
-      planes: planes.span, popup: popup)
+    let buffer = try importTestBuffer(connection, width: 40, height: 30, modifier: 1, popup: popup)
     #expect(buffer.state == .importing)
     buffer.close()
   }
+}
+
+@Test @MainActor func reclamationBarrierDrainsLateBufferEventsBeforeForgettingTheID() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let buffer = try importTestBuffer(connection)
+  let requests = try await drain(connection, &peer)
+  let create = try #require(requests.first { $0.id == peer.dmabuf && $0.opcode == 1 })
+  let params: UInt32 = try #require(
+    create.body.getInteger(at: create.body.readerIndex, endianness: .host))
+  let id: UInt32 = 0xff00_0000
+  try connection.receive(.init(object: params, opcode: 0, arguments: [.uint(id)]))
+  buffer.close()
+  try connection.receive(.init(object: peer.shell, opcode: 0, arguments: [.uint(99)]))
+  let snapshot = peer
+  let sync = try await blockingTestTask {
+    var peer = snapshot
+    return try peer.throughSync()
+  }.value
+  let callback = sync.callback
+  let destroyed = sync.requests
+  #expect(destroyed.contains { $0.id == id && $0.opcode == 0 })
+
+  var bytes = try WirePacket(object: id, opcode: 0, arguments: []).bytes
+  bytes.writeImmutableBuffer(
+    try WirePacket(object: callback, opcode: 0, arguments: [.uint(0)]).bytes)
+  bytes.writeImmutableBuffer(
+    try WirePacket(object: 1, opcode: 1, arguments: [.uint(callback)]).bytes)
+  var chunk = WireChunk(bytes: bytes, descriptors: [])
+  try connection.receive(&chunk)
+  #expect(buffer.state == .closed && connection.running)
+  // No metadata remains once the barrier has completed.
+  var late = WireChunk(
+    bytes: try WirePacket(object: id, opcode: 0, arguments: []).bytes, descriptors: [])
+  #expect(throws: WaylandError.dispatch) { try connection.receive(&late) }
 }

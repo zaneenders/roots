@@ -80,13 +80,13 @@ struct ConnectionPeer: Sendable {
         registry = try #require(first)
         for (name, interface): (UInt32, String) in [
           (1, "wl_compositor"), (2, "xdg_wm_base"), (3, "zwp_linux_dmabuf_v1"), (4, "wl_seat"),
-          (5, "zwp_idle_inhibit_manager_v1"),
+          (5, "zwp_idle_inhibit_manager_v1")
         ] where !omittingGlobals.contains(interface) {
           try send(
             registry, 0,
             [
               .uint(name), .string(interface),
-              .uint(name == 3 ? dmabufVersion : (name == 4 ? seatVersion : 6)),
+              .uint(name == 3 ? dmabufVersion : (name == 4 ? seatVersion : 6))
             ])
         }
         for (index, interface) in scaleGlobals.enumerated() {
@@ -138,7 +138,7 @@ struct ConnectionPeer: Sendable {
   }
 
   func sendFeedback(_ id: UInt32, device: UInt64) throws {
-    let (table, _) = try tableEvent([.init(format: 0x3432_5241, modifier: 0)], id: id)
+    let table = try tableEvent([.init(format: 0x3432_5241, modifier: 0)], id: id)
     try send(id, table.opcode, table.arguments)
     try send(id, 2, [deviceBytes(device)])
     for event in trancheEvents(device: device, indices: [0], id: id) {
