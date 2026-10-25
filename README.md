@@ -26,7 +26,7 @@ swift run --package-path Examples/Markdown MarkdownDemo
 swift run --package-path Examples/Tetris Tetris
 swift run --package-path Examples/Mandelbrot Mandelbrot
 swift run --package-path Examples/Video VideoPlayer /path/to/movie.mp4
-swift run -c release --package-path Examples/Path3D Path3D
+swift run --package-path Examples/Path3D Path3D
 ```
 
 Text measurement, drawing, and paragraphs recognize LF, CRLF, and CR line breaks.
