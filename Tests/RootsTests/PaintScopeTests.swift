@@ -58,7 +58,8 @@ import Testing
         }
         context.strokePolyline([], color: .accent)
         context.strokePolyline([.init(x: .nan, y: 0)], color: .accent)
-        context.strokePolyline(Array(repeating: Coordinate(x: 0, y: 0), count: 129), color: .accent)
+        context.strokePolyline(
+          Array(repeating: Coordinate(x: 0, y: 0), count: PolylineStroke.maximumPointCount + 1), color: .accent)
         context.fillCircle(center: .init(x: 0, y: 0), radius: -1, color: .accent)
       }
       frame.end()
@@ -91,8 +92,11 @@ import Testing
     })
   #expect(strokes.count == 2)
   for draw in strokes {
-    #expect(draw.polyline?.points == [Coordinate(x: 12, y: 24), Coordinate(x: 16, y: 28)])
-    #expect(draw.polyline?.width == 4)
+    #expect(draw.polyline?.points == stroke.points)
+    #expect(
+      draw.polyline?.points.map { draw.pathTransform.apply($0) } == [Coordinate(x: 12, y: 24), Coordinate(x: 16, y: 28)]
+    )
+    #expect(draw.polyline!.width * draw.pathTransform.scale == 4)
     #expect(draw.clip == Region(10, 20, 20, 20))
     #expect(draw.isValid)
   }

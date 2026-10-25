@@ -11,8 +11,18 @@ import SwiftWayland
   private var context: EGLContext?
   private var surface: EGLSurface?
   private var program: GLuint = 0
+  private var ribbonProgram: GLuint = 0
+  private var ribbonLocations: [GLint] = []
+  private var ribbons: [ObjectIdentifier: RibbonBuffer] = [:]
+  private var usedRibbons: Set<ObjectIdentifier> = []
+  private(set) var ribbonUploads = 0
+  var cachedRibbonCount: Int { ribbons.count }
   private var polylineProgram: GLuint = 0
   private var polylineLocations: [GLint] = []
+  private var polylines: [ObjectIdentifier: PolylineTexture] = [:]
+  private var usedPolylines: Set<ObjectIdentifier> = []
+  private(set) var polylineUploads = 0
+  var cachedPolylineCount: Int { polylines.count }
   private var vertexBuffer: GLuint = 0
   private var readbackBuffer: GLuint = 0
   private var images: [ObjectIdentifier: ImageTextures] = [:]
@@ -78,7 +88,7 @@ import SwiftWayland
       flush()
       setClip(draw.clip)
       guard frameError == nil, draw.isValid else { return }
-      renderPolyline(stroke, color: draw.color)
+      renderPolyline(stroke, draw: draw)
       return
     }
     setClip(draw.clip)
@@ -88,21 +98,48 @@ import SwiftWayland
     batch.append(draw)
   }
 
-  private func renderPolyline(_ stroke: PolylineStroke, color: Color) {
+  private func renderPolyline(_ stroke: PolylineStroke, draw: DrawRect) {
+    let id = ObjectIdentifier(stroke)
+    if stroke.usesRibbon(tint: draw.color, scale: draw.pathTransform.scale * min(Float(width) / Float(logicalSize.x), Float(height) / Float(logicalSize.y))), let ribbon = stroke.ribbon {
+      do {
+        if ribbons[id] == nil { ribbons[id] = try RibbonBuffer(stroke, ribbon: ribbon); ribbonUploads += 1 }
+      } catch { frameError = error; return }
+      usedRibbons.insert(id)
+      glUseProgram(ribbonProgram)
+      let t = draw.pathTransform
+      glUniform2f(ribbonLocations[0], Float(logicalSize.x), Float(logicalSize.y))
+      glUniform4f(ribbonLocations[1], t.translation.x, t.translation.y, t.axis.x, t.axis.y)
+      glUniform1f(ribbonLocations[2], t.scale)
+      glUniform1f(ribbonLocations[3], stroke.width)
+      glUniform4f(ribbonLocations[4], draw.color.r, draw.color.g, draw.color.b, draw.color.a)
+      glUniform2f(ribbonLocations[5], Float(width) / Float(logicalSize.x), Float(height) / Float(logicalSize.y))
+      ribbons[id]?.draw()
+      glUseProgram(program)
+      return
+    }
+    do {
+      if polylines[id] == nil {
+        polylines[id] = try PolylineTexture(stroke)
+        polylineUploads += 1
+      }
+    } catch {
+      frameError = error
+      return
+    }
+    usedPolylines.insert(id)
+    polylines[id]?.bind()
     glUseProgram(polylineProgram)
-    let b = stroke.bounds
+    let b = draw.bounds
     glUniform2f(polylineLocations[0], Float(logicalSize.x), Float(logicalSize.y))
     glUniform4f(polylineLocations[1], b.x, b.y, b.width, b.height)
-    var packed: [Float] = []
-    packed.reserveCapacity(stroke.points.count * 2)
-    for point in stroke.points {
-      packed.append(point.x)
-      packed.append(point.y)
-    }
-    unsafe glUniform2fv(polylineLocations[2], GLsizei(stroke.points.count), packed)
+    glUniform1i(polylineLocations[2], 5)
     glUniform1i(polylineLocations[3], GLint(stroke.points.count))
     glUniform1f(polylineLocations[4], stroke.width)
-    glUniform4f(polylineLocations[5], color.r, color.g, color.b, color.a)
+    glUniform4f(polylineLocations[5], draw.color.r, draw.color.g, draw.color.b, draw.color.a)
+    let t = draw.pathTransform
+    glUniform4f(polylineLocations[6], t.translation.x, t.translation.y, t.axis.x, t.axis.y)
+    glUniform1f(polylineLocations[7], t.scale)
+    glUniform2f(polylineLocations[8], Float(width) / Float(logicalSize.x), Float(height) / Float(logicalSize.y))
     glDrawArrays(GLenum(GL_TRIANGLES), 0, 6)
     glUseProgram(program)
   }
@@ -157,6 +194,8 @@ import SwiftWayland
     precondition(!frameBorrowed)
     frameError = nil
     usedImages.removeAll(keepingCapacity: true)
+    usedPolylines.removeAll(keepingCapacity: true)
+    usedRibbons.removeAll(keepingCapacity: true)
     let pixels = try BufferSize(
       width: width, height: height, scale: bufferScale, fractionalScale120: fractionalScale120)
     self.width = pixels.width
@@ -179,6 +218,8 @@ import SwiftWayland
     for id in images.keys.filter({ !usedImages.contains($0) }) {
       images.removeValue(forKey: id)?.close()
     }
+    for id in polylines.keys.filter({ !usedPolylines.contains($0) }) { polylines.removeValue(forKey: id)?.close() }
+    for id in ribbons.keys.filter({ !usedRibbons.contains($0) }) { ribbons.removeValue(forKey: id)?.close() }
     if let frameError { throw frameError }
     if surfaceless { glFinish() }
     guard glGetError() == GL_NO_ERROR else { throw NativeWindowError.rendering }
@@ -325,10 +366,23 @@ import SwiftWayland
     unsafe glGetProgramiv(polylineProgram, GLenum(GL_LINK_STATUS), &linked)
     guard linked != 0 else { throw NativeWindowError.rendering }
     let names: [String] = [
-      "resolution", "bounds", "points[0]", "pointCount", "strokeWidth", "color"
+      "resolution", "bounds", "geometry", "pointCount", "strokeWidth", "color", "transform", "scale", "pixelScale"
     ]
     polylineLocations = names.map { name in
       name.withCString { unsafe glGetUniformLocation(polylineProgram, $0) }
+    }
+    let ribbonVertex = try compileShader(GLenum(GL_VERTEX_SHADER), source: RibbonShaders.vertexSource)
+    defer { glDeleteShader(ribbonVertex) }
+    let ribbonFragment = try compileShader(GLenum(GL_FRAGMENT_SHADER), source: RibbonShaders.fragmentSource)
+    defer { glDeleteShader(ribbonFragment) }
+    ribbonProgram = glCreateProgram()
+    glAttachShader(ribbonProgram, ribbonVertex)
+    glAttachShader(ribbonProgram, ribbonFragment)
+    glLinkProgram(ribbonProgram)
+    unsafe glGetProgramiv(ribbonProgram, GLenum(GL_LINK_STATUS), &linked)
+    guard linked != 0 else { throw NativeWindowError.rendering }
+    ribbonLocations = ["resolution", "transform", "scale", "strokeWidth", "color", "pixelScale"].map { name in
+      name.withCString { unsafe glGetUniformLocation(ribbonProgram, $0) }
     }
     resolutionLocation = unsafe glGetUniformLocation(program, "resolution")
     unsafe glGenBuffers(1, &vertexBuffer)
@@ -552,6 +606,11 @@ import SwiftWayland
       if unsafe context != nil, (try? makeCurrent()) != nil {
         if program != 0 { glDeleteProgram(program) }
         if polylineProgram != 0 { glDeleteProgram(polylineProgram) }
+        if ribbonProgram != 0 { glDeleteProgram(ribbonProgram) }
+        for ribbon in ribbons.values { ribbon.close() }
+        ribbons.removeAll()
+        for path in polylines.values { path.close() }
+        polylines.removeAll()
         for image in images.values { image.close() }
         images.removeAll()
         if fontTexture != 0 { unsafe glDeleteTextures(1, &fontTexture) }
@@ -571,6 +630,7 @@ import SwiftWayland
     unsafe surface = nil
     device = nil
     polylineProgram = 0
+    ribbonProgram = 0
     program = 0
     vertexBuffer = 0
     readbackBuffer = 0

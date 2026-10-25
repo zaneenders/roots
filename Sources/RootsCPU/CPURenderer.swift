@@ -43,6 +43,11 @@ public final class CPURenderer {
   private func renderRectangle(_ draw: DrawRect) {
     let r = draw.region
     guard draw.isValid else { return }
+    if let stroke = draw.polyline, stroke.usesRibbon(tint: draw.color, scale: draw.pathTransform.scale), let mesh = stroke.ribbon {
+      StrokeRaster.render(draw, mesh: mesh, width: width, height: height,
+        bottomLeft: fragmentOrigin == .bottomLeft, pixels: &pixels)
+      return
+    }
     var bounds = draw.bounds
     if let clip = draw.clip {
       guard clip.x.isFinite && clip.y.isFinite && clip.width.isFinite && clip.height.isFinite
@@ -74,7 +79,9 @@ public final class CPURenderer {
       lod = 0
     }
     func distance(_ x: Float, _ y: Float) -> Float {
-      if let stroke = draw.polyline { return stroke.distance(to: .init(x: x, y: y)) }
+      if let stroke = draw.polyline {
+        return stroke.distance(to: draw.pathTransform.unapply(.init(x: x, y: y))) * draw.pathTransform.scale
+      }
       let local = draw.localPosition(at: .init(x: x, y: y))
       let qx = abs(local.x - r.width / 2) - r.width / 2 + radius
       let qy = abs(local.y - r.height / 2) - r.height / 2 + radius
@@ -111,6 +118,16 @@ public final class CPURenderer {
         var texRed = red
         var texGreen = green
         var texBlue = blue
+        if let stroke = draw.polyline, !stroke.colors.isEmpty,
+          let hit = stroke.hitTest(
+            Coordinate(x: px, y: py), transform: draw.pathTransform, tolerance: Float.greatestFiniteMagnitude)
+        {
+          let color = stroke.color(at: hit)
+          texRed *= max(0, min(1, color.r))
+          texGreen *= max(0, min(1, color.g))
+          texBlue *= max(0, min(1, color.b))
+          alpha *= max(0, min(1, color.a))
+        }
         if let uv = draw.glyphUV {
           guard local.x >= 0, local.x < r.width, local.y >= 0, local.y < r.height
           else { continue }

@@ -169,6 +169,49 @@ import Testing
     _ = try #require(await renderer.render(readback: true) { $0.render([draws[1]].span) })
   }
 
+  @Test @MainActor func retainedColoredPathMatchesCPUAndCachesBuffers() async throws {
+    let renderer = try MetalRenderer(logicalSize: .init(64, 64), drawableSize: .init(64, 64))
+    let points = (0..<1_024).map { i in Coordinate(x: Float(i) / 32, y: sin(Float(i) / 100) * 6) }
+    let colors = points.indices.map { i in Color(Float(i) / 1_023, 0.5, 1 - Float(i) / 1_023, 0.5) }
+    let path = try #require(PolylineStroke(points: points, width: 3, colors: colors))
+    let draws = [
+      DrawRect(Region(0, 0, 64, 64), Color(0, 0, 0)),
+      DrawRect(
+        polyline: path, transform: .init(translation: .init(x: 10, y: 20), scale: 1.2, rotation: 0.3),
+        clip: Region(8, 8, 48, 48))
+    ]
+    let cpu = CPURenderer(width: 64, height: 64)
+    cpu.render(draws.span)
+    for _ in 0..<4 {
+      let image = try #require(await renderer.render(readback: true) { $0.render(draws.span) })
+      let pixels = Array(image.dropFirst(Data("P6\n64 64\n255\n".utf8).count))
+      #expect(pixels.count == cpu.pixels.count)
+      let maximumError = zip(pixels, cpu.pixels).map { abs(Int($0) - Int($1)) }.max() ?? 0
+      #expect(maximumError <= 4)
+    }
+    #expect(renderer.polylineUploads == 1)
+    #expect(renderer.cachedPolylineCount == 1)
+    _ = try await renderer.render(readback: false) { $0.render([draws[0]].span) }
+    #expect(renderer.cachedPolylineCount == 0)
+  }
+
+  @Test @MainActor func coloredRibbonsMatchCPU() async throws {
+    let renderer = try MetalRenderer(logicalSize: .init(64, 64), drawableSize: .init(64, 64))
+    let points = (0..<257).map { i in Coordinate(x: Float(i) / 8, y: sin(Float(i) / 256 * 2) * 10) }
+    let colors = points.indices.map { i in Color(Float(i) / 256, 0.5, 1 - Float(i) / 256, 0.5) }
+    let stroke = try #require(PolylineStroke(points: points, width: 3, colors: colors, rendering: .ribbon))
+    #expect(stroke.ribbon != nil)
+    let draws = [DrawRect(Region(0, 0, 64, 64), Color(0, 0, 0)),
+      DrawRect(polyline: stroke, transform: .init(translation: .init(x: 12, y: 15), scale: 1.2, rotation: 0.4))]
+    let cpu = CPURenderer(width: 64, height: 64)
+    cpu.render(draws.span)
+    let image = try #require(await renderer.render(readback: true) { $0.render(draws.span) })
+    let pixels = Array(image.dropFirst(Data("P6\n64 64\n255\n".utf8).count))
+    let errors = zip(pixels, cpu.pixels).map { abs(Int($0) - Int($1)) }
+    #expect(pixels.count == cpu.pixels.count)
+    #expect((errors.max() ?? 0) <= 5)
+  }
+
   @Test @MainActor func cancellationDrainsSubmittedWorkBeforeAllowingReuse() async throws {
     let renderer = try MetalRenderer(logicalSize: .init(8, 8), drawableSize: .init(8, 8))
     var task: Task<Data?, any Error>?
