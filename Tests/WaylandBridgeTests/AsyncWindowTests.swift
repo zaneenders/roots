@@ -186,7 +186,9 @@ extension NativeSessionTests {
       lastInput = input
     }
     let input = try #require(lastInput)
-    let size = try BufferSize(width: input.width, height: input.height, scale: input.bufferScale)
+    let size = try BufferSize(
+      width: input.width, height: input.height, scale: input.bufferScale,
+      fractionalScale120: input.fractionalScale120)
     let bytes = try Data(contentsOf: path)
     let header = Data("P6\n\(size.width) \(size.height)\n255\n".utf8)
     #expect(bytes.starts(with: header))

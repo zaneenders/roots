@@ -1,4 +1,5 @@
 import AppKit
+import DesktopTestSupport
 import Roots
 import Testing
 
@@ -113,7 +114,7 @@ func overlappingModifiersPreservePhysicalTransitions(
   #expect(
     state.input.keyEvents == [
       KeyEvent(key, phase: .released, modifiers: flag, physicalCode: left),
-      KeyEvent(key, phase: .released, physicalCode: right),
+      KeyEvent(key, phase: .released, physicalCode: right)
     ])
 }
 
@@ -252,6 +253,67 @@ func overlappingModifiersPreservePhysicalTransitions(
   #expect(
     state.input.keyEvents == [
       KeyEvent(.shift, phase: .released, modifiers: .shift, physicalCode: 60),
-      KeyEvent(.shift, phase: .released, physicalCode: 56),
+      KeyEvent(.shift, phase: .released, physicalCode: 56)
     ])
+}
+
+@Test(arguments: [MacOSInputState.Button.secondary, .middle])
+func auxiliaryButtonsCaptureOutsideAndReleaseOnFocusLoss(button: MacOSInputState.Button) {
+  var state = MacOSInputState()
+  state.pointer(x: 5, y: 6, inside: true)
+  state.button(button, down: true)
+  state.pointer(x: -10, y: 90, inside: false)
+  #expect(!state.input.pressed && !state.primaryDown)
+  #expect(state.input.mousePosition == Coordinate(x: -10, y: 90))
+  #expect(button == .secondary ? state.input.secondaryPressed : state.input.middlePressed)
+  state.consumeEdges()
+  #expect(button == .secondary ? state.input.secondaryDown : state.input.middleDown)
+  #expect(!state.input.secondaryPressed && !state.input.middlePressed)
+  state.button(button, down: false)
+  // A leave arriving after the release must retain the coordinates for this frame.
+  state.pointer(x: -20, y: 100, inside: false)
+  #expect(state.input.mousePosition == Coordinate(x: -20, y: 100))
+  #expect(button == .secondary ? state.input.secondaryReleased : state.input.middleReleased)
+  state.consumeEdges()
+  #expect(state.input.mousePosition == nil)
+  state.pointer(x: 5, y: 6, inside: true)
+  state.button(button, down: true)
+  state.loseFocus()
+  state.loseFocus()
+  #expect(state.input.focusLost && state.input.mousePosition == nil)
+  #expect(!state.input.secondaryDown && !state.input.middleDown)
+  #expect(button == .secondary ? state.input.secondaryReleased : state.input.middleReleased)
+  state.consumeEdges()
+  #expect(!state.input.secondaryReleased && !state.input.middleReleased)
+}
+
+@Test func wheelMetadataResetsWithFrameEdgesWithoutDoublingLogicalDistance() {
+  var state = MacOSInputState()
+  state.scroll(x: 10, y: 20, stepsX: 1, stepsY: 2, inverted: true)
+  state.scroll(x: 0, y: 5, stepsY: 0.5, inverted: true)
+  #expect(state.input.scrollX == 10 && state.input.scrollY == 25)
+  #expect(state.input.scrollStepsX == 1 && state.input.scrollStepsY == 2.5)
+  #expect(state.input.scrollInvertedX == true && state.input.scrollInvertedY == true)
+  #expect(state.input.scrollVelocityY == nil)
+  state.consumeEdges()
+  #expect(state.input.scrollStepsX == 0 && state.input.scrollStepsY == 0)
+  #expect(state.input.scrollInvertedX == nil && state.input.scrollInvertedY == nil)
+  state.scroll(x: 0.25, y: 1.5, inverted: false)
+  #expect(state.input.scrollStepsX == 0 && state.input.scrollStepsY == 0)
+  #expect(state.input.scrollInvertedY == false)
+  state.loseFocus()
+  #expect(state.input.scrollY == 0 && state.input.scrollInvertedY == nil)
+}
+
+@Test(.enabled("WindowServer is unavailable") { await GraphicsAvailability.window })
+@MainActor func cursorIntentMapsToNativeCursorsAndDeclinesUnsupportedShapes() {
+  _ = NSApplication.shared
+  #expect(MacOSCursor.cursor(for: .default) === NSCursor.arrow)
+  #expect(MacOSCursor.cursor(for: .pointer) === NSCursor.pointingHand)
+  #expect(MacOSCursor.cursor(for: .text) === NSCursor.iBeam)
+  #expect(MacOSCursor.cursor(for: .crosshair) === NSCursor.crosshair)
+  #expect(MacOSCursor.cursor(for: .grabbing) === NSCursor.closedHand)
+  #expect(MacOSCursor.cursor(for: .northEastSouthWestResize) != nil)
+  #expect(MacOSCursor.cursor(for: .wait) == nil)
+  #expect(!MacOSBackend().setCursor(.pointer))
 }

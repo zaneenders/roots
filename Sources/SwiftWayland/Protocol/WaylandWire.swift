@@ -101,7 +101,9 @@ struct WireDecoder {
     self.descriptors.append(contentsOf: descriptors)
   }
 
-  mutating func next(interfaces: [UInt32: String] = [1: "wl_display"]) throws -> WireMessage? {
+  mutating func next(
+    interfaces: [UInt32: String] = [1: "wl_display"], versions: [UInt32: UInt32] = [:]
+  ) throws -> WireMessage? {
     let start = bytes.readerIndex
     guard let object: UInt32 = bytes.getInteger(at: start, endianness: .host),
       let header: UInt32 = bytes.getInteger(at: start + 4, endianness: .host)
@@ -109,10 +111,11 @@ struct WireDecoder {
     let length = Int(header >> 16)
     let opcode = UInt16(truncatingIfNeeded: header)
     guard length >= 8, length % 4 == 0, let interface = interfaces[object],
-      let events = WireSchema.events[interface], Int(opcode) < events.count
+      let events = WireSchema.events[interface], Int(opcode) < events.count,
+      events[Int(opcode)].since <= (versions[object] ?? 1)
     else { throw WaylandError.dispatch }
     guard bytes.readableBytes >= length else { return nil }
-    let signature = events[Int(opcode)]
+    let signature = events[Int(opcode)].signature
     let fdCount = signature.filter { $0 == "h" }.count
     guard descriptors.count - descriptorIndex >= fdCount else { return nil }
     var body = bytes.getSlice(at: start + 8, length: length - 8)!

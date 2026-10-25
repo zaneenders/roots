@@ -6,8 +6,8 @@ import SwiftWayland
 @safe @MainActor final class NativeRenderer {
   private var display: EGLDisplay?
   private var ownsDisplay = true
+  private(set) var device: DMABufDevice?
   private var dmabuf: DMABufPresenter?
-  private var presentsPopup = false
   private var context: EGLContext?
   private var surface: EGLSurface?
   private var program: GLuint = 0
@@ -22,7 +22,7 @@ import SwiftWayland
   private var clip: ScissorRect?
   private var width: Int32 = 0
   private var height: Int32 = 0
-  private var bufferScale: Int32 = 1
+  private var logicalSize = SIMD2<Int32>(1, 1)
   private var active = false
   private var frameBorrowed = false
   private var frameError: (any Error)?
@@ -60,7 +60,7 @@ import SwiftWayland
   private func renderPolyline(_ stroke: PolylineStroke, color: Color) {
     glUseProgram(polylineProgram)
     let b = stroke.bounds
-    glUniform2f(polylineLocations[0], Float(width / bufferScale), Float(height / bufferScale))
+    glUniform2f(polylineLocations[0], Float(logicalSize.x), Float(logicalSize.y))
     glUniform4f(polylineLocations[1], b.x, b.y, b.width, b.height)
     var packed: [Float] = []
     packed.reserveCapacity(stroke.points.count * 2)
@@ -77,7 +77,8 @@ import SwiftWayland
   }
 
   private func setClip(_ region: Region?) {
-    let next = region.map { ScissorRect($0, width: width, height: height, scale: Float(bufferScale)) }
+    let scale = SIMD2(Double(width) / Double(logicalSize.x), Double(height) / Double(logicalSize.y))
+    let next = region.map { ScissorRect($0, width: width, height: height, scale: scale) }
     guard next != clip else { return }
     flush()
     clip = next
@@ -118,15 +119,17 @@ import SwiftWayland
     }
   }
 
-  func beginFrame(width: Int32, height: Int32, bufferScale: Int32 = 1, transparent: Bool = false)
-    throws
-  {
+  func beginFrame(
+    width: Int32, height: Int32, bufferScale: Int32 = 1, fractionalScale120: UInt32? = nil,
+    transparent: Bool = false
+  ) throws {
     precondition(!frameBorrowed)
     frameError = nil
-    let pixels = try BufferSize(width: width, height: height, scale: bufferScale)
+    let pixels = try BufferSize(
+      width: width, height: height, scale: bufferScale, fractionalScale120: fractionalScale120)
     self.width = pixels.width
     self.height = pixels.height
-    self.bufferScale = bufferScale
+    logicalSize = SIMD2(width, height)
     glViewport(0, 0, pixels.width, pixels.height)
     glDisable(GLenum(GL_SCISSOR_TEST))
     clip = nil
@@ -146,24 +149,54 @@ import SwiftWayland
     guard glGetError() == GL_NO_ERROR else { throw NativeWindowError.rendering }
   }
 
-  func enableDMABuf(connection: WaylandConnection, popup: Bool = false) {
-    dmabuf = DMABufPresenter(connection: connection)
-    presentsPopup = popup
+  func updateDMABufDevice(
+    input: NativeWindowInput, connection: WaylandConnection, popup: Bool = false,
+    sharedDevice: DMABufDevice? = nil
+  ) throws {
+    // Keep usable targets on the old device until replacements can be imported.
+    guard connection.canImportDMABuf(popup: popup) else { return }
+    let preferred = (popup ? connection.popupDMABufPreferences : connection.dmabufPreferences)?
+      .mainDevice
+    guard let preferred, preferred != device?.advertisedDevice else { return }
+    let node = try DMABufDevice.renderNode(for: preferred)
+    guard node != device?.node else { return }  // primary and render IDs may name the same GPU.
+    let replacement: DMABufDevice
+    if let sharedDevice, sharedDevice.node == node {
+      replacement = sharedDevice
+    } else {
+      replacement = try DMABufDevice(device: preferred)
+    }
+    cleanup()
+    do {
+      try setup(input: input, device: replacement)
+      enableDMABuf(connection: connection, popup: popup)
+    } catch {
+      cleanup()
+      throw error
+    }
   }
 
-  func preparePresentation(width: Int32, height: Int32, bufferScale: Int32) throws -> Bool {
+  func enableDMABuf(connection: WaylandConnection, popup: Bool = false) {
+    dmabuf = DMABufPresenter(connection: connection, popup: popup)
+  }
+
+  func preparePresentation(
+    width: Int32, height: Int32, bufferScale: Int32, fractionalScale120: UInt32? = nil
+  ) throws -> Bool {
     guard dmabuf != nil else { return true }
-    let pixels = try BufferSize(width: width, height: height, scale: bufferScale)
+    let pixels = try BufferSize(
+      width: width, height: height, scale: bufferScale, fractionalScale120: fractionalScale120)
     guard let display = unsafe display, let context = unsafe context else {
       throw NativeWindowError.rendering
     }
     return try unsafe dmabuf!.prepare(
-      display: display, context: context, width: pixels.width, height: pixels.height)
+      display: display, context: context, width: pixels.width, height: pixels.height, device: device
+    )
   }
 
   func swapBuffers() throws {
     if dmabuf != nil {
-      try dmabuf!.present(popup: presentsPopup)
+      try dmabuf!.present()
       return
     }
     guard unsafe eglSwapBuffers(display, surface) != 0 else {
@@ -172,22 +205,26 @@ import SwiftWayland
   }
 
   func setup(
-    input: NativeWindowInput, ownsDisplay: Bool = true
+    input: NativeWindowInput, ownsDisplay: Bool = true, device: DMABufDevice? = nil
   ) throws {
     self.ownsDisplay = ownsDisplay
-    let pixels = try BufferSize(width: input.width, height: input.height, scale: input.bufferScale)
+    self.device = device
+    let pixels = try BufferSize(
+      width: input.width, height: input.height, scale: input.bufferScale,
+      fractionalScale120: input.fractionalScale120)
     guard let entry = unsafe eglGetProcAddress("eglGetPlatformDisplayEXT") else {
       throw NativeWindowError.egl(eglGetError())
     }
     let getPlatform = unsafe unsafeBitCast(entry, to: PFNEGLGETPLATFORMDISPLAYEXTPROC.self)
-    unsafe display = getPlatform(UInt32(EGL_PLATFORM_SURFACELESS_MESA), nil, nil)
-    guard unsafe display != nil, unsafe !ownsDisplay || eglInitialize(display, nil, nil) != 0,
+    unsafe display = device?.display ?? getPlatform(UInt32(EGL_PLATFORM_SURFACELESS_MESA), nil, nil)
+    guard unsafe display != nil,
+      unsafe device != nil || !ownsDisplay || eglInitialize(display, nil, nil) != 0,
       eglBindAPI(EGLenum(EGL_OPENGL_ES_API)) != 0
     else { throw NativeWindowError.egl(eglGetError()) }
     let attributes: [EGLint] = [
-      EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
+      EGL_SURFACE_TYPE, device == nil ? EGL_PBUFFER_BIT : 0,
       EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT, EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8,
-      EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE
+      EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8, EGL_NONE,
     ]
     var config: EGLConfig?
     var count: EGLint = 0
@@ -197,9 +234,17 @@ import SwiftWayland
     unsafe context = eglCreateContext(
       display, config, nil, [EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE])
     guard unsafe context != nil else { throw NativeWindowError.egl(eglGetError()) }
-    unsafe surface = eglCreatePbufferSurface(
-      display, config, [EGL_WIDTH, pixels.width, EGL_HEIGHT, pixels.height, EGL_NONE])
-    guard unsafe surface != nil, unsafe eglMakeCurrent(display, surface, surface, context) != 0
+    if device == nil {
+      unsafe surface = eglCreatePbufferSurface(
+        display, config, [EGL_WIDTH, pixels.width, EGL_HEIGHT, pixels.height, EGL_NONE])
+      guard unsafe surface != nil else { throw NativeWindowError.egl(eglGetError()) }
+    } else {
+      guard let extensions = unsafe eglQueryString(display, EGLint(EGL_EXTENSIONS)),
+        unsafe String(cString: extensions).split(separator: " ").contains(
+          "EGL_KHR_surfaceless_context")
+      else { throw NativeWindowError.dmabuf("GBM EGL display lacks surfaceless contexts.") }
+    }
+    guard unsafe eglMakeCurrent(display, surface, surface, context) != 0
     else {
       throw NativeWindowError.egl(eglGetError())
     }
@@ -476,11 +521,12 @@ import SwiftWayland
       unsafe eglMakeCurrent(display, nil, nil, nil)
       if unsafe surface != nil { unsafe eglDestroySurface(display, surface) }
       if unsafe context != nil { unsafe eglDestroyContext(display, context) }
-      if ownsDisplay { unsafe eglTerminate(display) }
+      if ownsDisplay && device == nil { unsafe eglTerminate(display) }
     }
     unsafe display = nil
     unsafe context = nil
     unsafe surface = nil
+    device = nil
     polylineProgram = 0
     program = 0
     vertexBuffer = 0

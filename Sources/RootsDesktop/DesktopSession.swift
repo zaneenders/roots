@@ -17,22 +17,29 @@ struct DesktopSession {
 
   func run<Content: Block>(
     content: @escaping @MainActor (Viewport) -> Content, offscreen: Bool = false,
+    backend: (any DesktopBackend)? = DesktopSystem.backend,
     present: (DesktopRuntime<Content>) async throws -> Void
   ) async throws {
     start?()
     defer { close?() }
-    let runtime = makeRuntime(content: content, offscreen: offscreen)
+    let runtime = makeRuntime(content: content, offscreen: offscreen, backend: backend)
     defer { runtime.stop() }
     try await present(runtime)
   }
 
   func makeRuntime<Content: Block>(
-    content: @escaping @MainActor (Viewport) -> Content, offscreen: Bool = false
+    content: @escaping @MainActor (Viewport) -> Content, offscreen: Bool = false,
+    backend: (any DesktopBackend)? = DesktopSystem.backend,
+    requestRedraw: (@MainActor () -> Void)? = nil
   ) -> DesktopRuntime<Content> {
     DesktopRuntime(
-      content: content, primaryShortcut: DesktopSystem.primaryShortcut, onKey: keyHandler,
-      onCopy: { if !offscreen { _ = DesktopSystem.writeClipboard($0) } },
-      requestRedraw: { if !offscreen { DesktopSystem.requestRedraw() } }, frameCallbacks: frameCallbacks,
+      content: content, primaryShortcut: backend?.primaryShortcut ?? .control, onKey: keyHandler,
+      onCopy: { if !offscreen { _ = backend?.writeClipboard($0) } },
+      requestRedraw: {
+        if !offscreen {
+          if let requestRedraw { requestRedraw() } else { backend?.requestRedraw() }
+        }
+      }, frameCallbacks: frameCallbacks,
       nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }

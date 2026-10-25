@@ -5,169 +5,6 @@ import Testing
 
 @testable import SwiftWayland
 
-private struct ConnectionPeer: Sendable {
-  let socket: WireDescriptor
-  var bytes = ByteBufferAllocator().buffer(capacity: 4096)
-  var registry: UInt32 = 0
-  var shell: UInt32 = 0
-  var surface: UInt32 = 0
-  var xdgSurface: UInt32 = 0
-  var toplevel: UInt32 = 0
-  var dmabuf: UInt32 = 0
-  var seat: UInt32 = 0
-  var pointer: UInt32 = 0
-  var idleManager: UInt32 = 0
-
-  static func pair() throws -> (Int32, ConnectionPeer) {
-    var fds: [Int32] = [-1, -1]
-    try #require(
-      unsafe socketpair(AF_UNIX, Int32(SOCK_STREAM.rawValue | SOCK_CLOEXEC.rawValue), 0, &fds) == 0)
-    let client = WireDescriptor(taking: fds[0])
-    let server = WireDescriptor(taking: fds[1])
-    var timeout = timeval(tv_sec: 3, tv_usec: 0)
-    try #require(
-      unsafe setsockopt(
-        fds[1], SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size)) == 0)
-    return (client.take(), ConnectionPeer(socket: server))
-  }
-
-  func send(_ object: UInt32, _ opcode: UInt16, _ arguments: [WireValue] = []) throws {
-    let packet = try WirePacket(object: object, opcode: opcode, arguments: arguments)
-    let count = socket.borrow { fd in
-      unsafe packet.bytes.withUnsafeReadableBytes {
-        unsafe cwl_send(fd, $0.baseAddress, $0.count, nil, 0)
-      }
-    }
-    try #require(count == packet.bytes.readableBytes)
-  }
-
-  mutating func next() throws -> (id: UInt32, opcode: UInt16, body: ByteBuffer) {
-    while true {
-      let start = bytes.readerIndex
-      if let header: UInt32 = bytes.getInteger(at: start + 4, endianness: .host) {
-        let size = Int(header >> 16)
-        try #require(size >= 8)
-        if bytes.readableBytes >= size {
-          let id: UInt32 = bytes.readInteger(endianness: .host)!
-          bytes.moveReaderIndex(forwardBy: 4)
-          return (id, UInt16(truncatingIfNeeded: header), bytes.readSlice(length: size - 8)!)
-        }
-      }
-      var scratch = [UInt8](repeating: 0, count: 4096)
-      let count = socket.borrow { unsafe recv($0, &scratch, scratch.count, 0) }
-      try #require(count > 0)
-      bytes.writeBytes(scratch.prefix(count))
-    }
-  }
-
-  mutating func configure() throws {
-    var compositor: UInt32 = 0
-    while true {
-      var request = try next()
-      let first: UInt32? = request.body.readInteger(endianness: .host)
-      switch (request.id, request.opcode) {
-      case (1, 1):
-        registry = try #require(first)
-        for (name, interface): (UInt32, String) in [
-          (1, "wl_compositor"), (2, "xdg_wm_base"), (3, "zwp_linux_dmabuf_v1"), (4, "wl_seat"),
-          (5, "zwp_idle_inhibit_manager_v1")
-        ] {
-          try send(registry, 0, [.uint(name), .string(interface), .uint(6)])
-        }
-      case (1, 0):
-        let callback = try #require(first)
-        try send(callback, 0, [.uint(1)])
-        try send(1, 1, [.uint(callback)])
-      case (registry, 0):
-        let id: UInt32 = try #require(
-          request.body.getInteger(at: request.body.writerIndex - 4, endianness: .host))
-        switch first {
-        case 1: compositor = id
-        case 2: shell = id
-        case 5: idleManager = id
-        case 4:
-          seat = id
-          try send(seat, 0, [.uint(1)])
-        case 3:
-          dmabuf = id
-          try send(dmabuf, 1, [.uint(0x3432_5241), .uint(0), .uint(0)])
-        default: break
-        }
-      case (seat, 0): pointer = try #require(first)
-      case (compositor, 0): surface = try #require(first)
-      case (shell, 2): xdgSurface = try #require(first)
-      case (xdgSurface, 1): toplevel = try #require(first)
-      case (surface, 6):
-        try send(toplevel, 0, [.int(100), .int(80), .array(ByteBuffer())])
-        try send(xdgSurface, 0, [.uint(1)])
-        return
-      default: break
-      }
-    }
-  }
-
-  mutating func throughSync() throws -> (
-    callback: UInt32, requests: [(id: UInt32, opcode: UInt16, body: ByteBuffer)]
-  ) {
-    var requests: [(id: UInt32, opcode: UInt16, body: ByteBuffer)] = []
-    while true {
-      let request = try next()
-      if request.id == 1, request.opcode == 0 {
-        let callback: UInt32 = try #require(
-          request.body.getInteger(at: request.body.readerIndex, endianness: .host))
-        return (callback, requests)
-      }
-      requests.append(request)
-    }
-  }
-
-  mutating func throughPong() throws -> [(id: UInt32, opcode: UInt16, body: ByteBuffer)] {
-    var requests: [(id: UInt32, opcode: UInt16, body: ByteBuffer)] = []
-    while true {
-      let request = try next()
-      if request.id == shell, request.opcode == 3 { return requests }
-      requests.append(request)
-    }
-  }
-}
-
-@MainActor private func connectedPeer() async throws -> (WaylandConnection, ConnectionPeer, Int32) {
-  let (fd, peer) = try ConnectionPeer.pair()
-  let server = blockingTestTask {
-    var peer = peer
-    do {
-      try peer.configure()
-      return peer
-    } catch {
-      peer.socket.close()
-      throw error
-    }
-  }
-  let connection = WaylandConnection(configuration: .init(width: 100, height: 80))
-  do {
-    try await connection.connect(path: nil, environment: ["WAYLAND_SOCKET": String(fd)])
-    return (connection, try await server.value, fd)
-  } catch {
-    connection.cleanup()
-    throw error
-  }
-}
-
-@MainActor private func drain(_ connection: WaylandConnection, _ peer: inout ConnectionPeer)
-  async throws
-  -> [(id: UInt32, opcode: UInt16, body: ByteBuffer)]
-{
-  try connection.receive(.init(object: peer.shell, opcode: 0, arguments: [.uint(99)]))
-  let snapshot = peer
-  let (updated, requests) = try await blockingTestTask {
-    var peer = snapshot
-    let requests = try peer.throughPong()
-    return (peer, requests)
-  }.value
-  peer = updated
-  return requests
-}
-
 @Test @MainActor func inheritedSocketConnectsWithoutDisplayPathAndClosesOnCleanup() async throws {
   let (connection, peer, fd) = try await connectedPeer()
   #expect(connection.configured && connection.running)
@@ -305,12 +142,7 @@ private struct ConnectionPeer: Sendable {
         == bufferID)
     try peer.send(callback, 0, [.uint(1)])
   }
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 400)]
-  let buffer = try connection.importDMABuf(
-    width: 100, height: 80, format: 0x3432_5241, modifier: 0, planes: planes.span)
+  let buffer = try importTestBuffer(connection)
   connection.waitForDMABufBuffer()
   while buffer.state == .importing { try await connection.dispatchAsync() }
   _ = connection.beginFrame()
@@ -342,7 +174,12 @@ private struct ConnectionPeer: Sendable {
   defer { connection.cleanup() }
   _ = connection.beginFrame()
   try peer.send(1, 0, [.uint(peer.surface), .uint(0), .string("rejected commit")])
-  await #expect(throws: WaylandError.dispatch) { try await connection.dispatchAsync() }
+  await #expect(
+    throws: WaylandError.protocolViolation(
+      .init(
+        objectID: peer.surface, interface: "wl_surface", code: 0, message: "rejected commit"
+      ))
+  ) { try await connection.dispatchAsync() }
   #expect(!connection.running && connection.protocolError == "rejected commit")
 }
 
@@ -371,7 +208,12 @@ private struct ConnectionPeer: Sendable {
   } else {
     peer.socket.close()
   }
-  await #expect(throws: WaylandError.dispatch) {
+  await #expect(
+    throws: WaylandError.protocolViolation(
+      .init(
+        objectID: peer.surface, interface: "wl_surface", code: 0, message: "rejected final commit"
+      ))
+  ) {
     while connection.running {
       _ = connection.beginFrame()
       try await connection.dispatchAsync()
@@ -388,7 +230,12 @@ private struct ConnectionPeer: Sendable {
     _ = try peer.throughSync()
     try peer.send(1, 0, [.uint(peer.surface), .uint(0), .string("rejected final commit")])
   }
-  await #expect(throws: WaylandError.dispatch) { try await connection.drain() }
+  await #expect(
+    throws: WaylandError.protocolViolation(
+      .init(
+        objectID: peer.surface, interface: "wl_surface", code: 0, message: "rejected final commit"
+      ))
+  ) { try await connection.drain() }
   try await server.value
   #expect(!connection.running && connection.protocolError == "rejected final commit")
 }
@@ -567,12 +414,7 @@ private struct ConnectionPeer: Sendable {
 func connectionDecodesServerCreatedBufferAndReleaseInOneChunk() async throws {
   let (connection, initialPeer, _) = try await connectedPeer()
   defer { connection.cleanup() }
-  let fd = unsafe open("/dev/null", O_RDONLY | O_CLOEXEC)
-  try #require(fd >= 0)
-  defer { _ = close(fd) }
-  let planes = [WaylandDMABufPlane(descriptor: fd, offset: 0, stride: 400)]
-  let buffer = try connection.importDMABuf(
-    width: 100, height: 80, format: 0x3432_5241, modifier: 0, planes: planes.span)
+  let buffer = try importTestBuffer(connection)
   var peer = initialPeer
   let requests = try await drain(connection, &peer)
   let create = try #require(requests.first { $0.id == peer.dmabuf && $0.opcode == 1 })
@@ -620,4 +462,24 @@ private func expectPeerEOF(_ peer: ConnectionPeer) throws {
     count = peer.socket.borrow { unsafe recv($0, &bytes, bytes.count, Int32(MSG_DONTWAIT)) }
   }
   #expect(count == 0)
+}
+
+@Test @MainActor func protocolErrorsIdentifyRetiredAndUnknownObjects() async throws {
+  let (connection, initialPeer, _) = try await connectedPeer()
+  defer { connection.cleanup() }
+  var peer = initialPeer
+  let popup = try await configurePopup(connection, &peer)
+  connection.dismissPopup()
+  for (id, interface): (UInt32, String?) in [(popup.surface, "wl_surface"), (999_999, nil)] {
+    let error = WaylandProtocolError(
+      objectID: id, interface: interface, code: 3, message: "invalid object")
+    #expect(throws: WaylandError.protocolViolation(error)) {
+      try connection.receive(
+        .init(object: 1, opcode: 0, arguments: [.uint(id), .uint(3), .string(error.message)]))
+    }
+    #expect(connection.protocolFailure == error)
+    #expect(connection.protocolError == error.message)
+  }
+  await connection.close()
+  #expect(connection.protocolFailure?.objectID == 999_999)
 }

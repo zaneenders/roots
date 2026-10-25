@@ -102,7 +102,7 @@ targets += [
     resources: [.copy("Protocols")], swiftSettings: swiftSettings),
   .target(
     name: "WaylandBridge",
-    dependencies: ["CEGLGLES", "Roots", "SwiftWayland"],
+    dependencies: ["CEGLGLES", "CGBM", "CDRM", "Roots", "SwiftWayland"],
     exclude: ["Shaders"],
     swiftSettings: swiftSettings, plugins: [.plugin(name: "ShaderSourcePlugin")]),
   .executableTarget(name: "ShaderSourceGenerator", swiftSettings: swiftSettings),
@@ -124,6 +124,8 @@ targets += [
       "WaylandBridge", "RootsCPU", "CEGLGLES", "SwiftWayland", "DesktopTestSupport"
     ],
     swiftSettings: swiftSettings),
+  .systemLibrary(name: "CGBM", pkgConfig: "gbm"),
+  .systemLibrary(name: "CDRM", pkgConfig: "libdrm"),
   .systemLibrary(name: "CEGLGLES")
 ]
 #elseif os(macOS)
@@ -139,16 +141,19 @@ targets += [
     swiftSettings: swiftSettings)
 ]
 #endif
-#if os(macOS) || os(Linux)
 products += [.library(name: "RootsDesktop", targets: ["RootsDesktop"])]
+var desktopDependencies: [Target.Dependency] = ["Roots"]
 #if os(macOS)
-let desktopBackend: Target.Dependency = "MacOSBridge"
-#else
-let desktopBackend: Target.Dependency = "WaylandBridge"
+desktopDependencies += ["MacOSBridge"]
+#elseif os(Linux)
+desktopDependencies += ["WaylandBridge"]
 #endif
 targets += [
   .target(
-    name: "RootsDesktop", dependencies: ["Roots", desktopBackend], swiftSettings: swiftSettings),
+    name: "RootsDesktop", dependencies: desktopDependencies, swiftSettings: swiftSettings)
+]
+#if os(macOS) || os(Linux)
+targets += [
   .testTarget(
     name: "RootsDesktopTests", dependencies: ["RootsDesktop", "RootsCPU", "DesktopTestSupport"],
     swiftSettings: swiftSettings)

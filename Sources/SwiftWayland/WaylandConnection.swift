@@ -10,20 +10,22 @@ import NIOCore
   private var writes: AsyncStream<Void>.Continuation?
   private var clipboardShutdown: Task<Void, Never>?
   private var decoder = WireDecoder()
-  public private(set) var protocolError: String?
+  public private(set) var protocolFailure: WaylandProtocolError?
+  public var protocolError: String? { protocolFailure?.message }
   private var terminalError: (any Error)?
   private var dispatching = false
   private var waiting: CheckedContinuation<Void, any Error>?
   private var waitID: UInt64 = 0
-  private var waitingForBuffer = false
+  private let frame = SurfaceFrameState()
   public let configuration: WaylandWindowConfiguration
   public internal(set) var input: WaylandInput
   public private(set) var running = true
-  public private(set) var configured = false
-  public private(set) var frameReady = true
-  public private(set) var redrawRequested = true
-  public var canRender: Bool {
-    running && configured && frameReady && redrawRequested && !waitingForBuffer
+  public var configured: Bool { frame.configured }
+  public var frameReady: Bool { lifecycle != .closed && frame.frameReady }
+  public var redrawRequested: Bool { frame.redrawRequested }
+  public var canRender: Bool { running && frame.canRender }
+  public var canRenderPopup: Bool {
+    running && popup?.dismissed == false && popup?.frame.canRender == true
   }
   private var registry: UInt32 = 0
   private var compositor: UInt32 = 0
@@ -46,14 +48,23 @@ import NIOCore
   private var pointer: UInt32 = 0
   private var keyboard: UInt32 = 0
   private var outputs: [UInt32: WaylandOutput] = [:]
-  private var preferredBufferScale: Int32?
+  private let scale = SurfaceScale()
+  private var fractionalManager: UInt32 = 0
+  private var fractionalManagerName: UInt32?
+  private var viewporter: UInt32 = 0
+  private var viewporterName: UInt32?
   private var typing = Keyboard()
+  private var repeatTask: Task<Void, Never>?
+  private var repeatDeadline: ContinuousClock.Instant?
   private var popup: WaylandPopup?
   private var pointerInPopup = false
   private var keyboardInPopup = false
   private var pointerSerial: UInt32?
-  private var frameCallback: UInt32 = 0
   private var callbacks: Set<UInt32> = []
+  private var cursorManagerName: UInt32?
+  private var textManagerName: UInt32?
+  private lazy var cursor = WaylandCursor(objects: objects)
+  private lazy var textInput = WaylandTextInput(objects: objects)
   private lazy var clipboard = WaylandClipboard(objects: objects)
   private lazy var dmabuf = WaylandDMABuf(objects: objects)
 
@@ -116,34 +127,48 @@ import NIOCore
         throw CancellationError()
       }
       installIO(transport)
-      registry = objects.create(1, 1, "wl_registry")
+      registry = objects.create(1, WlDisplayRequest.getRegistry, "wl_registry")
       try await synchronize()
       try await synchronize()
       guard compositor != 0, shell != 0, compositorVersion >= 3 else {
         throw WaylandError.missingGlobals
       }
-      surface = objects.create(compositor, 0, "wl_surface")
+      surface = objects.create(compositor, WlCompositorRequest.createSurface, "wl_surface")
+      setupSurfaceScales()
+      dmabuf.watch(surface: surface)
       if configuration.topBar {
         guard layerShell != 0 else { throw WaylandError.missingGlobals }
         layerSurface = objects.create(
-          layerShell, 0, "zwlr_layer_surface_v1",
-          [.uint(surface), .uint(0), .uint(2), .string(configuration.layerNamespace)])
+          layerShell, ZwlrLayerShellV1Request.getLayerSurface, "zwlr_layer_surface_v1",
+          [
+            .uint(surface), .uint(0), .uint(WaylandLayer.top.rawValue),
+            .string(configuration.layerNamespace),
+          ])
         objects.request(
-          layerSurface, 0,
+          layerSurface, ZwlrLayerSurfaceV1Request.setSize,
           [.uint(0), .uint(UInt32(configuration.height + configuration.topBarOverlayHeight))])
-        objects.request(layerSurface, 1, [.uint(1 | 4 | 8)])
-        objects.request(layerSurface, 2, [.int(configuration.height)])
-        objects.request(layerSurface, 4, [.uint(0)])
-      } else {
-        xdgSurface = objects.create(shell, 2, "xdg_surface", [.uint(surface)])
-        toplevel = objects.create(xdgSurface, 1, "xdg_toplevel")
-        objects.request(toplevel, 2, [.string(configuration.title)])
-        objects.request(toplevel, 3, [.string(configuration.appID)])
         objects.request(
-          toplevel, 8, [.int(configuration.minimumWidth), .int(configuration.minimumHeight)])
+          layerSurface, ZwlrLayerSurfaceV1Request.setAnchor,
+          [.uint(WaylandLayerAnchor([.top, .left, .right]).rawValue)])
+        objects.request(
+          layerSurface, ZwlrLayerSurfaceV1Request.setExclusiveZone, [.int(configuration.height)])
+        objects.request(
+          layerSurface, ZwlrLayerSurfaceV1Request.setKeyboardInteractivity,
+          [.uint(WaylandKeyboardInteractivity.none.rawValue)])
+      } else {
+        xdgSurface = objects.create(
+          shell, XdgWmBaseRequest.getXdgSurface, "xdg_surface", [.uint(surface)])
+        toplevel = objects.create(xdgSurface, XdgSurfaceRequest.getToplevel, "xdg_toplevel")
+        objects.request(toplevel, XdgToplevelRequest.setTitle, [.string(configuration.title)])
+        objects.request(toplevel, XdgToplevelRequest.setAppId, [.string(configuration.appID)])
+        objects.request(
+          toplevel, XdgToplevelRequest.setMinSize,
+          [.int(configuration.minimumWidth), .int(configuration.minimumHeight)])
       }
-      objects.request(surface, 6)
-      while !configured && running { try await waitForEvent() }
+      objects.request(surface, WlSurfaceRequest.commit)
+      while running && (!configured || !dmabuf.ready(surface: surface)) {
+        try await waitForEvent()
+      }
       try Task.checkCancellation()
       guard running, lifecycle != .closed else { throw WaylandError.connection }
       lifecycle = .connected
@@ -193,6 +218,7 @@ import NIOCore
         guard let self, self.lifecycle != .closed else { return }
         self.terminalError = error
         self.running = false
+        self.scheduleKeyRepeat()
         self.decoder = WireDecoder()
         self.objects.discard()
         self.signal()
@@ -225,14 +251,15 @@ import NIOCore
   func receive(_ chunk: inout WireChunk) throws {
     guard lifecycle != .closed else { return }
     try decoder.append(&chunk.bytes, descriptors: chunk.descriptors)
-    while let message = try decoder.next(interfaces: objects.interfaces) {
+    while let message = try decoder.next(interfaces: objects.interfaces, versions: objects.versions)
+    {
       try receive(message)
     }
     signal()
   }
 
   private func synchronize() async throws {
-    let callback = objects.create(1, 0, "wl_callback")
+    let callback = objects.create(1, WlDisplayRequest.sync, "wl_callback")
     callbacks.insert(callback)
     while callbacks.contains(callback), running { try await waitForEvent() }
   }
@@ -271,7 +298,7 @@ import NIOCore
     defer { dispatching = false }
     try Task.checkCancellation()
     if let terminalError { throw terminalError }
-    let callback = objects.create(1, 0, "wl_callback")
+    let callback = objects.create(1, WlDisplayRequest.sync, "wl_callback")
     callbacks.insert(callback)
     var expired = false
     let deadline = Task { @MainActor in
@@ -294,16 +321,22 @@ import NIOCore
     dispatching = true
     defer { dispatching = false }
     if let terminalError { throw terminalError }
-    if canRender || !running { return }
+    if canRender || canRenderPopup || popupDismissed || !running { return }
     try await waitForEvent()
   }
   public func requestRedraw() {
     guard running else { return }
-    redrawRequested = true
+    frame.redrawRequested = true
+    signal()
+  }
+  public func requestPopupRedraw() {
+    guard running, let popup, !popup.dismissed else { return }
+    popup.frame.redrawRequested = true
     signal()
   }
   public func requestClose() {
     running = false
+    scheduleKeyRepeat()
     signal()
   }
 
@@ -320,8 +353,11 @@ import NIOCore
     switch interface {
     case "wl_display":
       if opcode == 0 {
-        protocolError = a[2].text
-        throw WaylandError.dispatch
+        let error = WaylandProtocolError(
+          objectID: a[0].word, interface: objects.interfaces[a[0].word],
+          code: a[1].word, message: a[2].text ?? "")
+        protocolFailure = error
+        throw WaylandError.protocolViolation(error)
       }
       objects.deleted(a[0].word)
     case "wl_registry":
@@ -331,32 +367,33 @@ import NIOCore
         removeGlobal(a[0].word)
       }
     case "wl_callback":
+      objects.completeReclamation(id)
       objects.retire(id)
       callbacks.remove(id)
-      if frameCallback == id {
-        frameCallback = 0
-        frameReady = true
-      }
-    case "xdg_wm_base": objects.request(id, 3, [.uint(a[0].word)])
+      frame.complete(id)
+      popup?.frame.complete(id)
+    case "xdg_wm_base": objects.request(id, XdgWmBaseRequest.pong, [.uint(a[0].word)])
     case "xdg_surface":
       guard id == xdgSurface || id == popup?.xdgSurface else { return }
-      objects.request(id, 4, [.uint(a[0].word)])
+      objects.request(id, XdgSurfaceRequest.ackConfigure, [.uint(a[0].word)])
       if id == xdgSurface {
         if let pendingSize {
           if pendingSize.x > 0 { input.width = pendingSize.x }
           if pendingSize.y > 0 { input.height = pendingSize.y }
           self.pendingSize = nil
         }
-        configured = true
+        frame.configured = true
+        frame.waitingForBuffer = false
       } else if let popup {
         if let size = popup.pendingSize {
           if size.x > 0 { popup.input.width = size.x }
           if size.y > 0 { popup.input.height = size.y }
           popup.pendingSize = nil
         }
-        popup.configured = true
+        popup.frame.configured = true
+        popup.frame.waitingForBuffer = false
       }
-      requestRedraw()
+      if id == xdgSurface { requestRedraw() } else { requestPopupRedraw() }
     case "xdg_toplevel":
       if opcode == 0 {
         pendingSize = SIMD2(a[0].signed, a[1].signed)
@@ -365,7 +402,7 @@ import NIOCore
       }
     case "zwlr_layer_surface_v1":
       if opcode == 0 {
-        objects.request(id, 6, [.uint(a[0].word)])
+        objects.request(id, ZwlrLayerSurfaceV1Request.ackConfigure, [.uint(a[0].word)])
         configureLayer(width: a[1].word, height: a[2].word)
       } else {
         requestClose()
@@ -378,17 +415,21 @@ import NIOCore
         requestPopupDismissal()
       }
     case "wl_surface":
-      if id == surface {
-        if opcode <= 1 {
-          for name in outputs.keys where outputs[name]?.id == a[0].word {
-            outputs[name]?.entered = opcode == 0
-          }
-          updateBufferScale()
-        } else if opcode == 2, a[0].signed > 0 {
-          preferredBufferScale = a[0].signed
-          updateBufferScale()
-        }
+      guard let scale = id == surface ? scale : (id == popup?.surface ? popup?.scale : nil)
+      else { return }
+      if opcode <= 1 {
+        if opcode == 0 { scale.outputs.insert(a[0].word) } else { scale.outputs.remove(a[0].word) }
+      } else if opcode == 2, a[0].signed > 0 {
+        scale.preferredBufferScale = a[0].signed
       }
+      updateBufferScale()
+    case "wp_fractional_scale_v1":
+      guard a[0].word > 0,
+        let scale = id == scale.fractional
+          ? scale : (id == popup?.scale.fractional ? popup?.scale : nil)
+      else { return }
+      scale.preferredFractionalScale = a[0].word
+      updateBufferScale()
     case "wl_output":
       if opcode == 3, a[0].signed > 0 {
         for name in outputs.keys where outputs[name]?.id == id {
@@ -398,10 +439,29 @@ import NIOCore
         updateBufferScale()
       }
     case "wl_seat": if opcode == 0 { updateCapabilities(a[0].word) }
+    case "zwp_text_input_v3":
+      if opcode <= 1 { typing.resetCompose() }
+      if let update = textInput.event(message) {
+        typing.resetCompose()
+        if update.surface == surface {
+          input.textEvents.append(update.edit)
+          requestRedraw()
+        } else if update.surface == popup?.surface {
+          popup?.input.textEvents.append(update.edit)
+          requestPopupRedraw()
+        }
+      }
     case "wl_pointer": pointerEvent(opcode, a)
     case "wl_keyboard": keyboardEvent(opcode, a)
     case "wl_data_device", "wl_data_offer", "wl_data_source": clipboard.event(message)
-    case "zwp_linux_dmabuf_v1", "zwp_linux_buffer_params_v1", "wl_buffer": dmabuf.event(message)
+    case "zwp_linux_dmabuf_feedback_v1":
+      if try dmabuf.feedbackEvent(message) {
+        dmabufPreferencesChanged()
+      }
+    case "zwp_linux_dmabuf_v1":
+      dmabuf.event(message)
+      if opcode == 1 { dmabufPreferencesChanged() }
+    case "zwp_linux_buffer_params_v1", "wl_buffer": dmabuf.event(message)
     default: break
     }
   }
@@ -411,6 +471,14 @@ import NIOCore
     case "wl_compositor" where compositor == 0:
       compositorVersion = min(version, 6)
       compositor = objects.bind(registry, name, interface, compositorVersion)
+    case "wp_fractional_scale_manager_v1" where fractionalManager == 0 && version >= 1:
+      fractionalManager = objects.bind(registry, name, interface, 1)
+      fractionalManagerName = name
+      setupSurfaceScales()
+    case "wp_viewporter" where viewporter == 0 && version >= 1:
+      viewporter = objects.bind(registry, name, interface, 1)
+      viewporterName = name
+      setupSurfaceScales()
     case "xdg_wm_base" where shell == 0: shell = objects.bind(registry, name, interface, 1)
     case "zwlr_layer_shell_v1" where configuration.topBar && layerShell == 0:
       layerShell = objects.bind(registry, name, interface, 1)
@@ -420,34 +488,73 @@ import NIOCore
     case "wl_output" where version >= 2:
       outputs[name] = WaylandOutput(
         id: objects.bind(registry, name, interface, min(version, 3)), version: min(version, 3))
+    case "wp_cursor_shape_manager_v1" where cursor.manager == 0 && version >= 1:
+      cursor.manager = objects.bind(registry, name, interface, 1)
+      cursorManagerName = name
+    case "zwp_text_input_manager_v3" where textInput.manager == 0 && version >= 1:
+      textInput.manager = objects.bind(registry, name, interface, 1)
+      textManagerName = name
     case "wl_seat" where seat == 0 && version >= 4:
-      seatVersion = min(version, 5)
+      seatVersion = min(version, 9)
       seat = objects.bind(registry, name, interface, seatVersion)
       seatName = name
     case "wl_data_device_manager" where clipboard.manager == 0:
       clipboard.manager = objects.bind(registry, name, interface, 1)
       managerName = name
     case "zwp_linux_dmabuf_v1" where dmabuf.factory == 0 && version >= 3:
-      dmabuf.factory = objects.bind(registry, name, interface, 3)
+      dmabuf.version = min(version, 4)
+      dmabuf.factory = objects.bind(registry, name, interface, dmabuf.version)
+      dmabuf.watch()
+      if surface != 0 { dmabuf.watch(surface: surface) }
+      if let popup { dmabuf.watch(surface: popup.surface) }
       dmabufName = name
     default: break
     }
-    if seat != 0 { clipboard.attach(seat: seat) }
+    if seat != 0 {
+      clipboard.attach(seat: seat)
+      textInput.attach(seat: seat)
+    }
+    cursor.attach(pointer: pointer)
   }
   private func removeGlobal(_ name: UInt32) {
+    if cursorManagerName == name {
+      cursor.close()
+      cursorManagerName = nil
+    }
+    if textManagerName == name {
+      clearTextFocus()
+      textInput.close()
+      textManagerName = nil
+    }
+    if fractionalManagerName == name {
+      objects.request(fractionalManager, WpFractionalScaleManagerV1Request.destroy)
+      fractionalManager = 0
+      fractionalManagerName = nil
+    }
+    if viewporterName == name {
+      objects.request(viewporter, WpViewporterRequest.destroy)
+      viewporter = 0
+      viewporterName = nil
+    }
     if idleManagerName == name {
       _ = setIdleInhibited(false)
-      objects.request(idleManager, 0)
+      objects.request(idleManager, ZwpIdleInhibitManagerV1Request.destroy)
       idleManager = 0
       idleManagerName = nil
     }
     if let output = outputs.removeValue(forKey: name) {
-      if output.version >= 3 { objects.request(output.id, 0) } else { objects.retire(output.id) }
+      if output.version >= 3 {
+        objects.request(output.id, WlOutputRequest.release)
+      } else {
+        objects.retire(output.id)
+      }
+      scale.outputs.remove(output.id)
+      popup?.scale.outputs.remove(output.id)
       updateBufferScale()
     }
     if dmabufName == name {
-      objects.request(dmabuf.factory, 0)
-      dmabuf.factory = 0
+      objects.request(dmabuf.factory, ZwpLinuxDmabufV1Request.destroy)
+      dmabuf.removeFactory()
       dmabufName = nil
     }
     if managerName == name {
@@ -456,42 +563,54 @@ import NIOCore
     }
     if seatName == name {
       updateCapabilities(0)
+      clearTextFocus()
+      textInput.detach()
       clipboard.detachSeat()
-      if seatVersion >= 5 { objects.request(seat, 3) } else { objects.retire(seat) }
+      if seatVersion >= 5 {
+        objects.request(seat, WlSeatRequest.release)
+      } else {
+        objects.retire(seat)
+      }
       seat = 0
       seatName = nil
     }
   }
   private func updateCapabilities(_ capabilities: UInt32) {
+    defer { scheduleKeyRepeat() }
     if capabilities & 1 != 0 {
-      if pointer == 0 { pointer = objects.create(seat, 0, "wl_pointer") }
+      if pointer == 0 { pointer = objects.create(seat, WlSeatRequest.getPointer, "wl_pointer") }
+      cursor.attach(pointer: pointer)
     } else if pointer != 0 {
-      objects.request(pointer, 1)
+      cursor.detach()
+      objects.request(pointer, WlPointerRequest.release)
       pointer = 0
       pointerInput.leavePointer()
       pointerSerial = nil
       if popup != nil { requestPopupDismissal() }
-      requestRedraw()
+      if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
     }
     if capabilities & 2 != 0 {
-      if keyboard == 0 { keyboard = objects.create(seat, 1, "wl_keyboard") }
+      if keyboard == 0 { keyboard = objects.create(seat, WlSeatRequest.getKeyboard, "wl_keyboard") }
     } else if keyboard != 0 {
-      objects.request(keyboard, 0)
+      objects.request(keyboard, WlKeyboardRequest.release)
       keyboard = 0
       clipboard.focused = false
       typing.leave(input: &keyboardInput)
       if popup != nil { requestPopupDismissal() }
-      requestRedraw()
+      if keyboardInPopup { requestPopupRedraw() } else { requestRedraw() }
     }
   }
   private func pointerEvent(_ opcode: UInt16, _ a: [WireValue]) {
     switch opcode {
     case 0:
       pointerInPopup = a[1].word == popup?.surface
+      cursor.enter(surface: a[1].word, serial: a[0].word)
       pointerInput.pointerInside = true
       pointerInput.pointerX = Float(a[2].signed) / 256
       pointerInput.pointerY = Float(a[3].signed) / 256
-    case 1: pointerInput.leavePointer()
+    case 1:
+      cursor.leave()
+      pointerInput.leavePointer()
     case 2:
       pointerInput.pointerX = Float(a[1].signed) / 256
       pointerInput.pointerY = Float(a[2].signed) / 256
@@ -503,16 +622,24 @@ import NIOCore
     case 5:
       let previous = pointerInput.scrollVelocityY
       pointerInput.pointerFrame()
-      if pointerInput.scrollVelocityY == previous { return }
+      if pointerInput.scrollVelocityY == previous,
+        pointerInput.scrollStepsX == 0, pointerInput.scrollStepsY == 0
+      {
+        return
+      }
     case 6:
       pointerInput.axisSource(a[0].word)
       return
     case 7: pointerInput.axisStop(a[1].word, time: a[0].word)
+    case 8: pointerInput.axisSteps(a[0].word, value: a[1].signed, highResolution: false)
+    case 9: pointerInput.axisSteps(a[0].word, value: a[1].signed, highResolution: true)
+    case 10: pointerInput.axisDirection(a[0].word, inverted: a[1].word == 1)
     default: return
     }
-    requestRedraw()
+    if pointerInPopup { requestPopupRedraw() } else { requestRedraw() }
   }
   private func keyboardEvent(_ opcode: UInt16, _ a: [WireValue]) {
+    defer { scheduleKeyRepeat() }
     switch opcode {
     case 0:
       guard case .fd(let fd) = a[1] else { return }
@@ -521,6 +648,7 @@ import NIOCore
     case 1:
       clipboard.serial = a[0].word
       clipboard.focused = true
+      typing.resetCompose()
       keyboardInPopup = a[1].word == popup?.surface
     case 2:
       clipboard.focused = false
@@ -537,7 +665,7 @@ import NIOCore
       return
     default: return
     }
-    requestRedraw()
+    if keyboardInPopup { requestPopupRedraw() } else { requestRedraw() }
   }
   func configureLayer(width: UInt32, height: UInt32) {
     guard width <= UInt32(Int32.max), height <= UInt32(Int32.max) else {
@@ -547,29 +675,68 @@ import NIOCore
     if width > 0 { input.width = Int32(width) }
     if height > 0 { input.height = Int32(height) }
     if compositor != 0, surface != 0 {
-      let region = objects.create(compositor, 1, "wl_region")
-      objects.request(region, 1, [.int(0), .int(0), .int(input.width), .int(configuration.height)])
-      objects.request(surface, 5, [.uint(region)])
-      objects.request(region, 0)
+      let region = objects.create(compositor, WlCompositorRequest.createRegion, "wl_region")
+      objects.request(
+        region, WlRegionRequest.add,
+        [.int(0), .int(0), .int(input.width), .int(configuration.height)])
+      objects.request(surface, WlSurfaceRequest.setInputRegion, [.uint(region)])
+      objects.request(region, WlRegionRequest.destroy)
     }
-    configured = true
+    frame.configured = true
+    frame.waitingForBuffer = false
     requestRedraw()
   }
-  private func updateBufferScale() {
-    let scale = preferredBufferScale ?? outputs.values.filter(\.entered).map(\.scale).max() ?? 1
-    guard scale != input.bufferScale, surface != 0 else { return }
-    input.bufferScale = scale
-    objects.request(surface, 8, [.int(scale)])
+  private func setupSurfaceScales() {
+    scale.setup(
+      surface: surface, manager: fractionalManager, viewporter: viewporter, objects: objects)
     if let popup {
-      popup.input.bufferScale = scale
-      objects.request(popup.surface, 8, [.int(scale)])
+      popup.scale.setup(
+        surface: popup.surface, manager: fractionalManager, viewporter: viewporter, objects: objects
+      )
     }
-    requestRedraw()
+  }
+
+  private func updateBufferScale() {
+    func fallback(_ scale: SurfaceScale, otherwise: Int32 = 1) -> Int32 {
+      outputs.values.filter { scale.outputs.contains($0.id) }.map(\.scale).max() ?? otherwise
+    }
+    if scale.update(input: &input, surface: surface, fallback: fallback(scale), objects: objects) {
+      requestRedraw()
+    }
+    if let popup,
+      popup.scale.update(
+        input: &popup.input, surface: popup.surface,
+        fallback: fallback(popup.scale, otherwise: input.bufferScale), objects: objects)
+    {
+      requestPopupRedraw()
+    }
+  }
+
+  private func scheduleKeyRepeat() {
+    let deadline =
+      running && (!keyboardInPopup || popup?.dismissed == false)
+      ? typing.repeatDeadline : nil
+    guard deadline != repeatDeadline else { return }
+    repeatTask?.cancel()
+    repeatTask = nil
+    repeatDeadline = deadline
+    guard let deadline else { return }
+    repeatTask = Task { @MainActor [weak self] in
+      do { try await ContinuousClock().sleep(until: deadline) } catch { return }
+      guard let self, self.running, self.repeatDeadline == deadline else { return }
+      self.repeatTask = nil
+      // Leave the deadline armed until a frame consumes the bounded repeat batch.
+      // A delayed frame callback or buffer release must not cause a timer spin.
+      if self.keyboardInPopup { self.requestPopupRedraw() } else { self.requestRedraw() }
+    }
   }
 
   public func beginFrame() -> WaylandInput {
-    redrawRequested = false
-    if lifecycle != .closed { typing.repeatKeys(input: &keyboardInput) }
+    frame.redrawRequested = false
+    if running && !keyboardInPopup {
+      typing.repeatKeys(input: &input)
+      scheduleKeyRepeat()
+    }
     let snapshot = input
     input.resetEdges()
     return snapshot
@@ -577,10 +744,10 @@ import NIOCore
   public func endFrame(continuously: Bool = false) throws {
     guard lifecycle == .connected else { throw WaylandError.connection }
     guard running else { return }
-    guard frameCallback == 0 else { throw WaylandError.connection }
-    frameCallback = objects.create(surface, 3, "wl_callback")
-    frameReady = false
-    redrawRequested = redrawRequested || continuously || typing.isRepeating
+    scale.prepare(width: input.width, height: input.height, objects: objects)
+    try frame.endFrame(
+      on: surface, objects: objects,
+      continuously: continuously)
   }
   public func presentPopup(
     configuration: WaylandPopupConfiguration, grab: Bool = true,
@@ -594,54 +761,126 @@ import NIOCore
     popup = WaylandPopup(
       configuration: configuration, scale: input.bufferScale, compositor: compositor, shell: shell,
       parent: xdgSurface, layerParent: layerSurface, seat: grab ? seat : 0, serial: pointerSerial,
-      objects: objects,
+      objects: objects, fractionalManager: fractionalManager, viewporter: viewporter,
       onDismiss: onDismiss)
+    if let popup { dmabuf.watch(surface: popup.surface) }
     pointerSerial = nil
-    requestRedraw()
+    signal()
   }
   public func requestPopupDismissal() {
     popup?.dismissed = true
-    requestRedraw()
+    scheduleKeyRepeat()
+    signal()
   }
   public func dismissPopup() {
     guard let child = popup else { return }
     popup = nil
-    waitingForBuffer = false
     pointerInPopup = false
     if keyboardInPopup { typing.leave(input: &child.input) }
     keyboardInPopup = false
+    scheduleKeyRepeat()
+    textInput.set(nil, on: child.surface)
+    cursor.forget(child.surface)
+    dmabuf.unwatch(surface: child.surface)
     child.close()
-    requestRedraw()
+    signal()
   }
   public var popupInput: WaylandInput? { popup?.input }
-  public var popupConfigured: Bool { popup?.configured ?? false }
+  public var popupConfigured: Bool { popup?.frame.configured ?? false }
   public var popupDismissed: Bool { popup?.dismissed ?? false }
   public func takePopupInput() -> WaylandInput? {
-    guard let popup, popup.configured, !popup.dismissed else { return nil }
+    guard let popup, popup.frame.configured, !popup.dismissed else { return nil }
+    popup.frame.redrawRequested = false
+    if running && keyboardInPopup {
+      typing.repeatKeys(input: &popup.input)
+      scheduleKeyRepeat()
+    }
     let snapshot = popup.input
     popup.input.resetEdges()
     return snapshot
   }
+  public func endPopupFrame(continuously: Bool = false) throws {
+    guard lifecycle == .connected else { throw WaylandError.connection }
+    guard running, let popup, !popup.dismissed else { return }
+    popup.scale.prepare(width: popup.input.width, height: popup.input.height, objects: objects)
+    try popup.frame.endFrame(
+      on: popup.surface, objects: objects,
+      continuously: continuously)
+  }
+  /// Completed feedback is retained for existing buffers after factory removal.
+  public var dmabufPreferences: WaylandDMABufFeedback? { dmabuf.preferences(surface: surface) }
+  public var popupDMABufPreferences: WaylandDMABufFeedback? {
+    popup.flatMap { dmabuf.preferences(surface: $0.surface) }
+  }
+  package func canImportDMABuf(popup: Bool = false) -> Bool {
+    let target = popup ? self.popup?.surface ?? 0 : surface
+    return running && target != 0 && dmabuf.canImport(surface: target)
+  }
+  private func dmabufPreferencesChanged() {
+    frame.waitingForBuffer = false
+    popup?.frame.waitingForBuffer = false
+    requestRedraw()
+    requestPopupRedraw()
+  }
   public func importDMABuf(
     width: Int32, height: Int32, format: UInt32, modifier: UInt64,
-    planes: borrowing Span<WaylandDMABufPlane>
+    planes: borrowing Span<WaylandDMABufPlane>, popup: Bool = false
   ) throws -> WaylandDMABufBuffer {
     guard lifecycle == .connected, running else { throw WaylandError.connection }
+    guard let frame = popup ? self.popup?.frame : frame else { throw WaylandError.connection }
     return try dmabuf.importBuffer(
       width: width, height: height, format: format, modifier: modifier, planes: planes,
-      changed: { [weak self] in
-        guard let self, self.waitingForBuffer else { return }
-        self.waitingForBuffer = false
-        self.requestRedraw()
+      surface: popup ? self.popup?.surface ?? 0 : surface,
+      changed: { [weak self, weak frame] in
+        guard let frame, frame.waitingForBuffer else { return }
+        frame.waitingForBuffer = false
+        frame.redrawRequested = true
+        self?.signal()
       })
   }
-  public func waitForDMABufBuffer() { waitingForBuffer = true }
+  public func waitForDMABufBuffer(popup: Bool = false) {
+    let frame = popup ? self.popup?.frame : frame
+    frame?.waitingForBuffer = true
+  }
   public func presentDMABuf(_ buffer: WaylandDMABufBuffer, popup: Bool = false) throws {
     guard lifecycle == .connected, dmabuf.owns(buffer) else { throw WaylandError.connection }
     let target = popup ? self.popup?.surface ?? 0 : surface
     guard target != 0 else { throw WaylandError.connection }
     try buffer.present(on: target)
   }
+  /// Returns false when the compositor does not support cursor-shape-v1.
+  @discardableResult public func setCursor(_ shape: WaylandCursorShape, popup: Bool = false) -> Bool
+  {
+    let target = popup ? self.popup?.surface ?? 0 : surface
+    guard running, lifecycle == .connected, cursor.manager != 0, target != 0 else { return false }
+    cursor.set(shape, on: target)
+    return true
+  }
+
+  /// nil disables text input. Disable before switching editors, then send the new editor state.
+  /// Return false means unsupported protocol or invalid UTF-8 offsets/state.
+  @discardableResult public func setTextInput(
+    _ state: WaylandTextInputState?, popup: Bool = false
+  ) -> Bool {
+    let target = popup ? self.popup?.surface ?? 0 : surface
+    guard running, lifecycle == .connected, target != 0,
+      state?.isValid != false, state == nil || textInput.manager != 0
+    else { return false }
+    textInput.set(state, on: target)
+    return true
+  }
+
+  private func clearTextFocus() {
+    if textInput.surface == surface {
+      input.textEvents.append(.init())
+      requestRedraw()
+    } else if textInput.surface == popup?.surface {
+      popup?.input.textEvents.append(.init())
+      requestPopupRedraw()
+    }
+    typing.resetCompose()
+  }
+
   public func readClipboard() async -> String? {
     guard running, let fd = clipboard.beginRead() else { return nil }
     guard let bytes = try? await clipboard.io.read(from: fd) else { return nil }
@@ -656,10 +895,12 @@ import NIOCore
     if enabled {
       guard idleManager != 0, surface != 0 else { return false }
       if idleInhibitor == 0 {
-        idleInhibitor = objects.create(idleManager, 1, "zwp_idle_inhibitor_v1", [.uint(surface)])
+        idleInhibitor = objects.create(
+          idleManager, ZwpIdleInhibitManagerV1Request.createInhibitor, "zwp_idle_inhibitor_v1",
+          [.uint(surface)])
       }
     } else if idleInhibitor != 0 {
-      objects.request(idleInhibitor, 0)
+      objects.request(idleInhibitor, ZwpIdleInhibitorV1Request.destroy)
       idleInhibitor = 0
     }
     return true
@@ -675,14 +916,19 @@ import NIOCore
     guard lifecycle != .closed else { return }
     lifecycle = .closed
     running = false
-    configured = false
-    frameReady = false
+    scheduleKeyRepeat()
+    frame.close(objects: objects)
     io?.cancel()
     writes?.finish()
     writes = nil
     decoder = WireDecoder()
     dismissPopup()
-    dmabuf.close()
+    dmabuf.close(disconnecting: true)
+    scale.close(objects: objects)
+    objects.request(fractionalManager, WpFractionalScaleManagerV1Request.destroy)
+    objects.request(viewporter, WpViewporterRequest.destroy)
+    cursor.close()
+    textInput.close()
     clipboard.close()
     let io = clipboard.io
     clipboardShutdown = Task { await io.shutdown() }

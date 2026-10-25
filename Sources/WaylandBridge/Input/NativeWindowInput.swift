@@ -4,7 +4,14 @@ import SwiftWayland
 public struct NativeWindowInput: Sendable {
   public internal(set) var width: Int32
   public internal(set) var height: Int32
+  /// `wl_surface.set_buffer_scale`; remains 1 when fractional scaling is active.
   public internal(set) var bufferScale: Int32 = 1
+  /// Fractional scale numerator in units of 1/120; nil uses integer buffer scaling.
+  public internal(set) var fractionalScale120: UInt32?
+  /// Pixels per logical unit, before rounding the buffer dimensions.
+  public var renderScale: Double {
+    fractionalScale120.map { Double($0) / 120 } ?? Double(bufferScale)
+  }
   public internal(set) var timeSeconds: Double = 0
   public internal(set) var pointerX: Float = 0
   public internal(set) var pointerY: Float = 0
@@ -15,6 +22,17 @@ public struct NativeWindowInput: Sendable {
   public internal(set) var primaryDown = false
   public internal(set) var primaryPressed = false
   public internal(set) var primaryReleased = false
+  public internal(set) var secondaryDown = false
+  public internal(set) var secondaryPressed = false
+  public internal(set) var secondaryReleased = false
+  public internal(set) var middleDown = false
+  public internal(set) var middlePressed = false
+  public internal(set) var middleReleased = false
+  public internal(set) var scrollStepsX: Float = 0
+  public internal(set) var scrollStepsY: Float = 0
+  public internal(set) var scrollInvertedX: Bool?
+  public internal(set) var scrollInvertedY: Bool?
+  public internal(set) var textEvents: [TextInputEvent] = []
   public internal(set) var keyEvents: [KeyEvent] = []
   public internal(set) var focusLost = false
 
@@ -27,6 +45,7 @@ public struct NativeWindowInput: Sendable {
     width = input.width
     height = input.height
     bufferScale = input.bufferScale
+    fractionalScale120 = input.fractionalScale120
     pointerX = input.pointerX
     pointerY = input.pointerY
     scrollX = input.scrollX
@@ -36,6 +55,23 @@ public struct NativeWindowInput: Sendable {
     primaryDown = input.primaryDown
     primaryPressed = input.primaryPressed
     primaryReleased = input.primaryReleased
+    secondaryDown = input.secondaryDown
+    secondaryPressed = input.secondaryPressed
+    secondaryReleased = input.secondaryReleased
+    middleDown = input.middleDown
+    middlePressed = input.middlePressed
+    middleReleased = input.middleReleased
+    scrollStepsX = input.scrollStepsX
+    scrollStepsY = input.scrollStepsY
+    scrollInvertedX = input.scrollInvertedX
+    scrollInvertedY = input.scrollInvertedY
+    textEvents = input.textEvents.map {
+      TextInputEvent(
+        committed: $0.committed,
+        preedit: $0.preedit.map {
+          TextPreedit(text: $0.text, cursorBegin: $0.cursorBegin, cursorEnd: $0.cursorEnd)
+        }, deleteBefore: $0.deleteBefore, deleteAfter: $0.deleteAfter)
+    }
     focusLost = input.focusLost
     keyEvents = input.keyEvents.map {
       KeyEvent(

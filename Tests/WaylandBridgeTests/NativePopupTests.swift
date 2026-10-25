@@ -25,18 +25,35 @@ import Testing
 
 extension NativeSessionTests {
   @Test(
-    .enabled("Wayland compositor is unavailable") { try await WaylandAvailability.compositor },
+    .enabled("Wayland presentation is unavailable") { try await WaylandAvailability.presentation },
     arguments: [false, true])
   func popupDismissalDoesNotWaitForBufferAvailability(alreadyWaiting: Bool) async throws {
     let host = NativeHost(configuration: .init())
     defer { host.cleanup() }
     try await host.connect()
+    // xdg_popup requires a mapped parent, not only an acknowledged initial configure.
+    try host.setupRenderer(surfaceless: false)
+    let watchdog = Task {
+      try await Task.sleep(for: .seconds(5))
+      host.requestClose()
+    }
+    defer { watchdog.cancel() }
+    var parentFrames: Int32 = 0
+    while parentFrames == 0 && host.running {
+      if host.canRender {
+        _ = try NativeWindow.renderFrame(
+          host, surfaceless: false, started: .now, frameCount: &parentFrames, frame: { _, _ in })
+        try host.renderer.releaseCurrent()
+      } else {
+        try await host.dispatchAsync()
+      }
+    }
+    try #require(parentFrames == 1)
     var dismissals = 0
     try host.presentPopup(
       configuration: .init(x: 0, y: 0, anchorWidth: 10, anchorHeight: 10, width: 40, height: 30),
       grab: false, frame: { _, _ in Issue.record("Dismissal must not render") },
       onDismiss: { dismissals += 1 })
-    _ = host.beginFrame()
     host.connection.waitForDMABufBuffer()
     #expect(!host.canRender)
     if !alreadyWaiting { host.requestPopupDismissal() }
@@ -55,7 +72,7 @@ extension NativeSessionTests {
     if alreadyWaiting { host.requestPopupDismissal() }
     try await dispatch.value
     #expect(dismissals == 1 && host.connection.popupInput == nil)
-    #expect(host.canRender && host.running)
+    #expect(!host.canRender && host.running)
     host.dismissPopup()
     #expect(dismissals == 1)
   }
@@ -71,9 +88,17 @@ extension NativeSessionTests {
     try host.setupRenderer(surfaceless: false)
     var frameCount: Int32 = 0
     let started = ContinuousClock.now
-    _ = try NativeWindow.renderFrame(
-      host, surfaceless: false, started: started, frameCount: &frameCount, frame: { _, _ in })
-    try host.renderer.releaseCurrent()
+    while frameCount == 0 && host.running {
+      if host.canRender {
+        _ = try NativeWindow.renderFrame(
+          host, surfaceless: false, started: started, frameCount: &frameCount, frame: { _, _ in })
+        try host.renderer.releaseCurrent()
+      } else {
+        try await host.dispatchAsync()
+      }
+    }
+    #expect(frameCount == 1)
+    host.connection.waitForDMABufBuffer()
     var popupFrames = 0
     var timerRan = false
     var timer: Task<Void, Never>?
@@ -96,22 +121,24 @@ extension NativeSessionTests {
             timerRan = true
           }
         }
-        host.requestRedraw()
+        host.requestPopupRedraw()
       }, onDismiss: {})
     while host.running && popupFrames < 12 {
       if host.canRender {
+        host.connection.waitForDMABufBuffer()
         _ = try NativeWindow.renderFrame(
           host, surfaceless: false, started: started, frameCount: &frameCount, frame: { _, _ in })
         try host.renderer.releaseCurrent()
         if popupFrames > 0 {
-          #expect(!host.connection.frameReady)
-          #expect(host.connection.redrawRequested)
+          #expect(!host.connection.canRenderPopup)
+          #expect(!host.connection.canRender)
         }
       } else {
         try await host.dispatchAsync()
       }
     }
     #expect(popupFrames == 12)
+    #expect(frameCount == 1)
     #expect(timerRan)
   }
 

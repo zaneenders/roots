@@ -1,120 +1,62 @@
 import Roots
 
-#if os(macOS)
-import MacOSBridge
-#elseif os(Linux)
-import WaylandBridge
-#endif
-
+/// Convenience access to the active desktop session (or the platform default when idle).
 @MainActor
 public enum DesktopSystem {
-  public static var primaryShortcut: KeyModifiers {
-    #if os(macOS)
-    .super
-    #else
-    .control
-    #endif
-  }
+  private static var activeBackend: (any DesktopBackend)?
+  static var popupSurface: (any DesktopSurface)?
+  static var cursors = DesktopCursors()
 
-  public static func requestRedraw() {
-    #if os(macOS)
-    MacOSWindow.requestRedraw()
-    #else
-    NativeWindow.requestRedraw()
-    #endif
-  }
+  public static var backend: (any DesktopBackend)? { activeBackend ?? defaultBackend }
+  public static var primaryShortcut: KeyModifiers { backend?.primaryShortcut ?? .control }
 
+  public static func requestRedraw() { backend?.requestRedraw() }
+  public static func requestClose() { backend?.requestClose() }
+  public static func readClipboard() async -> String? { await backend?.readClipboard() }
+  @discardableResult
   public static func writeClipboard(_ text: String) -> Bool {
-    #if os(macOS)
-    MacOSWindow.writeClipboard(text)
-    #else
-    NativeWindow.writeClipboard(text)
-    #endif
+    backend?.writeClipboard(text) ?? false
   }
 
-  public static func requestClose() {
-    #if os(macOS)
-    MacOSWindow.requestClose()
-    #else
-    NativeWindow.requestClose()
-    #endif
+  /// Overrides hit-tested cursor selection until cleared or the surface closes.
+  /// False means unavailable; the override is retained for subsequent frames.
+  @discardableResult
+  public static func setCursor(_ shape: CursorShape?, popup: Bool = false) -> Bool {
+    cursors.set(shape, popup: popup)
   }
 
-  public static func readClipboard() async -> String? {
-    #if os(macOS)
-    await MacOSWindow.readClipboard()
-    #else
-    await NativeWindow.readClipboard()
-    #endif
+  /// False means this surface does not currently support input-method sessions.
+  @discardableResult
+  public static func setTextInput(_ state: TextInputState?, popup: Bool = false) -> Bool {
+    (surface(popup: popup) as? any DesktopTextInputSurface)?.setTextInput(state) ?? false
   }
 
-  static func run<Content: Block>(
-    _ window: DesktopWindow<Content>, runtime: DesktopRuntime<Content>
+  static func surface(popup: Bool) -> (any DesktopSurface)? {
+    popup ? popupSurface : backend
+  }
+
+  static func withBackend(
+    _ backend: any DesktopBackend, operation: () async throws -> Void
   ) async throws {
-    #if os(macOS)
-    let configuration = WindowConfiguration(
-        logicalSize: SIMD2(window.size.width, window.size.height), title: window.title,
-        maxFrames: window.maxFrames,
-      screenshotPath: window.screenshotPath)
-    let frame: @MainActor (WindowFrameInput, inout MetalRenderFrame) -> Void = {
-      snapshot, renderer in
-      let scale =
-        snapshot.logicalSize.x > 0 ? Float(snapshot.drawableSize.x) / snapshot.logicalSize.x : 1
-      runtime.frame(
-        input: snapshot.input, viewport: Viewport(
-          size: .init(width: snapshot.logicalSize.x, height: snapshot.logicalSize.y), scale: scale),
-        time: snapshot.timeSeconds,
-        present: { renderer.render($0) })
+    guard activeBackend == nil else { throw DesktopBackendError.alreadyRunning }
+    activeBackend = backend
+    defer {
+      activeBackend = nil
+      popupSurface = nil
+      cursors.reset(popup: false)
+      cursors.reset(popup: true)
     }
-    if window.offscreen {
-      try await MacOSWindow.renderOffscreen(configuration: configuration, frame: frame)
-    } else {
-      try await MacOSWindow.runAsync(configuration: configuration, frame: frame)
-    }
-    #else
-    try await run(
-      configuration: .init(
-        width: Int32(window.size.width.rounded(.up)), height: Int32(window.size.height.rounded(.up)),
-        maxFrames: window.maxFrames, title: window.title, screenshotPath: window.screenshotPath,
-        minimumWidth: min(760, Int32(window.size.width.rounded(.up))),
-        minimumHeight: min(640, Int32(window.size.height.rounded(.up)))),
-      runtime: runtime, offscreen: window.offscreen)
-    #endif
-  }
-
-  #if os(Linux)
-  static func run<Content: Block>(
-    configuration: NativeWindowConfiguration, runtime: DesktopRuntime<Content>,
-    offscreen: Bool = false
-  ) async throws {
-    try await NativeWindow.runAsync(configuration: configuration, surfaceless: offscreen) {
-      snapshot, renderer in
-      frame(snapshot, renderer: renderer, runtime: runtime)
-    }
-  }
-
-  static func input(_ snapshot: NativeWindowInput) -> Input {
-    let hasPointer =
-      snapshot.pointerInside || snapshot.primaryDown || snapshot.primaryPressed
-      || snapshot.primaryReleased
-    return Input(
-      mousePosition: hasPointer ? Coordinate(x: snapshot.pointerX, y: snapshot.pointerY) : nil,
-      pressed: snapshot.primaryPressed, released: snapshot.primaryReleased,
-      scrollX: snapshot.scrollX, scrollY: snapshot.scrollY,
-      scrollVelocityY: snapshot.scrollVelocityY,
-      keyEvents: snapshot.keyEvents, focusLost: snapshot.focusLost)
+    try await operation()
   }
 
   static func frame<Content: Block>(
-    _ snapshot: NativeWindowInput, renderer: borrowing RenderFrame,
-    runtime: DesktopRuntime<Content>
+    _ snapshot: BackendFrame, render: (borrowing UIDrawBatch) -> Void,
+    runtime: DesktopRuntime<Content>, popup: Bool = false
   ) {
     runtime.frame(
-      input: input(snapshot),
-      viewport: Viewport(
-        size: .init(width: Float(snapshot.width), height: Float(snapshot.height)),
-        scale: Float(snapshot.bufferScale)),
-      time: snapshot.timeSeconds, present: { renderer.render($0) })
+      input: snapshot.input,
+      viewport: Viewport(size: snapshot.logicalSize, scale: snapshot.scale),
+      time: snapshot.timeSeconds, present: render)
+    cursors.update(runtime.cursorStyle, popup: popup)
   }
-  #endif
 }

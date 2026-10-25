@@ -1,4 +1,8 @@
 import Foundation
+import SwiftWayland
+
+public typealias NativeCursorShape = WaylandCursorShape
+public typealias NativeTextInputState = WaylandTextInputState
 
 public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   case invalidConfiguration
@@ -7,6 +11,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
   case waylandConnection
   case missingWaylandGlobals
   case waylandDispatch
+  case waylandProtocol(WaylandProtocolError)
   case waylandDispatchBusy
   case egl(Int32)
   case shader(String)
@@ -22,6 +27,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     case .waylandConnection: "Cannot connect to Wayland. Check WAYLAND_DISPLAY and XDG_RUNTIME_DIR."
     case .missingWaylandGlobals:
       "Wayland compositor is missing wl_compositor or the requested surface-role protocol."
+    case .waylandProtocol(let error): "Wayland protocol violation: \(error)"
     case .waylandDispatch: "Wayland event dispatch failed."
     case .waylandDispatchBusy: "Wayland dispatch is already in progress on this connection."
     case .egl(let code): "EGL operation failed: 0x\(String(code, radix: 16))."
@@ -35,9 +41,23 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
 @MainActor public enum NativeWindow {
   private static var host: NativeHost?
 
+  /// Requests a parent-window frame without invalidating the popup.
   public static func requestRedraw() { host?.requestRedraw() }
 
+  /// Requests a popup frame without invalidating the parent window.
+  public static func requestPopupRedraw() { host?.requestPopupRedraw() }
+
   public static func requestClose() { host?.requestClose() }
+
+  @discardableResult
+  public static func setCursor(_ shape: NativeCursorShape, popup: Bool = false) -> Bool {
+    host?.connection.setCursor(shape, popup: popup) ?? false
+  }
+
+  @discardableResult
+  public static func setTextInput(_ state: NativeTextInputState?, popup: Bool = false) -> Bool {
+    host?.connection.setTextInput(state, popup: popup) ?? false
+  }
 
   @discardableResult
   public static func presentPopup(
@@ -182,25 +202,29 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
       let elapsed = started.duration(to: .now).components
       host.timeSeconds = Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
-    try host.renderer.makeCurrent()
-    if !surfaceless, try !host.preparePresentation() { return false }
-    let input = host.beginFrame()
-    try host.renderer.beginFrame(
-      width: input.width, height: input.height, bufferScale: input.bufferScale,
-      transparent: host.configuration.topBar)
-    host.renderer.withFrame { frame(input, $0) }
-    try host.renderer.endFrame(surfaceless: surfaceless)
-    frameCount += 1
-    let lastFrame = host.configuration.maxFrames > 0 && frameCount >= host.configuration.maxFrames
-    if lastFrame, let path = host.configuration.screenshotPath {
-      try host.renderer.screenshot(to: path)
-    }
-    if !surfaceless {
-      host.renderPopup()
+    var lastFrame = false
+    if surfaceless || host.connection.canRender {
       try host.renderer.makeCurrent()
-      try host.endFrame(continuously: !lastFrame && host.configuration.maxFrames > 0)
-      try host.renderer.swapBuffers()
+      if try surfaceless || host.preparePresentation() {
+        let input = host.beginFrame()
+        try host.renderer.beginFrame(
+          width: input.width, height: input.height, bufferScale: input.bufferScale,
+          fractionalScale120: input.fractionalScale120,
+          transparent: host.configuration.topBar)
+        host.renderer.withFrame { frame(input, $0) }
+        try host.renderer.endFrame(surfaceless: surfaceless)
+        frameCount += 1
+        lastFrame = host.configuration.maxFrames > 0 && frameCount >= host.configuration.maxFrames
+        if lastFrame, let path = host.configuration.screenshotPath {
+          try host.renderer.screenshot(to: path)
+        }
+        if !surfaceless {
+          try host.endFrame(continuously: !lastFrame && host.configuration.maxFrames > 0)
+          try host.renderer.swapBuffers()
+        }
+      }
     }
+    if !surfaceless { host.renderPopup() }
     return lastFrame || !host.running
   }
 
@@ -208,7 +232,7 @@ public enum NativeWindowError: Error, Equatable, CustomStringConvertible {
     let mode = surfaceless ? "EGL surfaceless" : "Wayland"
     nativeLog(
       "Rendered \(frameCount) \(mode) frames at \(host.input.width)x\(host.input.height), "
-        + "\(host.input.bufferScale)x buffer scale.")
+        + "\(host.input.renderScale)x buffer scale.")
   }
 }
 

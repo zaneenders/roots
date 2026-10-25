@@ -303,7 +303,7 @@ extension NativeSessionTests {
   }
 }
 
-@Test(arguments: [Float(1), 2]) func fractionalScissorsMatchHalfOpenPixelCenters(scale: Float) {
+@Test(arguments: [Float(1), 1.25, 1.5, 1.75, 2]) func fractionalScissorsMatchHalfOpenPixelCenters(scale: Float) {
   let parent = Region(1.75, 0.5, 1.5, 6)
   for region in [parent, parent.intersection(Region(2.25, 1.75, 4, 2.5)), Region(0.5, 0.5, 1, 1)] {
     let scissor = ScissorRect(region, width: 16, height: 16, scale: scale)

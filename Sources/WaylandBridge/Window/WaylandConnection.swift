@@ -20,7 +20,7 @@ import SwiftWayland
   }
   var running: Bool { connection.running }
   var configured: Bool { connection.configured }
-  var canRender: Bool { connection.canRender }
+  var canRender: Bool { connection.canRender || connection.canRenderPopup }
 
   init(configuration: NativeWindowConfiguration) {
     self.configuration = configuration
@@ -53,7 +53,10 @@ import SwiftWayland
       throw NativeWindowError.rendering
     }
     do {
-      try renderer.setup(input: input)
+      let device = try (!surfaceless ? connection.dmabufPreferences?.mainDevice : nil).map {
+        try DMABufDevice(device: $0)
+      }
+      try renderer.setup(input: input, device: device)
       if !surfaceless { renderer.enableDMABuf(connection: connection) }
       rendererReady = true
     } catch {
@@ -80,9 +83,11 @@ import SwiftWayland
   }
 
   func preparePresentation() throws -> Bool {
-    try renderer.preparePresentation(
+    try renderer.updateDMABufDevice(input: input, connection: connection)
+    return try renderer.preparePresentation(
       width: connection.input.width, height: connection.input.height,
-      bufferScale: connection.input.bufferScale)
+      bufferScale: connection.input.bufferScale,
+      fractionalScale120: connection.input.fractionalScale120)
   }
 
   func beginFrame() -> NativeWindowInput {
@@ -98,6 +103,7 @@ import SwiftWayland
   func setIdleInhibited(_ enabled: Bool) -> Bool { connection.setIdleInhibited(enabled) }
 
   func requestRedraw() { connection.requestRedraw() }
+  func requestPopupRedraw() { connection.requestPopupRedraw() }
   func requestClose() { connection.requestClose() }
   func readClipboard() async -> String? { await connection.readClipboard() }
   func writeClipboard(_ text: String) -> Bool { connection.writeClipboard(text) }
@@ -134,30 +140,40 @@ import SwiftWayland
       dismissPopup()
       return
     }
-    guard let renderer = popupRenderer, let frame = popupFrame,
-      let snapshot = connection.popupInput, connection.popupConfigured
+    guard connection.canRenderPopup, let renderer = popupRenderer, let frame = popupFrame,
+      let snapshot = connection.popupInput
     else { return }
-    var input = NativeWindowInput(snapshot)
-    input.timeSeconds = timeSeconds
     do {
       if !popupRendererReady {
-        try renderer.setup(input: input, ownsDisplay: false)
+        try renderer.setup(
+          input: NativeWindowInput(snapshot), ownsDisplay: false, device: self.renderer.device)
         renderer.enableDMABuf(connection: connection, popup: true)
         popupRendererReady = true
       }
+      try renderer.updateDMABufDevice(
+        input: NativeWindowInput(snapshot), connection: connection, popup: true,
+        sharedDevice: self.renderer.device)
       try renderer.makeCurrent()
       guard
         try renderer.preparePresentation(
-          width: input.width, height: input.height, bufferScale: input.bufferScale)
+          width: snapshot.width, height: snapshot.height, bufferScale: snapshot.bufferScale,
+          fractionalScale120: snapshot.fractionalScale120)
       else {
         try renderer.releaseCurrent()
         return
       }
-      _ = connection.takePopupInput()
+      guard let inputSnapshot = connection.takePopupInput() else {
+        try renderer.releaseCurrent()
+        return
+      }
+      var input = NativeWindowInput(inputSnapshot)
+      input.timeSeconds = timeSeconds
       try renderer.beginFrame(
-        width: input.width, height: input.height, bufferScale: input.bufferScale, transparent: true)
+        width: input.width, height: input.height, bufferScale: input.bufferScale,
+        fractionalScale120: input.fractionalScale120, transparent: true)
       renderer.withFrame { frame(input, $0) }
       try renderer.endFrame(surfaceless: false)
+      try connection.endPopupFrame()
       try renderer.swapBuffers()
       try renderer.releaseCurrent()
       if input.keyEvents.contains(where: { $0.key == .escape && $0.phase == .pressed }) {
@@ -185,13 +201,14 @@ import SwiftWayland
 }
 
 extension NativeWindowError {
-  fileprivate init(_ error: WaylandError) {
+  init(_ error: WaylandError) {
     switch error {
     case .invalidConfiguration: self = .invalidConfiguration
     case .connection: self = .waylandConnection
     case .missingGlobals: self = .missingWaylandGlobals
     case .busy: self = .waylandDispatchBusy
     case .dispatch: self = .waylandDispatch
+    case .protocolViolation(let error): self = .waylandProtocol(error)
     }
   }
 }
