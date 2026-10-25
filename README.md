@@ -14,8 +14,7 @@ Explore the runnable apps in [Examples](Examples):
   and aspect-ratio-preserving resizing.
 - [Tetris](Examples/Tetris): declarative blocks, keyboard input, observation,
   and frame-driven animation.
-- [Video](Examples/Video): muted local-file playback, GPU YUV conversion, and
-  pause/restart. FFmpeg is a dependency of this example only.
+- [Video](Examples/Video): muted local-file playback (requires FFmpeg).
 
 After following the [setup instructions](#development), run an example from
 the repository root:
@@ -24,6 +23,7 @@ the repository root:
 swift run --package-path Examples/Markdown MarkdownDemo
 swift run --package-path Examples/Tetris Tetris
 swift run --package-path Examples/Mandelbrot Mandelbrot
+swift run --package-path Examples/Video VideoPlayer /path/to/movie.mp4
 ```
 
 Text measurement, drawing, and paragraphs recognize LF, CRLF, and CR line breaks.
@@ -68,34 +68,6 @@ bars remain native extensions, with independent popup redraw and cursor state.
 The desktop host currently runs one window session at a time. Offscreen rendering
 requires a positive frame limit; a backend without offscreen or screenshot support
 should throw `DesktopBackendError.unsupportedFeature` for those requests.
-
-## Images and video
-
-```swift
-let source = ImageSource() // MainActor; the decoder remains application-owned.
-
-DesktopWindow("Video") { viewport in
-  Column(in: viewport.bounds) { Video(source, key: 1) }
-}
-
-// Publish immutable RGBA8, YUV420P, or NV12 frames from your producer.
-// source.publish(frame)
-```
-
-`Video` supports fit/fill/stretch; `UIPaintContext.drawImage` adds custom placement,
-clipping, and opacity. Desktop media updates reuse draw commands without rebuilding
-unchanged UI. The current path uploads CPU planes to reusable GPU textures; native
-decoder-buffer imports and audio playback are not implemented.
-
-**Backend migration:** `UIDrawBatch` now yields `DrawCommand`. Switch over
-`.rectangle(DrawRect)` and `.image(ImageDraw)`; `ImageDraw.resolve()` on MainActor
-returns an owned frame snapshot. See the [FFmpeg playback example](Examples/Video)
-for a separate package that supplies frames without adding codecs to Roots.
-
-## Design notes
-
-- [Video display proposal](Docs/Video.md): GPU-backed image sources, frame ownership,
-  playback timing, implemented CPU-frame support, and future native imports.
 
 ## Development
 
