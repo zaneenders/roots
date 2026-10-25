@@ -167,6 +167,7 @@ public struct WaylandDMABufPlane: Sendable {
       if message.opcode == 0 { buffer.created(message.arguments[0].word) } else { buffer.failed() }
     } else if let buffer = buffers.first(where: { $0.id == message.object && $0.id != 0 }) {
       buffer.released()
+      if buffer.id == 0 { buffers.removeAll { $0 === buffer } }
     } else if message.opcode == 0,
       objects.interfaces[message.object] == "zwp_linux_buffer_params_v1"
     {
@@ -176,9 +177,10 @@ public struct WaylandDMABufPlane: Sendable {
     }
   }
   func owns(_ buffer: WaylandDMABufBuffer) -> Bool { buffers.contains { $0 === buffer } }
-  func close() {
+  func close(disconnecting: Bool = false) {
     for buffer in buffers { buffer.close() }
-    buffers.removeAll()
+    // Global removal leaves the connection open for deferred wl_buffer.release events.
+    buffers.removeAll { disconnecting || $0.id == 0 }
     for surface in Array(feedback.keys) { unwatch(surface: surface) }
     formats.removeAll()
     factory = 0

@@ -905,7 +905,7 @@ import NIOCore
     writes = nil
     decoder = WireDecoder()
     dismissPopup()
-    dmabuf.close()
+    dmabuf.close(disconnecting: true)
     scale.close(objects: objects)
     objects.request(fractionalManager, WpFractionalScaleManagerV1Request.destroy)
     objects.request(viewporter, WpViewporterRequest.destroy)
