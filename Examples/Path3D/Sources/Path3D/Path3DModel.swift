@@ -82,9 +82,13 @@ import Roots
     let phase = hover?.progress ?? progress
     let world = geometry.position(at: phase)
     let font: Float = region.width < 600 ? 12 : 15
-    let line = String(
-      format: "%3.0f%%    x %+.2f   y %+.2f   z %+.2f", phase * 100, world.x,
-      world.y, world.z)
+    let format = "%3.0f%%    x %+.2f   y %+.2f   z %+.2f"
+    // Only Apple's Foundation marks this printf-style initializer unsafe.
+    #if os(macOS)
+    let line = unsafe String(format: format, phase * 100, world.x, world.y, world.z)
+    #else
+    let line = String(format: format, phase * 100, world.x, world.y, world.z)
+    #endif
     let footer = Region(region.x, region.y + max(0, region.height - 42), region.width, min(42, region.height))
     painter.fillRect(footer, color: Color(0.025, 0.04, 0.06, 0.95))
     painter.drawText(line, x: footer.x + 14, y: footer.y + 10, size: font, color: Color(0.65, 0.88, 0.97))
