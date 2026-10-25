@@ -153,6 +153,8 @@ import SwiftWayland
     input: NativeWindowInput, connection: WaylandConnection, popup: Bool = false,
     sharedDevice: DMABufDevice? = nil
   ) throws {
+    // Keep usable targets on the old device until replacements can be imported.
+    guard connection.canImportDMABuf(popup: popup) else { return }
     let preferred = (popup ? connection.popupDMABufPreferences : connection.dmabufPreferences)?
       .mainDevice
     guard let preferred, preferred != device?.advertisedDevice else { return }

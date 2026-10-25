@@ -383,6 +383,7 @@ import NIOCore
           self.pendingSize = nil
         }
         frame.configured = true
+        frame.waitingForBuffer = false
       } else if let popup {
         if let size = popup.pendingSize {
           if size.x > 0 { popup.input.width = size.x }
@@ -390,6 +391,7 @@ import NIOCore
           popup.pendingSize = nil
         }
         popup.frame.configured = true
+        popup.frame.waitingForBuffer = false
       }
       if id == xdgSurface { requestRedraw() } else { requestPopupRedraw() }
     case "xdg_toplevel":
@@ -454,10 +456,12 @@ import NIOCore
     case "wl_data_device", "wl_data_offer", "wl_data_source": clipboard.event(message)
     case "zwp_linux_dmabuf_feedback_v1":
       if try dmabuf.feedbackEvent(message) {
-        requestRedraw()
-        requestPopupRedraw()
+        dmabufPreferencesChanged()
       }
-    case "zwp_linux_dmabuf_v1", "zwp_linux_buffer_params_v1", "wl_buffer": dmabuf.event(message)
+    case "zwp_linux_dmabuf_v1":
+      dmabuf.event(message)
+      if opcode == 1 { dmabufPreferencesChanged() }
+    case "zwp_linux_buffer_params_v1", "wl_buffer": dmabuf.event(message)
     default: break
     }
   }
@@ -501,6 +505,8 @@ import NIOCore
       dmabuf.version = min(version, 4)
       dmabuf.factory = objects.bind(registry, name, interface, dmabuf.version)
       dmabuf.watch()
+      if surface != 0 { dmabuf.watch(surface: surface) }
+      if let popup { dmabuf.watch(surface: popup.surface) }
       dmabufName = name
     default: break
     }
@@ -548,7 +554,7 @@ import NIOCore
     }
     if dmabufName == name {
       objects.request(dmabuf.factory, ZwpLinuxDmabufV1Request.destroy)
-      dmabuf.close()
+      dmabuf.removeFactory()
       dmabufName = nil
     }
     if managerName == name {
@@ -677,6 +683,7 @@ import NIOCore
       objects.request(region, WlRegionRequest.destroy)
     }
     frame.configured = true
+    frame.waitingForBuffer = false
     requestRedraw()
   }
   private func setupSurfaceScales() {
@@ -800,9 +807,20 @@ import NIOCore
       on: popup.surface, objects: objects,
       continuously: continuously)
   }
+  /// Completed feedback is retained for existing buffers after factory removal.
   public var dmabufPreferences: WaylandDMABufFeedback? { dmabuf.preferences(surface: surface) }
   public var popupDMABufPreferences: WaylandDMABufFeedback? {
     popup.flatMap { dmabuf.preferences(surface: $0.surface) }
+  }
+  package func canImportDMABuf(popup: Bool = false) -> Bool {
+    let target = popup ? self.popup?.surface ?? 0 : surface
+    return running && target != 0 && dmabuf.canImport(surface: target)
+  }
+  private func dmabufPreferencesChanged() {
+    frame.waitingForBuffer = false
+    popup?.frame.waitingForBuffer = false
+    requestRedraw()
+    requestPopupRedraw()
   }
   public func importDMABuf(
     width: Int32, height: Int32, format: UInt32, modifier: UInt64,

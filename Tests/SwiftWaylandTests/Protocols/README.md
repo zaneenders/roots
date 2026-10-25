@@ -100,6 +100,11 @@ Feedback changes replace idle buffers; submitted buffers wait for release. Devic
 changes recreate the renderer on the advertised GPU. Parent and popup share a
 `DMABufDevice` when their render nodes match. No `wl_shm` fallback is provided.
 
+Removing the dma-buf factory preserves existing buffers, pending imports, and the
+last completed feedback for reuse. A surface waits if it needs a new allocation
+while the factory is absent. A replacement factory's fresh format announcements
+or feedback wake waiting surfaces; retained feedback never authorizes new imports.
+
 ## Surface scale
 
 ```text

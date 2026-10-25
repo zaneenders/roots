@@ -26,9 +26,30 @@ import SwiftWayland
     selected = nil
     if synchronization == nil { synchronization = unsafe DMABufSynchronization(display: display) }
     let feedback = popup ? connection.popupDMABufPreferences : connection.dmabufPreferences
+    let canImport = connection.canImportDMABuf(popup: popup)
     if feedback != preferences {
       preferences = feedback
       rejected.removeAll()
+    }
+    // Reuse any suitable buffer before trying to allocate another one. The
+    // factory may have disappeared while its existing buffers remain usable.
+    for index in targets.indices {
+      if targets[index]?.buffer.state == .available,
+        targets[index]?.width == width && targets[index]?.height == height,
+        (targets[index]?.preferences == feedback || !canImport)
+      {
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), targets[index]?.framebuffer ?? 0)
+        selected = index
+        return true
+      }
+    }
+    guard canImport else {
+      guard feedback != nil else {
+        throw NativeWindowError.dmabuf("Compositor has no dma-buf allocation feedback.")
+      }
+      // Releases and fresh factory feedback both wake this surface.
+      connection.waitForDMABufBuffer(popup: popup)
+      return false
     }
     for index in targets.indices {
       if let state = targets[index]?.buffer.state {
@@ -42,14 +63,7 @@ import SwiftWayland
           }
         case .closed: throw NativeWindowError.dmabuf("Buffer was closed before rendering.")
         case .importing, .submitted: continue
-        case .available:
-          if targets[index]?.width == width && targets[index]?.height == height,
-            targets[index]?.preferences == feedback
-          {
-            glBindFramebuffer(GLenum(GL_FRAMEBUFFER), targets[index]?.framebuffer ?? 0)
-            selected = index
-            return true
-          }
+        case .available: break
         }
       }
       targets[index]?.close()

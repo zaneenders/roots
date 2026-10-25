@@ -79,6 +79,7 @@ public struct WaylandDMABufPlane: Sendable {
   var version: UInt32 = 3
   private var feedback: [UInt32: DMABufFeedback] = [:]
   private var formats: [UInt32: Set<UInt64>] = [:]
+  private var retainedPreferences: [UInt32: WaylandDMABufFeedback] = [:]
   private var buffers: [WaylandDMABufBuffer] = []
   private let objects: WaylandObjects
   init(objects: WaylandObjects) { self.objects = objects }
@@ -92,13 +93,19 @@ public struct WaylandDMABufPlane: Sendable {
     feedback[surface] = DMABufFeedback(id: id)
   }
   func unwatch(surface: UInt32) {
+    retainedPreferences[surface] = nil
     if let removed = feedback.removeValue(forKey: surface) {
       objects.request(removed.id, ZwpLinuxDmabufFeedbackV1Request.destroy)
     }
   }
   func preferences(surface: UInt32 = 0) -> WaylandDMABufFeedback? {
+    currentPreferences(surface: surface) ?? retainedPreferences[surface] ?? retainedPreferences[0]
+  }
+  func canImport(surface: UInt32) -> Bool { currentPreferences(surface: surface) != nil }
+  private func currentPreferences(surface: UInt32) -> WaylandDMABufFeedback? {
     guard factory != 0 else { return nil }
     if version >= 4 { return feedback[surface]?.current ?? feedback[0]?.current }
+    guard !formats.isEmpty else { return nil }
     return WaylandDMABufFeedback(
       mainDevice: nil,
       tranches: [
@@ -133,7 +140,7 @@ public struct WaylandDMABufPlane: Sendable {
       throw WaylandError.invalidConfiguration
     }
     guard factory != 0,
-      preferences(surface: surface)?.supports(format: format, modifier: modifier) == true
+      currentPreferences(surface: surface)?.supports(format: format, modifier: modifier) == true
     else {
       throw WaylandError.missingGlobals
     }
@@ -177,12 +184,24 @@ public struct WaylandDMABufPlane: Sendable {
     }
   }
   func owns(_ buffer: WaylandDMABufBuffer) -> Bool { buffers.contains { $0 === buffer } }
-  func close(disconnecting: Bool = false) {
-    for buffer in buffers { buffer.close() }
-    // Global removal leaves the connection open for deferred wl_buffer.release events.
-    buffers.removeAll { disconnecting || $0.id == 0 }
+  func removeFactory() {
+    guard factory != 0 else { return }
+    // The factory's children remain valid. Keep completed feedback for reusing
+    // their allocations, but require fresh announcements before importing again.
+    var retained = retainedPreferences
+    for surface in Set(feedback.keys).union(retained.keys).union([0]) {
+      retained[surface] = preferences(surface: surface)
+    }
     for surface in Array(feedback.keys) { unwatch(surface: surface) }
     formats.removeAll()
     factory = 0
+    retainedPreferences = retained
+  }
+  func close(disconnecting: Bool = false) {
+    for buffer in buffers { buffer.close() }
+    // Explicitly closed submitted buffers still need their release events.
+    buffers.removeAll { disconnecting || $0.id == 0 }
+    removeFactory()
+    retainedPreferences.removeAll()
   }
 }
