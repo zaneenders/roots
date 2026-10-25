@@ -30,3 +30,25 @@ import Testing
   circleCPU.render([DrawRect(Region(12, 12, 8, 8), .accent, radius: 4)].span)
   #expect(strokeCPU.pixels == circleCPU.pixels)
 }
+
+@Test func longColoredSelfCrossingPathBlendsOnceAtChunkBoundaries() throws {
+  let points = (0..<257).map { index in
+    Coordinate(x: index % 2 == 0 ? 8 : 24, y: index % 2 == 0 ? 8 : 24)
+  }
+  let colors = points.map { _ in Color(1, 1, 1, 0.5) }
+  let stroke = try #require(PolylineStroke(points: points, width: 6, colors: colors))
+  let cpu = CPURenderer(width: 32, height: 32)
+  cpu.render([DrawRect(Region(0, 0, 32, 32), Color(0, 0, 0)), DrawRect(polyline: stroke)].span)
+  #expect(cpu.pixels.max() == 127)
+}
+
+@Test func translucentRibbonJoinsDoNotDoubleBlend() throws {
+  let points: [Coordinate] = [.init(x: 5, y: 15), .init(x: 20, y: 15), .init(x: 35, y: 22)]
+  let stroke = try #require(PolylineStroke(points: points, width: 6,
+    colors: points.map { _ in Color(1, 1, 1, 0.5) }, rendering: .ribbon))
+  #expect(stroke.ribbon != nil)
+  let cpu = CPURenderer(width: 48, height: 40)
+  cpu.render([DrawRect(Region(0, 0, 48, 40), Color(0, 0, 0)), DrawRect(polyline: stroke)].span)
+  #expect(cpu.pixels.max() == 127)
+  #expect(cpu.pixels[(15 * 48 + 20) * 3] == 127)
+}

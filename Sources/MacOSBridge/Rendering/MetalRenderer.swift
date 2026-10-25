@@ -21,6 +21,7 @@ private struct MetalFrameSlot: ~Copyable {
 @safe @MainActor final class MetalRenderer {
   let device: any MTLDevice
   private let queue: any MTLCommandQueue
+  private let ribbonPipeline: any MTLRenderPipelineState
   private let polylinePipeline: any MTLRenderPipelineState
   private let pipeline: any MTLRenderPipelineState
   private let atlas: any MTLTexture
@@ -29,6 +30,9 @@ private struct MetalFrameSlot: ~Copyable {
   private let sampler: any MTLSamplerState
   private var slots = UniqueArray<MetalFrameSlot>()
   private var frameState = MetalFrameState()
+  private var polylines: [ObjectIdentifier: MetalPolyline] = [:]
+  private(set) var polylineUploads = 0
+  var cachedPolylineCount: Int { polylines.count }
   private var nextFrameID: UInt64 = 0
   private var frameBorrowed = false
   private let offscreenTarget: (any MTLTexture)?
@@ -45,6 +49,7 @@ private struct MetalFrameSlot: ~Copyable {
     self.queue = queue
     pipeline = try Self.makePipeline(device: device)
     polylinePipeline = try Self.makePipeline(device: device, polyline: true)
+    ribbonPipeline = try Self.makePipeline(device: device, ribbon: true)
     atlas = try Self.makeAtlas(device: device)
     emojiAtlas = try Self.makeEmojiAtlas(device: device)
     let descriptor = MTLSamplerDescriptor()
@@ -196,6 +201,7 @@ private struct MetalFrameSlot: ~Copyable {
   ) throws {
     guard !frameState.runs.isEmpty else {
       slots[slotID].images.removeAll()
+      polylines.removeAll()
       return
     }
     let (byteCount, overflow) = max(1, frameState.vertices.count).multipliedReportingOverflow(
@@ -230,6 +236,8 @@ private struct MetalFrameSlot: ~Copyable {
     defaults.withUnsafeBytes { bytes in
       unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
     }
+    let usedPolylines = Set(frameState.runs.compactMap { $0.polyline?.polyline.map(ObjectIdentifier.init) })
+    polylines = polylines.filter { usedPolylines.contains($0.key) }
     for run in frameState.runs {
       let clip =
         run.scissor
@@ -255,15 +263,45 @@ private struct MetalFrameSlot: ~Copyable {
       }
       if let draw = run.polyline, let stroke = draw.polyline {
         encoder.setRenderPipelineState(polylinePipeline)
-        let b = stroke.bounds
+        let id = ObjectIdentifier(stroke)
+        if polylines[id] == nil {
+          polylines[id] = try MetalPolyline(stroke, device: device)
+          polylineUploads += 1
+        }
+        let geometry = polylines[id]!
+        if stroke.usesRibbon(tint: draw.color, scale: draw.pathTransform.scale * min(Float(drawableSize.x) / logicalSize.x, Float(drawableSize.y) / logicalSize.y)), let ribbon = geometry.ribbon {
+          encoder.setRenderPipelineState(ribbonPipeline)
+          encoder.setVertexBuffer(ribbon, offset: 0, index: 0)
+          let t = draw.pathTransform
+          var transform = SIMD4(t.translation.x, t.translation.y, t.axis.x, t.axis.y)
+          var parameters = SIMD4(t.scale, stroke.width, Float(drawableSize.x) / logicalSize.x, Float(drawableSize.y) / logicalSize.y)
+          var tint = SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a)
+          unsafe encoder.setVertexBytes(&transform, length: MemoryLayout<SIMD4<Float>>.stride, index: 2)
+          unsafe encoder.setVertexBytes(&parameters, length: MemoryLayout<SIMD4<Float>>.stride, index: 3)
+          unsafe encoder.setFragmentBytes(&tint, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
+          encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: geometry.ribbonCount)
+          encoder.setRenderPipelineState(pipeline)
+          encoder.setVertexBuffer(buffer, offset: 0, index: 0)
+          defaults.withUnsafeBytes { bytes in
+            unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
+          }
+          continue
+        }
+        let b = draw.bounds
         var bounds = SIMD4(b.x, b.y, b.width, b.height)
         var count = UInt32(stroke.points.count)
         var width = stroke.width
         var color = SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a)
         unsafe encoder.setVertexBytes(&bounds, length: MemoryLayout<SIMD4<Float>>.stride, index: 0)
-        stroke.points.map(\.vector).withUnsafeBytes { bytes in
-          unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
-        }
+        encoder.setFragmentBuffer(geometry.vertices, offset: 0, index: 0)
+        encoder.setFragmentBuffer(geometry.chunks, offset: 0, index: 4)
+        let t = draw.pathTransform
+        var transform = SIMD4(t.translation.x, t.translation.y, t.axis.x, t.axis.y)
+        var scale = t.scale
+        unsafe encoder.setFragmentBytes(&transform, length: MemoryLayout<SIMD4<Float>>.stride, index: 5)
+        unsafe encoder.setFragmentBytes(&scale, length: MemoryLayout<Float>.stride, index: 6)
+        var pixelScale = SIMD2(Float(drawableSize.x) / logicalSize.x, Float(drawableSize.y) / logicalSize.y)
+        unsafe encoder.setFragmentBytes(&pixelScale, length: MemoryLayout<SIMD2<Float>>.stride, index: 7)
         unsafe encoder.setFragmentBytes(&count, length: MemoryLayout<UInt32>.stride, index: 1)
         unsafe encoder.setFragmentBytes(&width, length: MemoryLayout<Float>.stride, index: 2)
         unsafe encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 3)
@@ -329,7 +367,7 @@ private struct MetalFrameSlot: ~Copyable {
     return texture
   }
 
-  private static func makePipeline(device: any MTLDevice, polyline: Bool = false) throws
+  private static func makePipeline(device: any MTLDevice, polyline: Bool = false, ribbon: Bool = false) throws
     -> any MTLRenderPipelineState
   {
     guard
@@ -342,9 +380,9 @@ private struct MetalFrameSlot: ~Copyable {
       source: String(contentsOf: url, encoding: .utf8), options: nil)
     let descriptor = MTLRenderPipelineDescriptor()
     descriptor.vertexFunction = library.makeFunction(
-      name: polyline ? "polylineVertex" : "rectangleVertex")
+      name: ribbon ? "ribbonVertex" : polyline ? "polylineVertex" : "rectangleVertex")
     descriptor.fragmentFunction = library.makeFunction(
-      name: polyline ? "polylineFragment" : "rectangleFragment")
+      name: ribbon ? "ribbonFragment" : polyline ? "polylineFragment" : "rectangleFragment")
     let vertices = MTLVertexDescriptor()
     let offsets = [
       MemoryLayout<MetalVertex>.offset(of: \.position)!,
@@ -366,7 +404,7 @@ private struct MetalFrameSlot: ~Copyable {
     vertices.layouts[0].stride = MemoryLayout<MetalVertex>.stride
     vertices.layouts[0].stepFunction = .perInstance
     vertices.layouts[0].stepRate = 1
-    if !polyline { descriptor.vertexDescriptor = vertices }
+    if !polyline && !ribbon { descriptor.vertexDescriptor = vertices }
     let color = descriptor.colorAttachments[0]!
     color.pixelFormat = .bgra8Unorm
     color.isBlendingEnabled = true

@@ -80,14 +80,15 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
   }
 
   public mutating func strokePolyline(_ points: [Coordinate], color: Color, width: Float = 1) {
-    guard !points.isEmpty, points.count <= PolylineStroke.maximumPointCount, width > 0,
-      width.isFinite
-    else { return }
-    guard
-      let stroke = PolylineStroke(
-        points: points.map { Coordinate(origin + $0.vector * scale) }, width: width * scale)
-    else { return }
-    storage.value.emit(DrawRect(polyline: stroke, color: color, clip: frameClip))
+    guard let stroke = PolylineStroke(points: points, width: width) else { return }
+    draw(DrawRect(polyline: stroke, color: color))
+  }
+
+  /// Retains geometry for this frame; transforms do not copy its vertices.
+  public mutating func strokePolyline(
+    _ stroke: PolylineStroke, transform: PathTransform = .identity, tint: Color = Color(1, 1, 1)
+  ) {
+    draw(DrawRect(polyline: stroke, color: tint, transform: transform))
   }
 
   private func frameRegion(_ region: Region) -> Region {
@@ -99,11 +100,8 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
     var draw = draw
     if let stroke = draw.polyline {
       guard draw.isValid else { return }
-      guard
-        let transformed = PolylineStroke(
-          points: stroke.points.map { Coordinate(origin + $0.vector * scale) }, width: stroke.width * scale)
-      else { return }
-      draw = DrawRect(polyline: transformed, color: draw.color, clip: draw.clip)
+      let transform = PathTransform(translation: Coordinate(origin), scale: scale).concatenating(draw.pathTransform)
+      draw = DrawRect(polyline: stroke, color: draw.color, transform: transform, clip: draw.clip)
     } else {
       draw.region = frameRegion(draw.region)
     }
@@ -117,8 +115,9 @@ public struct UIPaintContext: ~Copyable, ~Escapable {
     _ source: ImageSource, in region: Region, contentMode: ImageContentMode = .fit,
     opacity: Float = 1
   ) {
-    storage.value.emit(ImageDraw(
-      source, in: frameRegion(region), clip: frameClip, opacity: opacity, contentMode: contentMode))
+    storage.value.emit(
+      ImageDraw(
+        source, in: frameRegion(region), clip: frameClip, opacity: opacity, contentMode: contentMode))
   }
 
   public mutating func fillRect(_ region: Region, color: Color, radius: Float = 0) {

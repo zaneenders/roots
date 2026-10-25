@@ -89,21 +89,69 @@ vertex PolylineOutput polylineVertex(uint vertexID [[vertex_id]], constant float
                           1.0 - output.worldPosition.y / resolution.y * 2.0, 0, 1);
   return output;
 }
-fragment float4 polylineFragment(PolylineOutput input [[stage_in]], constant float2 *points [[buffer(0)]],
+fragment float4 polylineFragment(PolylineOutput input [[stage_in]], const device float4 *vertices [[buffer(0)]],
                                 constant uint &count [[buffer(1)]], constant float &width [[buffer(2)]],
-                                constant float4 &color [[buffer(3)]]) {
-  float distance = 1e30;
-  float2 start = points[0];
-  for (uint i = 0; i < count; i++) {
-    float2 end = points[i];
-    float2 segment = end - start;
-    float squaredLength = dot(segment, segment);
-    float t = squaredLength > 0.0 ? clamp(dot(input.worldPosition - start, segment) / squaredLength, 0.0, 1.0) : 0.0;
-    distance = min(distance, length(input.worldPosition - start - t * segment));
-    start = end;
+                                constant float4 &color [[buffer(3)]], const device float4 *chunks [[buffer(4)]],
+                                constant float4 &transform [[buffer(5)]], constant float &scale [[buffer(6)]], constant float2 &pixelScale [[buffer(7)]]) {
+  float2 p = (input.worldPosition - transform.xy) / scale;
+  p = float2(dot(p, transform.zw), dot(p, float2(-transform.w, transform.z)));
+  float distance = width * 0.5 + 2.0 / (scale * min(pixelScale.x, pixelScale.y));
+  float4 tint = float4(1);
+  uint segments = max(1u, count - 1);
+  uint chunkCount = (segments + 63) / 64;
+  for (uint chunk = 0; chunk < chunkCount; chunk++) {
+    float4 bounds = chunks[chunk];
+    float2 delta = max(max(bounds.xy - p, p - bounds.xy - bounds.zw), float2(0));
+    if (dot(delta, delta) > distance * distance) continue;
+    uint end = min((chunk + 1) * 64, segments);
+    for (uint i = chunk * 64; i < end; i++) {
+      float2 start = vertices[i * 2].xy;
+      uint next = min(i + 1, count - 1);
+      float2 segment = vertices[next * 2].xy - start;
+      float squaredLength = dot(segment, segment);
+      float t = squaredLength > 0.0 ? clamp(dot(p - start, segment) / squaredLength, 0.0, 1.0) : 0.0;
+      float d = length(p - start - t * segment);
+      if (d < distance) {
+        distance = d;
+        tint = mix(vertices[i * 2 + 1], vertices[next * 2 + 1], t);
+      }
+    }
   }
-  distance -= width * 0.5;
+  distance = (distance - width * 0.5) * scale;
   float edge = max(fwidth(distance) * 0.75, 0.0001);
   float coverage = 1.0 - smoothstep(-edge, edge, distance);
-  return float4(color.rgb, color.a * coverage);
+  float4 result = clamp(tint, 0.0, 1.0) * color;
+  return float4(result.rgb, result.a * coverage);
+}
+
+struct RibbonVertex { float4 geometry; float4 color; float4 edge; };
+struct RibbonOutput {
+  float4 position [[position]];
+  float4 tint;
+  float2 edgePosition;
+  float cap [[flat]];
+  float halfWidth [[flat]];
+};
+vertex RibbonOutput ribbonVertex(uint id [[vertex_id]], const device RibbonVertex *vertices [[buffer(0)]],
+    constant float2 &resolution [[buffer(1)]], constant float4 &transform [[buffer(2)]],
+    constant float4 &parameters [[buffer(3)]]) {
+  RibbonVertex v = vertices[id];
+  RibbonOutput output;
+  float scale = parameters.x;
+  output.halfWidth = parameters.y * scale * 0.5;
+  float padding = 1.5 / min(parameters.z, parameters.w);
+  float2 p = v.geometry.xy * scale + v.geometry.zw * (output.halfWidth + padding);
+  p = transform.xy + transform.zw * p.x + float2(-transform.w, transform.z) * p.y;
+  output.position = float4(p.x / resolution.x * 2 - 1, 1 - p.y / resolution.y * 2, 0, 1);
+  output.tint = v.color;
+  output.edgePosition = v.edge.xy * (output.halfWidth + padding);
+  output.cap = v.edge.z;
+  return output;
+}
+fragment float4 ribbonFragment(RibbonOutput input [[stage_in]], constant float4 &color [[buffer(0)]]) {
+  float d = (input.cap > 0.5 ? length(input.edgePosition) : abs(input.edgePosition.x)) - input.halfWidth;
+  float edge = max(fwidth(d) * 0.75, 0.0001);
+  float coverage = 1.0 - smoothstep(-edge, edge, d);
+  float4 value = clamp(input.tint, 0.0, 1.0) * color;
+  return float4(value.rgb, value.a * coverage);
 }

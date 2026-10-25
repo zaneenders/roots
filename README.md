@@ -69,6 +69,17 @@ The desktop host currently runs one window session at a time. Offscreen renderin
 requires a positive frame limit; a backend without offscreen or screenshot support
 should throw `DesktopBackendError.unsupportedFeature` for those requests.
 
+## Retained colored paths
+
+```swift
+let path = PolylineStroke(points: points, width: 3, colors: colors)!
+Canvas(key: 1) { paint in
+  paint.strokePolyline(path, transform: PathTransform(scale: 1.5, rotation: 0.2))
+}
+```
+
+[Path transforms, picking, and renderer ownership](Docs/Paths.md) · [3D path example](Examples/Path3D)
+
 ## Development
 
 Requires Swift 6.4.1 (`pkg-config` on Linux), plus:

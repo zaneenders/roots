@@ -1,5 +1,6 @@
 public struct DrawRect: Sendable {
   public private(set) var polyline: PolylineStroke?
+  public private(set) var pathTransform = PathTransform.identity
   public var region: Region
   public var color: Color
   public var radius: Float
@@ -24,15 +25,25 @@ public struct DrawRect: Sendable {
     self.colorGlyph = colorGlyph
   }
 
-  public init(polyline: PolylineStroke, color: Color, clip: Region? = nil) {
-    self.init(polyline.bounds, color, clip: clip)
+  public init(
+    polyline: PolylineStroke, color: Color = Color(1, 1, 1),
+    transform: PathTransform = .identity, clip: Region? = nil
+  ) {
+    self.init(transform.bounds(of: polyline.bounds), color, clip: clip)
     self.polyline = polyline
+    self.pathTransform = transform
   }
 
   @inlinable
   public var isValid: Bool {
     if let polyline {
-      return region == polyline.bounds && axis == SIMD2(1, 0) && radius == 0 && strokeWidth == 0
+      return pathTransform.isValid && region == pathTransform.bounds(of: polyline.bounds)
+        && region.x.isFinite && region.y.isFinite && region.width.isFinite && region.height.isFinite
+        && (region.x + region.width).isFinite && (region.y + region.height).isFinite
+        && region.width > 0 && region.height > 0
+        && (region.width * region.width + region.height * region.height).isFinite
+        && (polyline.width * pathTransform.scale).isFinite && polyline.width * pathTransform.scale > 0
+        && axis == SIMD2(1, 0) && radius == 0 && strokeWidth == 0
         && glyphUV == nil
         && color.r.isFinite && color.g.isFinite && color.b.isFinite && color.a.isFinite
     }
@@ -81,7 +92,12 @@ public struct DrawRect: Sendable {
 
   @inlinable
   public var bounds: Region {
-    if let polyline { return polyline.bounds }
+    if let polyline {
+      let padding = polyline.width * pathTransform.scale * 2 + 3
+      // A high-DPI backend can select ribbons at a smaller logical transform scale.
+      return polyline.ribbon != nil
+        ? region.insetBy(dx: -padding, dy: -padding) : region.insetBy(dx: -1, dy: -1)
+    }
     let padding = edgePadding
     if axis == SIMD2(1, 0) {
       return Region(
