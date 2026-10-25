@@ -83,9 +83,14 @@ public enum DesktopSystem {
   }
 
   #if os(Linux)
+  static var cursors = DesktopCursors()
+  private static var isRunning = false
+
+  /// Overrides hit-tested cursor selection until `setCursor(nil, popup:)` or surface closure.
+  /// Returns false if the native backend cannot apply the request; the override is retained.
   @discardableResult
-  public static func setCursor(_ shape: NativeCursorShape, popup: Bool = false) -> Bool {
-    NativeWindow.setCursor(shape, popup: popup)
+  public static func setCursor(_ shape: NativeCursorShape?, popup: Bool = false) -> Bool {
+    cursors.set(shape, popup: popup)
   }
 
   @discardableResult
@@ -97,6 +102,13 @@ public enum DesktopSystem {
     configuration: NativeWindowConfiguration, runtime: DesktopRuntime<Content>,
     offscreen: Bool = false
   ) async throws {
+    guard !isRunning else { throw NativeWindowError.alreadyRunning }
+    isRunning = true
+    defer {
+      isRunning = false
+      cursors.reset(popup: false)
+      cursors.reset(popup: true)
+    }
     try await NativeWindow.runAsync(configuration: configuration, surfaceless: offscreen) {
       snapshot, renderer in
       frame(snapshot, renderer: renderer, runtime: runtime)
@@ -133,12 +145,7 @@ public enum DesktopSystem {
         size: .init(width: Float(snapshot.width), height: Float(snapshot.height)),
         scale: Float(snapshot.renderScale)),
       time: snapshot.timeSeconds, present: { renderer.render($0) })
-    let shape: NativeCursorShape = switch runtime.cursorStyle {
-    case .default: .default
-    case .pointer: .pointer
-    case .text: .text
-    }
-    _ = NativeWindow.setCursor(shape, popup: popup)
+    cursors.update(runtime.cursorStyle, popup: popup)
   }
   #endif
 }

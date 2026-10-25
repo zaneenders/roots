@@ -71,6 +71,7 @@ public struct WaylandPopup<Content: Block> {
       },
       onDismiss: {
         runtime.stop()
+        DesktopSystem.cursors.reset(popup: true)
         close?()
       })
     if !presented { runtime.stop() }
