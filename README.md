@@ -15,6 +15,8 @@ Explore the runnable apps in [Examples](Examples):
 - [Tetris](Examples/Tetris): declarative blocks, keyboard input, observation,
   and frame-driven animation.
 - [Video](Examples/Video): muted local-file playback (requires FFmpeg).
+- [Path3D](Examples/Path3D): an interactive 3D torus knot with camera controls
+  and animated playback.
 
 After following the [setup instructions](#development), run an example from
 the repository root:
@@ -24,6 +26,7 @@ swift run --package-path Examples/Markdown MarkdownDemo
 swift run --package-path Examples/Tetris Tetris
 swift run --package-path Examples/Mandelbrot Mandelbrot
 swift run --package-path Examples/Video VideoPlayer /path/to/movie.mp4
+swift run -c release --package-path Examples/Path3D Path3D
 ```
 
 Text measurement, drawing, and paragraphs recognize LF, CRLF, and CR line breaks.
