@@ -29,6 +29,7 @@ private final class BarModel {
   var red: Float = 0
 }
 
+@Suite(GraphicsTest())
 @MainActor
 struct WaylandBarTests {
   @Test func configurationSelectsPassiveLayerRoleWithoutToplevelConstraints() throws {

@@ -1,11 +1,17 @@
 import AppKit
 import Foundation
+import Roots
 
 @MainActor public enum MacOSWindow {
   private static var host: MacOSWindowHost?
   private static let clipboardLimit = 16 * 1024 * 1024
 
   public static func requestRedraw() { host?.requestRedraw() }
+
+  @discardableResult
+  public static func setCursor(_ shape: CursorShape) -> Bool {
+    host?.view.setCursor(shape) ?? false
+  }
 
   @available(*, noasync, message: "Use runAsync from an asynchronous context")
   public static func run(
@@ -64,6 +70,11 @@ import Foundation
       size.x <= 8192, size.y <= 8192, configuration.maxFrames >= 0,
       configuration.screenshotPath == nil || configuration.maxFrames > 0
     else { throw MacOSWindowError.invalidConfiguration }
+    if let minimum = configuration.minimumSize {
+      guard minimum.x.isFinite, minimum.y.isFinite, minimum.x >= 0, minimum.y >= 0,
+        minimum.x <= size.x, minimum.y <= size.y
+      else { throw MacOSWindowError.invalidConfiguration }
+    }
     let application = NSApplication.shared
     application.setActivationPolicy(.regular)
     let delegate = MacOSApplicationDelegate()

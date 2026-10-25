@@ -37,7 +37,8 @@ import MetalKit
     super.init()
     window.isReleasedWhenClosed = false
     window.title = configuration.title
-    window.contentMinSize = NSSize(width: 360, height: 260)
+    let minimum = configuration.minimumSize ?? SIMD2(Float(min(360, size.width)), Float(min(260, size.height)))
+    window.contentMinSize = NSSize(width: Double(minimum.x), height: Double(minimum.y))
     window.contentView = view
     window.delegate = self
     window.acceptsMouseMovedEvents = true

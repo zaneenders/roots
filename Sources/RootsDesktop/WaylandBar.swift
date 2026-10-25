@@ -72,8 +72,13 @@ public struct WaylandBar<Content: Block>: Window {
   public func run() async throws {
     try Task.checkCancellation()
     try validate()
-    try await session.run(content: content) { runtime in
-      try await DesktopSystem.run(configuration: configuration, runtime: runtime)
+    let backend = WaylandBackend()
+    try await DesktopSystem.withBackend(backend) {
+      try await session.run(content: content, backend: backend) { runtime in
+        try await backend.run(configuration: configuration) { snapshot, render in
+          DesktopSystem.frame(snapshot, render: render, runtime: runtime)
+        }
+      }
     }
   }
 

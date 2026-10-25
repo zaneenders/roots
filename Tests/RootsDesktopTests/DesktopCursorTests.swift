@@ -1,15 +1,13 @@
-#if os(Linux)
 import Roots
 import Testing
 
 @testable import RootsDesktop
-@testable import WaylandBridge
 
 @MainActor
 struct DesktopCursorTests {
-  @Test(arguments: [NativeCursorShape.crosshair, .eastWestResize, .grabbing, .default])
-  func overridesSurviveAutomaticUpdatesUntilCleared(shape: NativeCursorShape) {
-    var applied: [NativeCursorShape] = []
+  @Test(arguments: [CursorShape.crosshair, .eastWestResize, .grabbing, .default])
+  func overridesSurviveAutomaticUpdatesUntilCleared(shape: CursorShape) {
+    var applied: [CursorShape] = []
     let cursors = DesktopCursors { shape, _ in
       applied.append(shape)
       return true
@@ -26,7 +24,7 @@ struct DesktopCursorTests {
   }
 
   @Test func overridesAndResetsArePerSurface() {
-    var applied: [Bool: NativeCursorShape] = [:]
+    var applied: [Bool: CursorShape] = [:]
     let cursors = DesktopCursors { shape, popup in
       applied[popup] = shape
       return true
@@ -47,7 +45,7 @@ struct DesktopCursorTests {
   }
 
   @Test func unavailableBackendStillRecordsCursorIntent() {
-    var applied: NativeCursorShape?
+    var applied: CursorShape?
     let cursors = DesktopCursors { shape, _ in
       applied = shape
       return false
@@ -60,11 +58,14 @@ struct DesktopCursorTests {
   }
 }
 
+#if os(Linux)
+@testable import WaylandBridge
+
 extension DesktopWindowRenderingTests {
   @Test(arguments: [false, true])
   func explicitCursorSurvivesFrameCallbacksAndSubsequentFrames(popup: Bool) throws {
     let previous = DesktopSystem.cursors
-    var applied: [Bool: NativeCursorShape] = [:]
+    var applied: [Bool: CursorShape] = [:]
     DesktopSystem.cursors = DesktopCursors { shape, popup in
       applied[popup] = shape
       return true
@@ -93,9 +94,10 @@ extension DesktopWindowRenderingTests {
       snapshot.pointerInside = true
       snapshot.pointerX = 10
       snapshot.pointerY = positions[frames]
-      DesktopSystem.frame(snapshot, renderer: renderer, runtime: runtime, popup: popup)
+      DesktopSystem.frame(
+        snapshot.backendFrame, render: { renderer.render($0) }, runtime: runtime, popup: popup)
       #expect(runtime.cursorStyle == expectedStyles[frames])
-      let expected: NativeCursorShape = frames < 3 ? .crosshair : frames == 3 ? .pointer : .eastWestResize
+      let expected: CursorShape = frames < 3 ? .crosshair : frames == 3 ? .pointer : .eastWestResize
       #expect(applied[popup] == expected)
       #expect(applied[!popup] == nil)
       if frames == 2 {
@@ -111,7 +113,7 @@ extension DesktopWindowRenderingTests {
 
   @Test func cursorOverridesDoNotLeakIntoLaterWindowSessions() async throws {
     let previous = DesktopSystem.cursors
-    var applied: [Bool: NativeCursorShape] = [:]
+    var applied: [Bool: CursorShape] = [:]
     DesktopSystem.cursors = DesktopCursors { shape, popup in
       applied[popup] = shape
       return true

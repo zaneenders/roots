@@ -1,10 +1,12 @@
 #if os(Linux)
+import DesktopTestSupport
 @_spi(Hosting) import Roots
 import Testing
 import WaylandBridge
 
 @testable import RootsDesktop
 
+@Suite(GraphicsTest())
 @MainActor
 struct WaylandPopupTests {
   @Test func failedPresentationDoesNotBuildContentOrCloseAnUnstartedSession() {

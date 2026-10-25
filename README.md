@@ -28,6 +28,42 @@ Selectable plain text copies its displayed lines with LF separators.
 
 macOS 27+ and Linux (Hyprland). PRs for other backends welcome.
 
+## Desktop backends
+
+`DesktopWindow` uses the bundled `MacOSBackend` or `WaylandBackend` by default.
+Pass `backend:` to select another implementation; application content and frame
+callbacks stay the same:
+
+```swift
+DesktopWindow("My app", backend: MyBackend()) { viewport in
+  Column(in: viewport.bounds) { Text("Hello") }
+}
+```
+
+Implement the public `DesktopBackend` protocol in `Roots`. Its `run` method owns
+native window creation, event dispatch, frame pacing, presentation, cancellation,
+and cleanup. Each frame supplies `BackendFrame` (normalized `Input`, logical size,
+fractional scale, and time in seconds) plus a synchronous render closure accepting
+`borrowing UIDrawBatch`. Consume or encode the draws before the closure returns;
+the batch and render closure cannot escape. Public draw iteration and font/emoji
+atlases are available to renderers in other packages.
+
+`DesktopSurface` provides redraw and close commands. Add `DesktopCursorSurface`
+or `DesktopTextInputSurface` when supported; both report temporary unavailability
+with `false`. Cursor requests use `Roots.CursorShape`, and text-input context uses
+`Roots.TextInputState` with UTF-8 byte offsets. Explicit cursor overrides survive
+automatic hit testing until cleared with `DesktopSystem.setCursor(nil)` or the
+surface closes. `DesktopSystem` routes services to the active backend, and the
+runtime captures that backend for observation-driven redraws and copying.
+
+Both bundled backends support cursor selection, auxiliary mouse buttons, and
+wheel metadata. macOS currently has no input-method session implementation;
+`DesktopSystem.setTextInput` returns `false` there. Wayland popups and layer-shell
+bars remain native extensions, with independent popup redraw and cursor state.
+The desktop host currently runs one window session at a time. Offscreen rendering
+requires a positive frame limit; a backend without offscreen or screenshot support
+should throw `DesktopBackendError.unsupportedFeature` for those requests.
+
 ## Development
 
 Requires Swift 6.4.1 (`pkg-config` on Linux), plus:

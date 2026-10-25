@@ -61,21 +61,28 @@ public struct WaylandPopup<Content: Block> {
     guard configuration.width > 0, configuration.height > 0,
       configuration.anchorWidth > 0, configuration.anchorHeight > 0, session.isValid
     else { return false }
+    guard let backend = DesktopSystem.backend as? WaylandBackend else { return false }
+    var surface: (any DesktopSurface)?
     let runtime = session.makeRuntime(
-      content: content, requestRedraw: { NativeWindow.requestPopupRedraw() })
+      content: content, backend: backend, requestRedraw: { surface?.requestRedraw() })
     let close = session.close
-    let presented = NativeWindow.presentPopup(
+    surface = backend.presentPopup(
       configuration: configuration,
-      frame: { snapshot, renderer in
-        DesktopSystem.frame(snapshot, renderer: renderer, runtime: runtime, popup: true)
+      frame: { snapshot, render in
+        DesktopSystem.frame(snapshot, render: render, runtime: runtime, popup: true)
       },
       onDismiss: {
         runtime.stop()
+        if DesktopSystem.popupSurface === surface { DesktopSystem.popupSurface = nil }
         DesktopSystem.cursors.reset(popup: true)
         close?()
       })
-    if !presented { runtime.stop() }
-    return presented
+    guard let surface else {
+      runtime.stop()
+      return false
+    }
+    DesktopSystem.popupSurface = surface
+    return true
   }
 }
 #endif

@@ -1,6 +1,7 @@
 import Roots
 
 struct MacOSInputState {
+  enum Button { case primary, secondary, middle }
   private(set) var input = Input()
   private(set) var primaryDown = false
   private(set) var pointerInside = false
@@ -11,13 +12,30 @@ struct MacOSInputState {
 
   mutating func pointer(x: Float, y: Float, inside: Bool) {
     pointerInside = inside
-    input.mousePosition = inside || primaryDown ? Coordinate(x: x, y: y) : nil
+    input.mousePosition = inside || hasPointerCapture ? Coordinate(x: x, y: y) : nil
   }
 
-  mutating func button(down: Bool) {
-    if down && !primaryDown { input.pressed = true }
-    if !down && primaryDown { input.released = true }
-    primaryDown = down
+  private var hasPointerCapture: Bool {
+    primaryDown || input.secondaryDown || input.middleDown
+      || input.pressed || input.released || input.secondaryPressed || input.secondaryReleased
+      || input.middlePressed || input.middleReleased
+  }
+
+  mutating func button(_ button: Button = .primary, down: Bool) {
+    switch button {
+    case .primary:
+      if down && !primaryDown { input.pressed = true }
+      if !down && primaryDown { input.released = true }
+      primaryDown = down
+    case .secondary:
+      if down && !input.secondaryDown { input.secondaryPressed = true }
+      if !down && input.secondaryDown { input.secondaryReleased = true }
+      input.secondaryDown = down
+    case .middle:
+      if down && !input.middleDown { input.middlePressed = true }
+      if !down && input.middleDown { input.middleReleased = true }
+      input.middleDown = down
+    }
   }
 
   mutating func key(_ event: KeyEvent) {
@@ -78,19 +96,34 @@ struct MacOSInputState {
     modifiers = flags
   }
 
-  mutating func scroll(x: Float, y: Float) {
+  mutating func scroll(
+    x: Float, y: Float, stepsX: Float = 0, stepsY: Float = 0, inverted: Bool? = nil
+  ) {
     if x.isFinite { input.scrollX = max(-100_000, min(100_000, input.scrollX + x)) }
     if y.isFinite { input.scrollY = max(-100_000, min(100_000, input.scrollY + y)) }
+    if stepsX.isFinite { input.scrollStepsX = max(-100_000, min(100_000, input.scrollStepsX + stepsX)) }
+    if stepsY.isFinite { input.scrollStepsY = max(-100_000, min(100_000, input.scrollStepsY + stepsY)) }
+    if (x.isFinite && x != 0) || (stepsX.isFinite && stepsX != 0) { input.scrollInvertedX = inverted }
+    if (y.isFinite && y != 0) || (stepsY.isFinite && stepsY != 0) { input.scrollInvertedY = inverted }
   }
 
   mutating func consumeEdges() {
     input.focusLost = false
     input.pressed = false
     input.released = false
+    input.secondaryPressed = false
+    input.secondaryReleased = false
+    input.middlePressed = false
+    input.middleReleased = false
     input.scrollX = 0
     input.scrollY = 0
+    input.scrollStepsX = 0
+    input.scrollStepsY = 0
+    input.scrollInvertedX = nil
+    input.scrollInvertedY = nil
+    input.textEvents.removeAll(keepingCapacity: true)
     input.keyEvents.removeAll(keepingCapacity: true)
-    if !pointerInside && !primaryDown {
+    if !pointerInside && !hasPointerCapture {
       input.mousePosition = nil
     }
   }
@@ -112,11 +145,22 @@ struct MacOSInputState {
     physicalModifiers.removeAll(keepingCapacity: true)
     modifiers = []
     input.pressed = false
-    input.released = primaryDown
+    input.released = input.released || primaryDown
     primaryDown = false
+    input.secondaryPressed = false
+    input.secondaryReleased = input.secondaryReleased || input.secondaryDown
+    input.secondaryDown = false
+    input.middlePressed = false
+    input.middleReleased = input.middleReleased || input.middleDown
+    input.middleDown = false
     pointerInside = false
     input.mousePosition = nil
     input.scrollX = 0
     input.scrollY = 0
+    input.scrollStepsX = 0
+    input.scrollStepsY = 0
+    input.scrollInvertedX = nil
+    input.scrollInvertedY = nil
+    input.textEvents.removeAll(keepingCapacity: true)
   }
 }

@@ -6,6 +6,8 @@ public enum DesktopWindowError: Error, Equatable {
 
 @MainActor
 public struct DesktopWindow<Content: Block>: Window {
+  private let backend: (any DesktopBackend)?
+  private let minimumSize: Size?
   let title: String
   let size: Size
   let maxFrames: Int32
@@ -17,9 +19,12 @@ public struct DesktopWindow<Content: Block>: Window {
   public init(
     _ title: String, width: Float = 900, height: Float = 660, maxFrames: Int32 = 0,
     screenshotPath: String? = nil, offscreen: Bool = false,
+    minimumSize: Size? = nil, backend: (any DesktopBackend)? = nil,
     nodeCapacity: Int = 128, scrollAcceleration: Float = 0, scrollDeceleration: Float = 8,
     @BlockBuilder content: @escaping @MainActor (Viewport) -> Content
   ) {
+    self.backend = backend
+    self.minimumSize = minimumSize
     self.title = title
     self.size = Size(width: width, height: height)
     self.maxFrames = maxFrames
@@ -76,16 +81,26 @@ public struct DesktopWindow<Content: Block>: Window {
   public func run() async throws {
     try Task.checkCancellation()
     try validate()
-    try await session.run(content: content, offscreen: offscreen) { runtime in
-      try await DesktopSystem.run(self, runtime: runtime)
+    guard let backend = backend ?? DesktopSystem.defaultBackend else {
+      throw DesktopBackendError.unavailable
+    }
+    try await DesktopSystem.withBackend(backend) {
+      try await session.run(content: content, offscreen: offscreen, backend: backend) { runtime in
+        try await backend.run(configuration: configuration) { snapshot, render in
+          DesktopSystem.frame(snapshot, render: render, runtime: runtime)
+        }
+      }
     }
   }
 
+  var configuration: BackendWindowConfiguration {
+    .init(
+      title: title, logicalSize: size, minimumSize: minimumSize,
+      maxFrames: maxFrames, screenshotPath: screenshotPath, offscreen: offscreen)
+  }
+
   func validate() throws {
-    guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0,
-      size.width <= 8192, size.height <= 8192, maxFrames >= (offscreen ? 1 : 0),
-      session.isValid,
-      screenshotPath == nil || maxFrames > 0
-    else { throw DesktopWindowError.invalidConfiguration }
+    do { try configuration.validate() } catch { throw DesktopWindowError.invalidConfiguration }
+    guard session.isValid else { throw DesktopWindowError.invalidConfiguration }
   }
 }

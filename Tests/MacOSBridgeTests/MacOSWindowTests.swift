@@ -83,7 +83,9 @@ import Testing
       if frames < 3 { MacOSWindow.requestRedraw() }
       if frames == 3 {
         let menu = NSApplication.shared.mainMenu!.items[0].submenu!
-        menu.performActionForItem(at: menu.items.count - 1)
+        // AppKit can append system menu items. Invoke our quit command explicitly.
+        let quit = menu.items.first { $0.action == #selector(MacOSApplicationDelegate.quit(_:)) }!
+        menu.performActionForItem(at: menu.index(of: quit))
       }
     }
     #expect(frames == 3)
@@ -189,5 +191,48 @@ import Testing
     #expect(await MacOSWindow.readClipboard() == "café\nsecond line")
     #expect(!MacOSWindow.writeClipboard(String(repeating: "x", count: 16 * 1024 * 1024 + 1)))
     #expect(await MacOSWindow.readClipboard() == "café\nsecond line")
+  }
+}
+
+extension MacOSWindowTests {
+  @Test func backendNormalizesAuxiliaryInputAndAppliesNativeWindowOptions() async throws {
+    let backend = MacOSBackend()
+    var frames = 0
+    try await backend.run(
+      configuration: .init(
+        title: "Backend contract", logicalSize: .init(width: 420, height: 320),
+        minimumSize: .init(width: 200, height: 150), maxFrames: 3)
+    ) { snapshot, _ in
+      frames += 1
+      guard let window = NSApplication.shared.windows.first(where: { $0.title == "Backend contract" }),
+        let view = window.contentView as? MacOSInputView
+      else {
+        Issue.record("Missing backend window")
+        return
+      }
+      #expect(window.contentMinSize == NSSize(width: 200, height: 150))
+      #expect(snapshot.logicalSize == Size(width: 420, height: 320))
+      #expect(snapshot.scale >= 1)
+      if frames == 1 {
+        let event = NSEvent.mouseEvent(
+          with: .rightMouseDown, location: .init(x: 10, y: 10), modifierFlags: [], timestamp: 0,
+          windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        view.rightMouseDown(with: event)
+        #expect(backend.setCursor(.text))
+        #expect(!backend.setCursor(.wait))
+      } else if frames == 2 {
+        #expect(snapshot.input.secondaryPressed && snapshot.input.secondaryDown)
+        #expect(!snapshot.input.pressed && snapshot.input.mousePosition != nil)
+        let event = NSEvent.mouseEvent(
+          with: .rightMouseUp, location: .init(x: 10, y: 10), modifierFlags: [], timestamp: 0,
+          windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0)!
+        view.rightMouseUp(with: event)
+      } else {
+        #expect(snapshot.input.secondaryReleased && !snapshot.input.secondaryDown)
+        #expect(!snapshot.input.secondaryPressed && !snapshot.input.released)
+      }
+    }
+    #expect(frames == 3)
+    #expect(!backend.setCursor(.text))
   }
 }
