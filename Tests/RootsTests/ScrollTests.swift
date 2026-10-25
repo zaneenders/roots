@@ -75,9 +75,9 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
     input: Input(mousePosition: .init(x: 20, y: 90), pressed: true, released: true), build: { column(&$0) },
     present: { draws in
       #expect(draws.count == 2)
-      for draw in draws { #expect(draw.clip == viewport) }
-      #expect(draws[1].region == Region(10, 60, 100, 30))
-      #expect(draws[1].radius == 7)
+      for draw in draws.rectangles { #expect(draw.clip == viewport) }
+      #expect(draws[1].rectangle.region == Region(10, 60, 100, 30))
+      #expect(draws[1].rectangle.radius == 7)
     })
   #expect(try state(ui, key: 2).clicks == 0)
   #expect(try state(ui, key: 2).hovered == false)
@@ -114,7 +114,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
   ui.frame(
     input: Input(keyEvents: [KeyEvent(.enter)]), build: { column(&$0) },
     present: { draws in
-      for draw in draws { #expect(draw.clip == viewport) }
+      for draw in draws.rectangles { #expect(draw.clip == viewport) }
     })
   #expect(try state(ui, key: 3).clicks == 1)
   #expect(try state(ui, key: 100).scrollOffset == 50)
@@ -170,9 +170,9 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
     input: Input(mousePosition: .init(x: 20, y: 65), scrollY: 10), build: build,
     present: { draws in
       #expect(draws.count == 2)
-      #expect(draws[1].region.y == 80)
-      #expect(draws[0].clip == Region(10, 60, 100, 20))
-      #expect(draws[0].region == Region(10, 50, 100, 30))
+      #expect(draws[1].rectangle.region.y == 80)
+      #expect(draws[0].rectangle.clip == Region(10, 60, 100, 20))
+      #expect(draws[0].rectangle.region == Region(10, 50, 100, 30))
     })
   #expect(try state(ui, key: 100).scrollOffset == 0)
   #expect(try state(ui, key: 200).scrollOffset == 10)
@@ -195,7 +195,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
     },
     present: { draws in
       #expect(draws.count > 2)
-      for draw in draws { #expect(draw.clip == viewport) }
+      for draw in draws.rectangles { #expect(draw.clip == viewport) }
     })
   let original = ui.handle(for: 1)
   ui.frame(
@@ -206,7 +206,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
     },
     present: { draws in
       #expect(draws.count > 2)
-      for draw in draws {
+      for draw in draws.rectangles {
         #expect(draw.clip == (draw.color == .text ? Region(200, 200, 100, 60) : nil))
       }
     })
@@ -228,7 +228,7 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
     },
     present: { draws in
       #expect(draws.count == 2)
-      for draw in draws { #expect(draw.clip == viewport) }
+      for draw in draws.rectangles { #expect(draw.clip == viewport) }
     })
   #expect(try state(ui, key: 100).scrollOffset == 50)
   #expect(try state(ui, key: 1).region == Region(10, 50, 40, 30))
@@ -277,8 +277,8 @@ private func state(_ ui: borrowing UIStore, key: UInt64) throws -> NodeState {
   ui.frame(
     input: Input(mousePosition: .init(x: 20, y: 25)), dt: 0.1, build: { column(&$0) },
     present: { draws in
-      for draw in draws { #expect(draw.clip == viewport) }
-      #expect(draws[0].region.y < 30)
+      for draw in draws.rectangles { #expect(draw.clip == viewport) }
+      #expect(draws[0].rectangle.region.y < 30)
     })
   #expect(try state(ui, key: 1).hovered == false)
   #expect(try state(ui, key: 2).hovered)
@@ -454,7 +454,7 @@ func momentumStopsAtBoundsAndDoesNotReturnAfterGrowth(
   var thumb: Region?
   func present(_ draws: borrowing UIDrawBatch) {
     thumb = nil
-    for draw in draws where draw.color == Color(1, 1, 1, 0.45) {
+    for draw in draws.rectangles where draw.color == Color(1, 1, 1, 0.45) {
       thumb = draw.region
       #expect(draw.clip == viewport)
     }

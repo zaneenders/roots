@@ -13,12 +13,12 @@ import Testing
     present: { draws in
       var first: Region?
       var last: Region?
-      for draw in draws where draw.color == .text {
+      for draw in draws.rectangles where draw.color == .text {
         if first == nil { first = draw.region }
         last = draw.region
       }
       #expect((last?.y ?? 0) - (first?.y ?? 0) >= 20)
-      #expect(draws[0].region == Region(0, 0, 100, 44))
+      #expect(draws[0].rectangle.region == Region(0, 0, 100, 44))
     })
 }
 
@@ -77,7 +77,7 @@ import Testing
     },
     present: { draws in
       var foundUpdatedDraw = false
-      for draw in draws where draw.color == .text {
+      for draw in draws.rectangles where draw.color == .text {
         #expect(draw.region == Region(10, 20, 3, 1))
         foundUpdatedDraw = true
       }
@@ -189,7 +189,7 @@ import Testing
     present: { draws in
       var shapes = 0
       var glyphs = 0
-      for draw in draws {
+      for draw in draws.rectangles {
         if draw.color == .accent {
           #expect(draw.region == Region(0, 0, 200, 200))
           #expect(draw.clip == (shapes == 0 ? Region(10, 70, 100, 10) : Region(20, 70, 30, 10)))
@@ -221,7 +221,7 @@ import Testing
     },
     present: { draws in
       #expect(draws.count == capacity)
-      for i in 0..<draws.count where i > 0 { #expect(draws[i].clip == Region(0, 0, 100, 44)) }
+      for i in 0..<draws.count where i > 0 { #expect(draws[i].rectangle.clip == Region(0, 0, 100, 44)) }
     })
   #expect(ui.droppedDraws == 5 - capacity)
 }
@@ -330,7 +330,7 @@ import Testing
     frame.end()
   }
   func present(_ draws: borrowing UIDrawBatch) {
-    for draw in draws {
+    for draw in draws.rectangles {
       if draw.color == .accent { #expect(draw.region.height < overlay.height) }
       if draw.region == overlay { #expect(draw.color == Color(0, 0, 0, 0.5)) }
     }

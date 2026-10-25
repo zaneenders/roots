@@ -19,10 +19,10 @@ import Testing
       present: { draws in
         #expect(draws.count == count + 2)
         guard draws.count == count + 2 else { return }
-        #expect(draws[1].color == Color(0, 0, 0))
-        #expect(draws[count].color == Color(Float(count - 1), 0, 0))
-        #expect(draws[count + 1].region == Region(0, 50, 100, 50))
-        #expect(draws[count + 1].color == .accent)
+        #expect(draws[1].rectangle.color == Color(0, 0, 0))
+        #expect(draws[count].rectangle.color == Color(Float(count - 1), 0, 0))
+        #expect(draws[count + 1].rectangle.region == Region(0, 50, 100, 50))
+        #expect(draws[count + 1].rectangle.color == .accent)
       })
     #expect(ui.droppedDraws == 0)
   }
@@ -83,8 +83,8 @@ import Testing
     },
     present: { draws in
       #expect(draws.count == 2)
-      #expect(draws[1].isValid)
-      #expect(draws[1].color == .accent)
+      #expect(draws[1].rectangle.isValid)
+      #expect(draws[1].rectangle.color == .accent)
     })
   #expect(host.droppedDraws == 0)
 }

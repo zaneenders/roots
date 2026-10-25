@@ -15,7 +15,7 @@ struct BoardBlockTests {
     host.frame(
       build: { Stack(in: bounds) { BoardBlock(game: game) } },
       present: { batch in
-        for draw in batch { draws.append(draw) }
+        for case .rectangle(let draw) in batch { draws.append(draw) }
       })
     try #require(draws.count == 221)
     #expect(draws[0].region == bounds)
@@ -43,10 +43,16 @@ struct BoardBlockTests {
       build: { Stack(in: Region(0, 0, 160, 320)) { BoardBlock(game: game) } },
       present: { batch in
         #expect(batch.count == 201)
-        #expect(batch[0].color == Palette.well)
+        guard case .rectangle(let background) = batch[0] else {
+          Issue.record("Expected board background"); return
+        }
+        #expect(background.color == Palette.well)
         for index in 1..<batch.count {
-          #expect(batch[index].color == Palette.grid)
-          #expect(batch[index].strokeWidth == 0.5)
+          guard case .rectangle(let draw) = batch[index] else {
+            Issue.record("Expected grid rectangle"); return
+          }
+          #expect(draw.color == Palette.grid)
+          #expect(draw.strokeWidth == 0.5)
         }
       })
   }

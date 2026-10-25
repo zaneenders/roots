@@ -23,7 +23,7 @@ extension NativeSessionTests {
             }
           }
         }
-      }, present: { batch in for draw in batch.draws { draws.append(draw) } })
+      }, present: { batch in for case .rectangle(let draw) in batch { draws.append(draw) } })
     try expectReferenceParity(draws, width: 8, height: 8, scale: scale)
   }
 

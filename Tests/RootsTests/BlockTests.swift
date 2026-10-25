@@ -49,7 +49,7 @@ struct BlockTests {
           frame.end()
           frame.canvas(key: 5, extent: 10) { _ in }
           frame.end()
-        }, present: { for draw in $0 { expected.append(draw) } })
+        }, present: { for draw in $0.rectangles { expected.append(draw) } })
       host.frame(
         input: input, dt: 0,
         build: {
@@ -68,10 +68,10 @@ struct BlockTests {
         present: { actual in
           #expect(actual.count == expected.count)
           for index in 0..<min(actual.count, expected.count) {
-            #expect(actual[index].region == expected[index].region)
-            #expect(actual[index].color == expected[index].color)
-            #expect(actual[index].clip == expected[index].clip)
-            #expect(actual[index].glyphUV == expected[index].glyphUV)
+            #expect(actual[index].rectangle.region == expected[index].region)
+            #expect(actual[index].rectangle.color == expected[index].color)
+            #expect(actual[index].rectangle.clip == expected[index].clip)
+            #expect(actual[index].rectangle.glyphUV == expected[index].glyphUV)
           }
         })
       #expect(host.state(for: 4)?.region == Region(223, 0, 30, 20))

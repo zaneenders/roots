@@ -72,6 +72,9 @@ struct UIStore: ~Copyable {
       dispatchInput: dispatchInput, inputElapsed: inputElapsed)
     track { storage.paint() }
     present(UIDrawBatch(storage.draws.span))
-    storage.draws.removeAll()
+  }
+
+  func present(_ body: (borrowing UIDrawBatch) -> Void) {
+    body(UIDrawBatch(storage.draws.span))
   }
 }

@@ -51,10 +51,10 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
     build: { scrollbarColumn(&$0) },
     present: { draws in
       #expect(draws.count == 3)
-      #expect(draws[0].region.height == 400)
-      #expect(draws[1].region == bar.track)
-      #expect(draws[2].region.width == 6)
-      #expect(draws[2].clip == scrollbarViewport)
+      #expect(draws[0].rectangle.region.height == 400)
+      #expect(draws[1].rectangle.region == bar.track)
+      #expect(draws[2].rectangle.region.width == 6)
+      #expect(draws[2].rectangle.clip == scrollbarViewport)
     })
   #expect(abs(try scrollbarState(ui).scrollOffset - 150) < 0.001)
   #expect(!(try scrollbarState(ui, key: 1).focused))
@@ -135,8 +135,8 @@ private func scrollbarState(_ ui: borrowing UIStore, key: UInt64 = 100) throws -
   ui.frame(
     input: Input(mousePosition: .init(x: 105, y: 100), pressed: true, released: true), build: build,
     present: { draws in
-      let background = draws[draws.count - 2]
-      let outline = draws[draws.count - 1]
+      let background = draws[draws.count - 2].rectangle
+      let outline = draws[draws.count - 1].rectangle
       #expect(background.region == scrollbarViewport)
       #expect(outline.color == .accent && outline.strokeWidth == 2)
       #expect(

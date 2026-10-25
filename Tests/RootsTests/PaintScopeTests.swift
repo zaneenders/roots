@@ -38,7 +38,7 @@ import Testing
         context.strokeCircle(center: .init(x: 80, y: 70), radius: 6, color: .text, width: 2)
       }
       frame.end()
-    }, present: { span in for draw in span { output.append(draw) } })
+    }, present: { span in for draw in span.rectangles { output.append(draw) } })
   let clipped = output.filter { $0.color == .accent || $0.glyphUV != nil }
   #expect(clipped.count == 2)
   #expect(clipped.allSatisfy { $0.clip == Region(20, 30, 20, 20) })
@@ -64,7 +64,7 @@ import Testing
       frame.end()
     },
     present: { span in
-      for draw in span { #expect(draw.color != .accent) }
+      for draw in span.rectangles { #expect(draw.color != .accent) }
     })
 }
 
@@ -87,7 +87,7 @@ import Testing
       frame.end()
     },
     present: { draws in
-      for draw in draws where draw.polyline != nil { strokes.append(draw) }
+      for draw in draws.rectangles where draw.polyline != nil { strokes.append(draw) }
     })
   #expect(strokes.count == 2)
   for draw in strokes {
@@ -127,7 +127,7 @@ import Testing
       frame.end()
     },
     present: { draws in
-      for draw in draws { #expect(draw.polyline == nil) }
+      for draw in draws.rectangles { #expect(draw.polyline == nil) }
     })
   #expect(store.droppedDraws == 0)
 }

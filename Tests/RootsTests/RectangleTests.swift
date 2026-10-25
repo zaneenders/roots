@@ -12,11 +12,11 @@ struct RectangleTests {
       build: { Stack(in: bounds) { rectangle } },
       present: { batch in
         #expect(batch.count == 1)
-        #expect(batch[0].region == bounds)
-        #expect(batch[0].color == .text)
-        #expect(batch[0].radius == 0)
-        #expect(batch[0].strokeWidth == 0)
-        #expect(batch[0].glyphUV == nil)
+        #expect(batch[0].rectangle.region == bounds)
+        #expect(batch[0].rectangle.color == .text)
+        #expect(batch[0].rectangle.radius == 0)
+        #expect(batch[0].rectangle.strokeWidth == 0)
+        #expect(batch[0].rectangle.glyphUV == nil)
       })
     #expect(host.liveCount == 1)
   }
@@ -35,11 +35,11 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].region == Region(10, 20, 28, 20))
-        #expect(batch[0].color == .panel)
-        #expect(batch[1].region == Region(12, 22, 24, 16))
-        #expect(batch[1].color == .accent)
-        #expect(batch[1].radius == 0)
+        #expect(batch[0].rectangle.region == Region(10, 20, 28, 20))
+        #expect(batch[0].rectangle.color == .panel)
+        #expect(batch[1].rectangle.region == Region(12, 22, 24, 16))
+        #expect(batch[1].rectangle.color == .accent)
+        #expect(batch[1].rectangle.radius == 0)
       })
   }
 
@@ -58,10 +58,10 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 4)
-        #expect(batch[0].color == .accent)
-        #expect(batch[1].color == .panel)
-        #expect(batch[2].color == .text)
-        #expect(batch[3].color == .text)
+        #expect(batch[0].rectangle.color == .accent)
+        #expect(batch[1].rectangle.color == .panel)
+        #expect(batch[2].rectangle.color == .text)
+        #expect(batch[3].rectangle.color == .text)
       })
   }
 
@@ -76,8 +76,8 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].region == Region(0, 0, 20, 30))
-        #expect(batch[1].region == Region(24, 0, 76, 30))
+        #expect(batch[0].rectangle.region == Region(0, 0, 20, 30))
+        #expect(batch[1].rectangle.region == Region(24, 0, 76, 30))
       })
   }
 
@@ -92,8 +92,8 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].region == Region(0, 0, 100, 10))
-        #expect(batch[1].region == Region(0, 12, 100, 88))
+        #expect(batch[0].rectangle.region == Region(0, 0, 100, 10))
+        #expect(batch[1].rectangle.region == Region(0, 12, 100, 88))
       })
   }
 
@@ -110,8 +110,8 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 1)
-        #expect(batch[0].region == Region(0, -10, 20, 40))
-        #expect(batch[0].clip == Region(0, 0, 20, 20))
+        #expect(batch[0].rectangle.region == Region(0, -10, 20, 40))
+        #expect(batch[0].rectangle.clip == Region(0, 0, 20, 20))
       })
     #expect(host.state(for: 1)?.scrollOffset == 10)
   }
@@ -147,14 +147,14 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].region == bounds)
-        #expect(batch[0].radius == 3)
-        #expect(batch[0].strokeWidth == 0)
-        #expect(batch[0].color == .accent)
-        #expect(batch[1].region == bounds)
-        #expect(batch[1].radius == 7)
-        #expect(batch[1].strokeWidth == 1.5)
-        #expect(batch[1].color == .accent)
+        #expect(batch[0].rectangle.region == bounds)
+        #expect(batch[0].rectangle.radius == 3)
+        #expect(batch[0].rectangle.strokeWidth == 0)
+        #expect(batch[0].rectangle.color == .accent)
+        #expect(batch[1].rectangle.region == bounds)
+        #expect(batch[1].rectangle.radius == 7)
+        #expect(batch[1].rectangle.strokeWidth == 1.5)
+        #expect(batch[1].rectangle.color == .accent)
       })
   }
 
@@ -173,8 +173,8 @@ struct RectangleTests {
       present: { batch in
         #expect(batch.count == 4)
         for index in 0..<batch.count {
-          #expect(batch[index].radius == [Float(3), 7, 0, 5][index])
-          #expect(batch[index].strokeWidth == [Float(0), 2, 0, 2][index])
+          #expect(batch[index].rectangle.radius == [Float(3), 7, 0, 5][index])
+          #expect(batch[index].rectangle.strokeWidth == [Float(0), 2, 0, 2][index])
         }
       })
   }
@@ -202,11 +202,11 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 1)
-        #expect(batch[0].region == Region(0, -10, 20, 40))
-        #expect(batch[0].clip == Region(0, 0, 20, 20))
-        #expect(batch[0].radius == 3)
-        #expect(batch[0].strokeWidth == 1)
-        #expect(batch[0].color == .accent)
+        #expect(batch[0].rectangle.region == Region(0, -10, 20, 40))
+        #expect(batch[0].rectangle.clip == Region(0, 0, 20, 20))
+        #expect(batch[0].rectangle.radius == 3)
+        #expect(batch[0].rectangle.strokeWidth == 1)
+        #expect(batch[0].rectangle.color == .accent)
       })
   }
 
@@ -218,16 +218,16 @@ struct RectangleTests {
       build: { Stack(in: Region(0, 0, 20, 20)) { stroke; fill } },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].strokeWidth == 2)
-        #expect(batch[1].strokeWidth == 0)
+        #expect(batch[0].rectangle.strokeWidth == 2)
+        #expect(batch[1].rectangle.strokeWidth == 0)
       })
     host.frame(build: {}, present: { _ in })
     host.frame(
       build: { Stack(in: Region(0, 0, 20, 20)) { Rectangle() } },
       present: { batch in
         #expect(batch.count == 1)
-        #expect(batch[0].radius == 0)
-        #expect(batch[0].strokeWidth == 0)
+        #expect(batch[0].rectangle.radius == 0)
+        #expect(batch[0].rectangle.strokeWidth == 0)
       })
   }
 
@@ -246,8 +246,8 @@ struct RectangleTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].radius == 7)
-        #expect(batch[1].color == .accent)
+        #expect(batch[0].rectangle.radius == 7)
+        #expect(batch[1].rectangle.color == .accent)
       })
   }
 }

@@ -19,7 +19,7 @@ import Testing
     var backgroundIndex = -1
     var outlineIndex = -1
     var index = 0
-    for draw in draws {
+    for draw in draws.rectangles {
       if draw.color == .panel { backgroundIndex = index }
       if draw.color == .accent {
         outlines += 1

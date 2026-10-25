@@ -9,7 +9,12 @@ final class ExternalBackend: DesktopBackend, DesktopCursorSurface {
     try Task.checkCancellation()
     frame(.init(input: Input(), logicalSize: configuration.logicalSize, scale: 1.5, timeSeconds: 0)) {
       draws in
-      for draw in draws { _ = draw.region }
+      for command in draws {
+        switch command {
+        case .rectangle(let draw): _ = draw.region
+        case .image(let draw): _ = draw.resolve()?.frame.planes
+        }
+      }
       _ = FontAtlas.shared.mipLevels
       _ = EmojiAtlas.shared.mipLevels
     }

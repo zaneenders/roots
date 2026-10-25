@@ -19,7 +19,7 @@ struct GameBlockTests {
       host.frame(
         build: { GameBlock(controller: controller, bounds: bounds) },
         present: { batch in
-          for draw in batch where draw.glyphUV == nil {
+          for case .rectangle(let draw) in batch where draw.glyphUV == nil {
             if draw.color == Palette.well { board = draw.region }
             if draw.color == Palette.panel, panel == nil { panel = draw.region }
             if draw.radius == 3, draw.strokeWidth == 0,

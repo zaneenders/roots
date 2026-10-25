@@ -14,9 +14,9 @@ struct TextTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        for draw in batch { #expect(draw.glyphUV != nil) }
-        #expect(batch[0].region == Region(0, 0, 10, 14))
-        #expect(batch[1].region == Region(6, 0, 10, 14))
+        for draw in batch.rectangles { #expect(draw.glyphUV != nil) }
+        #expect(batch[0].rectangle.region == Region(0, 0, 10, 14))
+        #expect(batch[1].rectangle.region == Region(6, 0, 10, 14))
       })
     #expect(host.state(for: 1) == nil)
     host.frame(
@@ -67,7 +67,7 @@ struct TextTests {
       },
       present: { batch in
         var glyphs: [DrawRect] = []
-        for draw in batch where draw.glyphUV != nil { glyphs.append(draw) }
+        for draw in batch.rectangles where draw.glyphUV != nil { glyphs.append(draw) }
         #expect(glyphs.count == 3)
         #expect(glyphs.last?.glyphUV == FontAtlas.shared.glyphUV("…"))
         #expect(glyphs.last?.clip == Region(0, 0, 22, 14))
@@ -96,7 +96,7 @@ struct TextTests {
         },
         present: { batch in
           var actual: [DrawRect] = []
-          for draw in batch { actual.append(draw) }
+          for draw in batch.rectangles { actual.append(draw) }
           if !selectable {
             expected = actual
           } else {
@@ -156,7 +156,7 @@ struct TextTests {
         Focus(key: 1)
       },
       present: { batch in
-        for draw in batch { #expect(draw.clip == Region(0, 0, 10, 20)) }
+        for draw in batch.rectangles { #expect(draw.clip == Region(0, 0, 10, 20)) }
       })
     #expect(host.selectedText == "A\nB\nC")
     #expect(host.state(for: 1)?.region == Region(0, -16, 10, 46))
@@ -193,9 +193,9 @@ struct TextTests {
       },
       present: { batch in
         #expect(batch.count == 2)
-        #expect(batch[0].region == Region(0, 0, 100, 32))
-        #expect(batch[1].region == Region(12, 0, 20, 28))
-        #expect(batch[1].clip == Region(12, 0, 20, 28))
+        #expect(batch[0].rectangle.region == Region(0, 0, 100, 32))
+        #expect(batch[1].rectangle.region == Region(12, 0, 20, 28))
+        #expect(batch[1].rectangle.clip == Region(12, 0, 20, 28))
       })
   }
 

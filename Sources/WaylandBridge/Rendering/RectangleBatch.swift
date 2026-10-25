@@ -13,7 +13,7 @@ struct RectangleBatch: ~Copyable {
 
   static func accepts(_ draw: DrawRect) -> Bool { draw.isValid }
 
-  mutating func append(_ draw: DrawRect) {
+  mutating func append(_ draw: DrawRect, textured: Float? = nil) {
     precondition(count < Self.capacity && draw.polyline == nil)
     let offset = count * Self.vertexFloats
     var vertices = storage.mutableSpan
@@ -30,7 +30,7 @@ struct RectangleBatch: ~Copyable {
     vertices[offset + 10] = draw.glyphUV?.y ?? 0
     vertices[offset + 11] = draw.glyphUV?.width ?? 0
     vertices[offset + 12] = draw.glyphUV?.height ?? 0
-    vertices[offset + 13] = draw.glyphUV == nil ? 0 : (draw.colorGlyph ? 2 : 1)
+    vertices[offset + 13] = textured ?? (draw.glyphUV == nil ? 0 : (draw.colorGlyph ? 2 : 1))
     vertices[offset + 14] = draw.strokeWidth
     vertices[offset + 15] = draw.axis.x
     vertices[offset + 16] = draw.axis.y

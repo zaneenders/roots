@@ -19,13 +19,13 @@ import Testing
       #expect(batch.count == 3)
       #expect(batch.underestimatedCount == batch.count)
       guard batch.count == 3 else { return }
-      #expect(batch[0].color == .panel)
-      #expect(batch[1].color == .accent)
-      #expect(batch[2].color == .text)
+      #expect(batch[0].rectangle.color == .panel)
+      #expect(batch[1].rectangle.color == .accent)
+      #expect(batch[2].rectangle.color == .text)
       var index = 0
-      for draw in batch {
-        #expect(draw.region == batch[index].region)
-        #expect(draw.color == batch[index].color)
+      for draw in batch.rectangles {
+        #expect(draw.region == batch[index].rectangle.region)
+        #expect(draw.color == batch[index].rectangle.color)
         index += 1
       }
       #expect(index == batch.count)
@@ -36,6 +36,6 @@ import Testing
       let isEmpty = batch.isEmpty
       #expect(isEmpty)
       #expect(batch.count == 0)
-      for _ in batch { Issue.record("Empty frame retained a previous draw") }
+      for _ in batch.rectangles { Issue.record("Empty frame retained a previous draw") }
     })
 }

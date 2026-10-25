@@ -42,7 +42,23 @@ vertex VertexOutput rectangleVertex(VertexInput input [[stage_in]], uint vertexI
 
 fragment float4 rectangleFragment(VertexOutput input [[stage_in]],
                                   texture2d<float> atlas [[texture(0)]], sampler atlasSampler [[sampler(0)]],
-                                  texture2d<float> emojiAtlas [[texture(1)]], sampler emojiSampler [[sampler(1)]]) {
+                                  texture2d<float> emojiAtlas [[texture(1)]], sampler emojiSampler [[sampler(1)]],
+                                  texture2d<float> imageY [[texture(2)]], texture2d<float> imageU [[texture(3)]],
+                                  texture2d<float> imageV [[texture(4)]], sampler imageSampler [[sampler(2)]],
+                                  constant float4 *imageRows [[buffer(0)]]) {
+  if (input.textured > 2.5) {
+    float4 texel;
+    if (input.textured < 3.5) {
+      texel = imageY.sample(imageSampler, input.glyphUV);
+    } else {
+      float2 chromaUV = input.glyphUV * imageRows[3].xy + imageRows[3].zw;
+      float4 yuv = float4(imageY.sample(imageSampler, input.glyphUV).r,
+        imageU.sample(imageSampler, chromaUV).r,
+        input.textured > 4.5 ? imageU.sample(imageSampler, chromaUV).g : imageV.sample(imageSampler, chromaUV).r, 1);
+      texel = float4(clamp(float3(dot(imageRows[0], yuv), dot(imageRows[1], yuv), dot(imageRows[2], yuv)), 0.0, 1.0), 1);
+    }
+    return float4(texel.rgb, texel.a * input.color.a);
+  }
   float2 halfSize = input.size * 0.5;
   float radius = clamp(input.radius, 0.0, min(halfSize.x, halfSize.y));
   float2 q = abs(input.localPosition - halfSize) - halfSize + float2(radius);

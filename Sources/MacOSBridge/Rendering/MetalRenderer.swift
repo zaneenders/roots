@@ -15,6 +15,7 @@ private struct MetalFrameSlot: ~Copyable {
   var drawableSize = SIMD2<Int32>.zero
   var rowBytes = 0
   var capturesImage = false
+  var images: [ObjectIdentifier: MetalImageTextures] = [:]
 }
 
 @safe @MainActor final class MetalRenderer {
@@ -24,6 +25,7 @@ private struct MetalFrameSlot: ~Copyable {
   private let pipeline: any MTLRenderPipelineState
   private let atlas: any MTLTexture
   private let emojiAtlas: any MTLTexture
+  private let imageSampler: any MTLSamplerState
   private let sampler: any MTLSamplerState
   private var slots = UniqueArray<MetalFrameSlot>()
   private var frameState = MetalFrameState()
@@ -55,6 +57,11 @@ private struct MetalFrameSlot: ~Copyable {
       throw MacOSWindowError.resourceAllocation
     }
     self.sampler = sampler
+    descriptor.mipFilter = .notMipmapped
+    guard let imageSampler = device.makeSamplerState(descriptor: descriptor) else {
+      throw MacOSWindowError.resourceAllocation
+    }
+    self.imageSampler = imageSampler
     if let logicalSize, let drawableSize {
       try Self.validate(logicalSize: logicalSize, drawableSize: drawableSize)
       offscreenTarget = try Self.makeTarget(device: device, size: drawableSize)
@@ -187,7 +194,10 @@ private struct MetalFrameSlot: ~Copyable {
     _ encoder: any MTLRenderCommandEncoder, slotID: Int, logicalSize: SIMD2<Float>,
     drawableSize: SIMD2<Int32>
   ) throws {
-    guard !frameState.runs.isEmpty else { return }
+    guard !frameState.runs.isEmpty else {
+      slots[slotID].images.removeAll()
+      return
+    }
     let (byteCount, overflow) = max(1, frameState.vertices.count).multipliedReportingOverflow(
       by: MemoryLayout<MetalVertex>.stride)
     guard !overflow, byteCount <= device.maxBufferLength else {
@@ -210,6 +220,16 @@ private struct MetalFrameSlot: ~Copyable {
     encoder.setFragmentSamplerState(sampler, index: 0)
     encoder.setFragmentTexture(emojiAtlas, index: 1)
     encoder.setFragmentSamplerState(sampler, index: 1)
+    let used = Set(frameState.runs.compactMap { $0.image.map { ObjectIdentifier($0.frame) } })
+    var reusable = slots[slotID].images.filter { !used.contains($0.key) }.map(\.value)
+    slots[slotID].images = slots[slotID].images.filter { used.contains($0.key) }
+    // Bind valid defaults for every shader argument, including shape-only batches.
+    for index in 2...4 { encoder.setFragmentTexture(atlas, index: index) }
+    encoder.setFragmentSamplerState(imageSampler, index: 2)
+    let defaults = [SIMD4<Float>](repeating: .zero, count: 4)
+    defaults.withUnsafeBytes { bytes in
+      unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
+    }
     for run in frameState.runs {
       let clip =
         run.scissor
@@ -218,6 +238,21 @@ private struct MetalFrameSlot: ~Copyable {
           drawableSize: drawableSize)
       encoder.setScissorRect(
         MTLScissorRect(x: clip.x, y: clip.y, width: clip.width, height: clip.height))
+      if let image = run.image {
+        let id = ObjectIdentifier(image.frame)
+        let textures = slots[slotID].images[id] ?? reusable.popLast() ?? MetalImageTextures()
+        slots[slotID].images[id] = textures
+        try textures.update(image.frame, device: device)
+        for (index, texture) in textures.textures.enumerated() {
+          encoder.setFragmentTexture(texture, index: index + 2)
+        }
+        // The image shader uses a non-mipmapped clamp sampler.
+        encoder.setFragmentSamplerState(imageSampler, index: 2)
+        let rows = [image.frame.red, image.frame.green, image.frame.blue, image.frame.chromaTransform]
+        rows.withUnsafeBytes { bytes in
+          unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
+        }
+      }
       if let draw = run.polyline, let stroke = draw.polyline {
         encoder.setRenderPipelineState(polylinePipeline)
         let b = stroke.bounds
@@ -235,6 +270,9 @@ private struct MetalFrameSlot: ~Copyable {
         encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
         encoder.setRenderPipelineState(pipeline)
         encoder.setVertexBuffer(buffer, offset: 0, index: 0)
+        defaults.withUnsafeBytes { bytes in
+          unsafe encoder.setFragmentBytes(bytes.baseAddress!, length: bytes.count, index: 0)
+        }
       } else {
         encoder.drawPrimitives(
           type: .triangle, vertexStart: 0, vertexCount: 6,

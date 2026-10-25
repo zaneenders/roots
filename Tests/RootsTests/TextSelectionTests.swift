@@ -88,7 +88,7 @@ struct TextSelectionTests {
       input: Input(keyEvents: [KeyEvent(.character("c"), modifiers: .control)]),
       build: build,
       present: { draws in
-        for draw in draws where draw.glyphUV != nil {
+        for draw in draws.rectangles where draw.glyphUV != nil {
           #expect(draw.clip == Region(0, 10, 200, 60))
         }
       })
@@ -274,7 +274,7 @@ struct TextSelectionTests {
   }
   ui.frame(input: Input(mousePosition: .init(x: 24, y: 10), pressed: true), build: build, present: { _ in })
   ui.frame(input: Input(mousePosition: .init(x: 48, y: 10), released: true), build: build) { draws in
-    let highlights = (0..<draws.count).map { draws[$0] }.filter {
+    let highlights = (0..<draws.count).map { draws[$0].rectangle }.filter {
       $0.color == Color(0.28, 0.24, 0.42)
     }
     #expect(highlights.count == 1)

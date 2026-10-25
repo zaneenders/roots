@@ -51,7 +51,7 @@ import Testing
       frame.end()
     },
     present: { draws in
-      for draw in draws where draw.color == .text {
+      for draw in draws.rectangles where draw.color == .text {
         #expect(draw.clip == region)
       }
     })

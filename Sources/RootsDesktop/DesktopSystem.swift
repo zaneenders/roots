@@ -10,7 +10,12 @@ public enum DesktopSystem {
   public static var backend: (any DesktopBackend)? { activeBackend ?? defaultBackend }
   public static var primaryShortcut: KeyModifiers { backend?.primaryShortcut ?? .control }
 
-  public static func requestRedraw() { backend?.requestRedraw() }
+  // Explicit application redraws must rebuild even when a media wake coalesces.
+  static var redrawRevision: UInt64 = 0
+  public static func requestRedraw() {
+    redrawRevision &+= 1
+    backend?.requestRedraw()
+  }
   public static func requestClose() { backend?.requestClose() }
   public static func readClipboard() async -> String? { await backend?.readClipboard() }
   @discardableResult

@@ -16,6 +16,7 @@ struct MetalDrawRun {
   var vertexCount: Int
   var scissor: MetalScissorRect?
   var polyline: DrawRect? = nil
+  var image: ResolvedImageDraw? = nil
 }
 
 @MainActor struct MetalFrameState: ~Copyable {
@@ -36,30 +37,47 @@ struct MetalDrawRun {
     body(&frame)
   }
 
+  mutating func render(_ batch: borrowing UIDrawBatch) {
+    for command in batch {
+      switch command {
+      case .rectangle(let draw): append(draw)
+      case .image(let image):
+        if let draw = image.resolve() { append(draw.rectangle, image: draw) }
+      }
+    }
+  }
+
   mutating func render(_ draws: borrowing Span<DrawRect>) {
-    for draw in draws {
-      guard Self.accepts(draw) else { continue }
-      let scissor = draw.clip.map {
-        MetalScissorRect($0, logicalSize: logicalSize, drawableSize: drawableSize)
-      }
-      if scissor?.isEmpty == true { continue }
-      if draw.polyline != nil {
-        runs.append(MetalDrawRun(firstVertex: 0, vertexCount: 0, scissor: scissor, polyline: draw))
-        continue
-      }
-      let first = vertices.count
-      let uv = draw.glyphUV.map { SIMD4($0.x, $0.y, $0.width, $0.height) } ?? .zero
-      vertices.append(
-        MetalVertex(
-          position: SIMD2(draw.region.x, draw.region.y), size: SIMD2(draw.region.width, draw.region.height),
-          color: SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a), radius: draw.radius,
-          glyphUV: uv, textured: draw.glyphUV == nil ? 0 : (draw.colorGlyph ? 2 : 1),
-          strokeWidth: draw.strokeWidth, axis: draw.axis))
-      if let last = runs.last, last.polyline == nil, last.scissor == scissor {
-        runs[runs.count - 1].vertexCount += 1
-      } else {
-        runs.append(MetalDrawRun(firstVertex: first, vertexCount: 1, scissor: scissor))
-      }
+    for draw in draws { append(draw) }
+  }
+
+  private mutating func append(_ draw: DrawRect, image: ResolvedImageDraw? = nil) {
+    guard Self.accepts(draw) else { return }
+    let scissor = draw.clip.map {
+      MetalScissorRect($0, logicalSize: logicalSize, drawableSize: drawableSize)
+    }
+    if scissor?.isEmpty == true { return }
+    if draw.polyline != nil {
+      runs.append(MetalDrawRun(firstVertex: 0, vertexCount: 0, scissor: scissor, polyline: draw))
+      return
+    }
+    let first = vertices.count
+    let uv = draw.glyphUV.map { SIMD4($0.x, $0.y, $0.width, $0.height) } ?? .zero
+    vertices.append(
+      MetalVertex(
+        position: SIMD2(draw.region.x, draw.region.y),
+        size: SIMD2(draw.region.width, draw.region.height),
+        color: SIMD4(draw.color.r, draw.color.g, draw.color.b, draw.color.a), radius: draw.radius,
+        glyphUV: uv,
+        textured: image.map { $0.frame.format == .rgba8 ? 3 : ($0.frame.format == .nv12 ? 5 : 4) }
+          ?? (draw.glyphUV == nil ? 0 : (draw.colorGlyph ? 2 : 1)),
+        strokeWidth: draw.strokeWidth, axis: draw.axis))
+    if image == nil, let last = runs.last, last.image == nil, last.polyline == nil,
+      last.scissor == scissor
+    {
+      runs[runs.count - 1].vertexCount += 1
+    } else {
+      runs.append(MetalDrawRun(firstVertex: first, vertexCount: 1, scissor: scissor, image: image))
     }
   }
 
