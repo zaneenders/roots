@@ -15,8 +15,7 @@ Explore the runnable apps in [Examples](Examples):
 - [Tetris](Examples/Tetris): declarative blocks, keyboard input, observation,
   and frame-driven animation.
 - [Video](Examples/Video): muted local-file playback (requires FFmpeg).
-- [Path3D](Examples/Path3D): an interactive 3D torus knot with camera controls
-  and animated playback.
+- [Path3D](Examples/Path3D): interactive 3D torus knot.
 
 After following the [setup instructions](#development), run an example from
 the repository root:
@@ -71,17 +70,6 @@ bars remain native extensions, with independent popup redraw and cursor state.
 The desktop host currently runs one window session at a time. Offscreen rendering
 requires a positive frame limit; a backend without offscreen or screenshot support
 should throw `DesktopBackendError.unsupportedFeature` for those requests.
-
-## Retained colored paths
-
-```swift
-let path = PolylineStroke(points: points, width: 3, colors: colors)!
-Canvas(key: 1) { paint in
-  paint.strokePolyline(path, transform: PathTransform(scale: 1.5, rotation: 0.2))
-}
-```
-
-[Path transforms, picking, and renderer ownership](Docs/Paths.md) · [3D path example](Examples/Path3D)
 
 ## Development
 
