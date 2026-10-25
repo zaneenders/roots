@@ -10,15 +10,18 @@ Explore the runnable apps in [Examples](Examples):
 
 - [Markdown](Examples/Markdown): styled paragraphs, selectable text, scrolling,
   and clipboard support.
+- [Mandelbrot](Examples/Mandelbrot): a cached fractal image, custom canvas painting,
+  and aspect-ratio-preserving resizing.
 - [Tetris](Examples/Tetris): declarative blocks, keyboard input, observation,
   and frame-driven animation.
 
-After following the [setup instructions](#development), run either example from
+After following the [setup instructions](#development), run an example from
 the repository root:
 
 ```sh
 swift run --package-path Examples/Markdown MarkdownDemo
 swift run --package-path Examples/Tetris Tetris
+swift run --package-path Examples/Mandelbrot Mandelbrot
 ```
 
 Text measurement, drawing, and paragraphs recognize LF, CRLF, and CR line breaks.
