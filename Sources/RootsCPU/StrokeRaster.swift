@@ -38,11 +38,17 @@ struct StrokeRaster {
         swap(&b, &c)
         area = -area
       }
-      let x0 = Int(max(bounds.x, min(a.p.x, b.p.x, c.p.x)).rounded(.down))
-      let x1 = Int(min(bounds.x + bounds.width, max(a.p.x, b.p.x, c.p.x)).rounded(.up))
-      let y0 = Int(max(bounds.y, min(a.p.y, b.p.y, c.p.y)).rounded(.down))
-      let y1 = Int(min(bounds.y + bounds.height, max(a.p.y, b.p.y, c.p.y)).rounded(.up))
-      guard x1 > x0, y1 > y0 else { continue }
+      let left = max(bounds.x, min(a.p.x, b.p.x, c.p.x))
+      let right = min(bounds.x + bounds.width, max(a.p.x, b.p.x, c.p.x))
+      let top = max(bounds.y, min(a.p.y, b.p.y, c.p.y))
+      let bottom = min(bounds.y + bounds.height, max(a.p.y, b.p.y, c.p.y))
+      // Reject offscreen triangles before converting potentially large coordinates.
+      // An overlapping interval lies inside the bounded renderer dimensions.
+      guard left < right, top < bottom else { continue }
+      let x0 = Int(left.rounded(.down))
+      let x1 = Int(right.rounded(.up))
+      let y0 = Int(top.rounded(.down))
+      let y1 = Int(bottom.rounded(.up))
       let cap = mesh.vertices[index].edge.z > 0.5
       func edge(_ a: SIMD2<Float>, _ b: SIMD2<Float>, _ p: SIMD2<Float>) -> Float {
         // Reversing a shared edge must produce the exact opposite sign.

@@ -62,6 +62,8 @@ struct WaylandBarTests {
       .init(maxFrames: -1) { _ in BlockBuilder.buildBlock() },
       .init(screenshotPath: "bar.ppm") { _ in BlockBuilder.buildBlock() },
       .init(nodeCapacity: -1) { _ in BlockBuilder.buildBlock() },
+      .init(drawCapacity: -1) { _ in BlockBuilder.buildBlock() },
+      .init(drawCapacity: .max) { _ in BlockBuilder.buildBlock() },
       .init(scrollAcceleration: -.infinity) { _ in BlockBuilder.buildBlock() },
       .init(scrollAcceleration: .nan) { _ in BlockBuilder.buildBlock() },
       .init(scrollDeceleration: 0) { _ in BlockBuilder.buildBlock() },

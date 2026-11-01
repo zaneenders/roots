@@ -9,6 +9,20 @@ import WaylandBridge
 @Suite(GraphicsTest())
 @MainActor
 struct WaylandPopupTests {
+  @Test(arguments: [-1, Int.max])
+  func invalidDrawBudgetRejectsPopupBeforeBuilding(capacity: Int) {
+    var builds = 0
+    let popup = WaylandPopup(
+      configuration: .init(x: 0, y: 0, anchorWidth: 20, anchorHeight: 26, width: 320, height: 320),
+      drawCapacity: capacity
+    ) { _ in
+      builds += 1
+      return BlockBuilder.buildBlock()
+    }
+    #expect(!popup.present())
+    #expect(builds == 0)
+  }
+
   @Test func failedPresentationDoesNotBuildContentOrCloseAnUnstartedSession() {
     var builds = 0
     var closes = 0

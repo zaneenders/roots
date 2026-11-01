@@ -133,7 +133,7 @@ import Testing
         }
       },
       present: { span in
-        for draw in span { draws.append(draw) }
+        for case .rectangle(let draw) in span { draws.append(draw) }
       })
     let cpu = CPURenderer(width: 64, height: 48)
     cpu.render(draws.span)
@@ -201,8 +201,10 @@ import Testing
     let colors = points.indices.map { i in Color(Float(i) / 256, 0.5, 1 - Float(i) / 256, 0.5) }
     let stroke = try #require(PolylineStroke(points: points, width: 3, colors: colors, rendering: .ribbon))
     #expect(stroke.ribbon != nil)
-    let draws = [DrawRect(Region(0, 0, 64, 64), Color(0, 0, 0)),
-      DrawRect(polyline: stroke, transform: .init(translation: .init(x: 12, y: 15), scale: 1.2, rotation: 0.4))]
+    let draws = [
+      DrawRect(Region(0, 0, 64, 64), Color(0, 0, 0)),
+      DrawRect(polyline: stroke, transform: .init(translation: .init(x: 12, y: 15), scale: 1.2, rotation: 0.4))
+    ]
     let cpu = CPURenderer(width: 64, height: 64)
     cpu.render(draws.span)
     let image = try #require(await renderer.render(readback: true) { $0.render(draws.span) })
