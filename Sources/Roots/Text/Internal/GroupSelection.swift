@@ -26,6 +26,11 @@ extension UIStorage {
     members.compactMap { nodes[$0].textLayout?.text }.joined(separator: "\n")
   }
 
+  private func selectionSeparatorCount(after index: Int) -> Int {
+    // The inserted LF joins a trailing CR into one Character in selectionText.
+    nodes[index].textLayout?.text.last == "\r" ? 0 : 1
+  }
+
   func isTextSelected(_ index: Int) -> Bool {
     if let selection = activeGroupSelection, nodes[index].selectionGroup == selection.key {
       return true
@@ -64,7 +69,7 @@ extension UIStorage {
     var start = 0
     for member in members {
       if member == index { break }
-      start += (nodes[member].textLayout?.text.count ?? 0) + 1
+      start += (nodes[member].textLayout?.text.count ?? 0) + selectionSeparatorCount(after: member)
     }
     groupSelection = GroupSelection(
       key: key, text: selectionText(members), anchor: start + offset, cursor: start + offset)
@@ -80,7 +85,7 @@ extension UIStorage {
       let upper = min(count, max(0, selection.range.upperBound - start))
       nodes[index].selectionAnchor = lower
       nodes[index].selectionCursor = upper
-      start += count + 1
+      start += count + selectionSeparatorCount(after: index)
     }
   }
 
@@ -101,7 +106,7 @@ extension UIStorage {
     var start = 0
     for member in members {
       if member == target { break }
-      start += (nodes[member].textLayout?.text.count ?? 0) + 1
+      start += (nodes[member].textLayout?.text.count ?? 0) + selectionSeparatorCount(after: member)
     }
     selection.cursor = start + layout.offset(x: x - nodes[target].region.x, y: y - nodes[target].region.y)
     groupSelection = selection

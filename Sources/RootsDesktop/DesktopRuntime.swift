@@ -1,6 +1,6 @@
 import Observation
-import Synchronization
 @_spi(Hosting) import Roots
+import Synchronization
 
 @MainActor @Observable
 private final class FrameInvalidation {
@@ -70,10 +70,11 @@ final class DesktopRuntime<Content: Block> {
     onKey: ((KeyEvent) -> Bool)? = nil, onCopy: @escaping (String) -> Void,
     requestRedraw: @escaping @MainActor () -> Void,
     frameCallbacks: DesktopFrameCallbacks = .init(),
-    nodeCapacity: Int = 128, scrollAcceleration: Float = 0, scrollDeceleration: Float = 8
+    nodeCapacity: Int = 128, drawCapacity: Int = 32_768,
+    scrollAcceleration: Float = 0, scrollDeceleration: Float = 8
   ) {
     host = UIHost(
-      nodeCapacity: nodeCapacity, drawCapacity: nil, scrollAcceleration: scrollAcceleration,
+      nodeCapacity: nodeCapacity, drawCapacity: drawCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
     self.frameCallbacks = frameCallbacks
     self.content = content
@@ -99,13 +100,15 @@ final class DesktopRuntime<Content: Block> {
     input: Input, viewport: Viewport, dt: Float, inputElapsed: Float? = nil,
     present: (borrowing UIDrawBatch) -> Void
   ) {
-    let changedInput = input.mousePosition != mousePosition || input.pressed || input.released
+    let changedInput =
+      input.mousePosition != mousePosition || input.pressed || input.released
       || input.focusLost || !input.keyEvents.isEmpty || !input.textEvents.isEmpty
       || input.secondaryDown || input.secondaryPressed || input.secondaryReleased
       || input.middleDown || input.middlePressed || input.middleReleased
       || input.scrollStepsX != 0 || input.scrollStepsY != 0
       || input.scrollX != 0 || input.scrollY != 0 || input.scrollVelocityY != nil
-    let mediaOnly = mediaPending && !invalidation.hasPending && self.viewport == viewport
+    let mediaOnly =
+      mediaPending && !invalidation.hasPending && self.viewport == viewport
       && !changedInput && !needsAnimationFrame
       && lastExplicitRedraw == DesktopSystem.redrawRevision
     mediaPending = false
@@ -137,7 +140,10 @@ final class DesktopRuntime<Content: Block> {
           host.rebuild(
             mousePosition: mousePosition,
             build: { content(viewport) },
-            present: { draws in observeImages(in: draws); present(draws) }, track: invalidation.track)
+            present: { draws in
+              observeImages(in: draws)
+              present(draws)
+            }, track: invalidation.track)
         }
       }
       host.withState { frameCallbacks.finish?($0) }

@@ -18,3 +18,7 @@ escape-time palette from [Chroma's ImageDemo](https://github.com/zaneenders/chro
 paints them with overlapping edges to avoid antialiasing seams. No bitmap texture
 API or per-pixel `Block` is required. `fitted(in: Region)` centers the image without
 changing its aspect ratio when the window resizes.
+
+The window reserves `640 * 400 + 128` draw commands: at most one run per sample,
+plus space for labels and backgrounds. This uses about 29.3 MiB of command storage
+on arm64 and keeps the full image within a fixed budget.

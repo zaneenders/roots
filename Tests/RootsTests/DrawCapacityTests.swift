@@ -88,3 +88,24 @@ import Testing
     })
   #expect(host.droppedDraws == 0)
 }
+
+@Test @MainActor func boundedCommandStorageKeepsItsAllocationAtCapacityAndOverflow() {
+  let limit = 32_768
+  var storage = UIStorage(nodeCapacity: 0, drawCapacity: limit)
+  let capacity = storage.draws.capacity
+  let address = storage.draws.span.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) }
+  let source = ImageSource()
+  let rectangle = DrawRect(Region(0, 0, 1, 1), .accent)
+  let image = ImageDraw(source, in: Region(0, 0, 1, 1))
+  for count in [limit, limit + 1, limit * 2, 1, limit + 1] {
+    storage.draws.removeAll()
+    storage.droppedDraws = 0
+    for index in 0..<count {
+      if index.isMultiple(of: 2) { storage.emit(rectangle) } else { storage.emit(image) }
+    }
+    #expect(storage.draws.count == min(count, limit))
+    #expect(storage.droppedDraws == max(0, count - limit))
+    #expect(storage.draws.capacity == capacity)
+    #expect(storage.draws.span.withUnsafeBufferPointer { UInt(bitPattern: $0.baseAddress) } == address)
+  }
+}

@@ -61,7 +61,7 @@ struct MandelbrotTests {
 
   @MainActor
   @Test func resizingPaintsTheCompleteImageWithinTheCanvas() throws {
-    var host = UIHost(drawCapacity: nil)
+    var host = UIHost(drawCapacity: MandelbrotImage.drawCapacity)
     for bounds in [Region(0, 0, 1120, 840), Region(30, 40, 480, 360)] {
       var imageDraws: [DrawRect] = []
       host.frame(

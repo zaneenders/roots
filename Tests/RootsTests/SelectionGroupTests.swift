@@ -55,6 +55,45 @@ struct SelectionGroupTests {
     #expect(host.selectedText == "irst\nsecond line\nth")
   }
 
+  @Test(arguments: ["\r", "\n", "\r\n"], [false, true])
+  func memberOffsetsMatchJoinedTextAfterLineBreaks(lineBreak: String, reverse: Bool) throws {
+    var host = UIHost()
+    func build() -> some Block {
+      Column(in: Region(0, 0, 100, 100), gap: 0) {
+        Paragraph { Text("A" + lineBreak) }.size(10).selectable(key: 1)
+        Paragraph { Text("BC") }.size(10).selectable(key: 2)
+        Paragraph { Text("DE") }.size(10).selectable(key: 3)
+      }.textSelectionGroup(key: 100)
+    }
+    host.frame(build: { build() }, present: { _ in })
+    for (key, text): (UInt64, String) in [(2, "BC"), (3, "DE")] {
+      let region = try #require(host.state(for: key)?.region)
+      host.frame(
+        input: Input(mousePosition: .init(x: reverse ? 6 : 0, y: region.y + 5), pressed: true),
+        build: { build() }, present: { _ in })
+      host.frame(
+        input: Input(mousePosition: .init(x: reverse ? 0 : 6, y: region.y + 5), released: true),
+        build: { build() },
+        present: { batch in
+          var highlights: [Region] = []
+          for case .rectangle(let draw) in batch where draw.color == Color(0.28, 0.24, 0.42) {
+            highlights.append(draw.region)
+          }
+          #expect(highlights == [Region(region.x, region.y, 6, 14)])
+        })
+      #expect(host.selectedText == String(text.prefix(1)))
+      var copied: String?
+      host.frame(
+        input: Input(keyEvents: [KeyEvent(.character("c"), modifiers: .control)]),
+        onCopy: { copied = $0 }, build: { build() }, present: { _ in })
+      #expect(copied == String(text.prefix(1)))
+    }
+    host.frame(
+      input: Input(keyEvents: [KeyEvent(.character("a"), modifiers: .control)]),
+      build: { build() }, present: { _ in })
+    #expect(host.selectedText == "A" + lineBreak + "\nBC\nDE")
+  }
+
   @Test func selectAllFromAnyMemberIncludesOnlyThatGroup() {
     var host = UIHost()
     for key: UInt64 in [1, 2, 3] {

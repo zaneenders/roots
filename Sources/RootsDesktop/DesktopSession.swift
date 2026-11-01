@@ -3,6 +3,7 @@ import Roots
 @MainActor
 struct DesktopSession {
   let nodeCapacity: Int
+  let drawCapacity: Int
   let scrollAcceleration: Float
   let scrollDeceleration: Float
   var start: (() -> Void)?
@@ -10,8 +11,20 @@ struct DesktopSession {
   var frameCallbacks = DesktopFrameCallbacks()
   var keyHandler: ((KeyEvent) -> Bool)?
 
+  init(
+    nodeCapacity: Int = 128, drawCapacity: Int = 32_768,
+    scrollAcceleration: Float = 0, scrollDeceleration: Float = 8
+  ) {
+    self.nodeCapacity = nodeCapacity
+    self.drawCapacity = drawCapacity
+    self.scrollAcceleration = scrollAcceleration
+    self.scrollDeceleration = scrollDeceleration
+  }
+
   var isValid: Bool {
-    nodeCapacity >= 0 && scrollAcceleration.isFinite && scrollAcceleration >= 0
+    nodeCapacity >= 0 && drawCapacity >= 0
+      && drawCapacity <= Int.max / MemoryLayout<DrawCommand>.stride
+      && scrollAcceleration.isFinite && scrollAcceleration >= 0
       && scrollDeceleration.isFinite && scrollDeceleration > 0
   }
 
@@ -40,7 +53,7 @@ struct DesktopSession {
           if let requestRedraw { requestRedraw() } else { backend?.requestRedraw() }
         }
       }, frameCallbacks: frameCallbacks,
-      nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
+      nodeCapacity: nodeCapacity, drawCapacity: drawCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }
 }

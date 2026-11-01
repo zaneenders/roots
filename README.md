@@ -31,6 +31,20 @@ swift run --package-path Examples/Path3D Path3D
 Text measurement, drawing, and paragraphs recognize LF, CRLF, and CR line breaks.
 Selectable plain text copies its displayed lines with LF separators.
 
+Desktop windows, Wayland bars, and popups reserve space for 32,768 draw commands
+at session startup. Set `drawCapacity` on their initializer for a larger or smaller
+workload, including zero. Each frame retains the first valid commands up to that
+limit; later commands are dropped and counted in `UIState.droppedDraws`, available
+through `onFinishFrame`. Invalid capacities are rejected before the session starts.
+
+The command arena reuses its uniquely owned allocation at capacity and after
+overflow. Budget at least `drawCapacity * MemoryLayout<DrawCommand>.stride` bytes
+per session, plus allocator rounding (3.75 MiB at the default on arm64, where the
+stride is 120 bytes). A popup owns another arena. This guarantee covers command
+storage; layout/text storage, referenced image/path resources, application paint
+work, and backend/GPU staging have separate allocation and work costs. The low-level
+hosting SPI still permits explicitly growable storage with `drawCapacity: nil`.
+
 ## Platforms
 
 macOS 27+ and Linux (Hyprland). PRs for other backends welcome.

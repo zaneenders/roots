@@ -16,11 +16,14 @@ public struct DesktopWindow<Content: Block>: Window {
   let content: @MainActor (Viewport) -> Content
   private var session: DesktopSession
 
+  /// `drawCapacity` reserves command storage at session startup. Later commands
+  /// are dropped at capacity and counted in `UIState.droppedDraws` each frame.
   public init(
     _ title: String, width: Float = 900, height: Float = 660, maxFrames: Int32 = 0,
     screenshotPath: String? = nil, offscreen: Bool = false,
     minimumSize: Size? = nil, backend: (any DesktopBackend)? = nil,
-    nodeCapacity: Int = 128, scrollAcceleration: Float = 0, scrollDeceleration: Float = 8,
+    nodeCapacity: Int = 128, drawCapacity: Int = 32_768,
+    scrollAcceleration: Float = 0, scrollDeceleration: Float = 8,
     @BlockBuilder content: @escaping @MainActor (Viewport) -> Content
   ) {
     self.backend = backend
@@ -32,7 +35,7 @@ public struct DesktopWindow<Content: Block>: Window {
     self.offscreen = offscreen
     self.content = content
     session = DesktopSession(
-      nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
+      nodeCapacity: nodeCapacity, drawCapacity: drawCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }
 

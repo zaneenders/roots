@@ -5,6 +5,8 @@ enum MandelbrotImage {
   static let width = 640
   static let height = 400
   static let maximumIterations = 160
+  // At most one run per sample, plus 128 commands for labels/backgrounds.
+  static let drawCapacity = width * height + 128
   static let interior = Color(8 / 255, 10 / 255, 20 / 255)
 
   // Cache horizontal runs of equal RGBA8 colors, rather than creating a Block per pixel.

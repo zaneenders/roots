@@ -16,10 +16,13 @@ public struct WaylandBar<Content: Block>: Window {
   let content: @MainActor (Viewport) -> Content
   private var session: DesktopSession
 
+  /// `drawCapacity` reserves command storage at session startup. Overflow is
+  /// dropped and counted in `UIState.droppedDraws` each frame.
   public init(
     height: Int32 = 26, namespace: String = "roots-bar", overlayHeight: Int32 = 0,
     maxFrames: Int32 = 0, screenshotPath: String? = nil,
-    nodeCapacity: Int = 128, scrollAcceleration: Float = 0, scrollDeceleration: Float = 8,
+    nodeCapacity: Int = 128, drawCapacity: Int = 32_768,
+    scrollAcceleration: Float = 0, scrollDeceleration: Float = 8,
     @BlockBuilder content: @escaping @MainActor (Viewport) -> Content
   ) {
     self.height = height
@@ -29,7 +32,7 @@ public struct WaylandBar<Content: Block>: Window {
     self.screenshotPath = screenshotPath
     self.content = content
     session = DesktopSession(
-      nodeCapacity: nodeCapacity, scrollAcceleration: scrollAcceleration,
+      nodeCapacity: nodeCapacity, drawCapacity: drawCapacity, scrollAcceleration: scrollAcceleration,
       scrollDeceleration: scrollDeceleration)
   }
 

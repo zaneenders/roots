@@ -49,6 +49,40 @@ private final class BackendModel { var label = "First" }
 @Suite(GraphicsTest(), .serialized)
 @MainActor
 struct DesktopBackendTests {
+  @Test(arguments: [0, 1, 3, 32_768, 40_002])
+  func windowForwardsDrawBudgetAndReportsOverflow(capacity: Int) async throws {
+    let backend = RecordingBackend()
+    backend.snapshots.append(backend.snapshots[0])
+    var dropped: [Int] = []
+    try await DesktopWindow("Draw budget", backend: backend, drawCapacity: capacity) { viewport in
+      Column(in: viewport.bounds) {
+        Canvas(key: 1, extent: 10) { painter in
+          for _ in 0..<40_000 { painter.fillRect(Region(0, 0, 1, 1), color: .accent) }
+        }
+      }
+    }
+    .onFinishFrame { dropped.append($0.droppedDraws) }
+    .run()
+    #expect(backend.drawCounts == [Int](repeating: min(capacity, 40_001), count: 2))
+    #expect(dropped == [Int](repeating: max(0, 40_001 - capacity), count: 2))
+  }
+
+  @Test func defaultDesktopDrawBudgetIsBounded() async throws {
+    let backend = RecordingBackend()
+    var dropped = 0
+    try await DesktopWindow("Default draw budget", backend: backend) { viewport in
+      Column(in: viewport.bounds) {
+        Canvas(key: 1, extent: 10) { painter in
+          for _ in 0..<32_768 { painter.fillRect(Region(0, 0, 1, 1), color: .accent) }
+        }
+      }
+    }
+    .onFinishFrame { dropped = $0.droppedDraws }
+    .run()
+    #expect(backend.drawCounts == [32_768])
+    #expect(dropped == 1)
+  }
+
   @Test func injectedBackendReceivesConfigurationFramesAndSessionServices() async throws {
     let backend = RecordingBackend()
     let input = Input(

@@ -80,6 +80,17 @@ struct DesktopWindowTests {
         .run()
     }
     #expect(events.isEmpty)
+    for capacity in [-1, Int.max] {
+      await #expect(throws: DesktopWindowError.invalidConfiguration) {
+        try await DesktopWindow("Invalid draw budget", drawCapacity: capacity) {
+          _ in BlockBuilder.buildBlock()
+        }
+        .onStart { events.append("start") }
+        .onClose { events.append("close") }
+        .run()
+      }
+    }
+    #expect(events.isEmpty)
     for (acceleration, deceleration): (Float, Float) in [
       (-1, 4), (.nan, 4), (1, 0), (1, .infinity)
     ] {
